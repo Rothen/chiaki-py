@@ -1,0 +1,21 @@
+{
+    "name": "chiaki-py",
+    "version": "0.0.1",
+    "dependencies": [
+        "pkgconf",
+        "sdl2",
+        "protobuf",
+        "openssl",
+        "hidapi",
+        "json-c",
+        "miniupnpc",
+        "opus",
+        "fftw3",
+        "lcms",
+        "speexdsp",
+        "vulkan",
+        "fmt",
+        "zlib",
+        "libssh2"
+    ]
+}
