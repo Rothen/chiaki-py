@@ -1,0 +1,2 @@
+grpcio-tools==1.0.0
+pybind11_stubgen==2.5.3
