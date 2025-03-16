@@ -265,27 +265,8 @@ cmake `
 # Build chiaki-ng
 cmake --build build-debug --config Debug --clean-first --target chiaki_py
 
-# Prepare Qt deployment package
-mkdir chiaki-ng-Win-debug
-Copy-Item build-debug\gui\chiaki.exe chiaki-ng-Win-debug
-Copy-Item build-debug\third-party\cpp-steam-tools\cpp-steam-tools.dll chiaki-ng-Win-debug
-Copy-Item scripts\qtwebengine_import.qml gui\src\qml\
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\libcrypto-*-x64.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\libssl-*-x64.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\SDL2.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\hidapi.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\fftw3.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\opus.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\libspeexdsp.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\lcms2.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\miniupnpc.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\json-c.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\zlib1.dll" chiaki-ng-Win-debug/zlib.dll
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\swresample-*.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\avcodec-*.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\avutil-*.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\avformat-*.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\libplacebo-*.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\shaderc_shared.dll" chiaki-ng-Win-debug
-Copy-Item "${env:workplace}\${env:dep_folder}\bin\spirv-cross-c-shared.dll" chiaki-ng-Win-debug
-.\Qt\6.8.2\msvc2022_64\bin\windeployqt.exe --no-translations --qmldir=gui\src\qml --release chiaki-ng-Win-debug\chiaki.exe
+Copy-Item "${env:workplace}\${env:dep_folder}\bin\avcodec-*.dll" build-debug\pybind
+Copy-Item "${env:workplace}\${env:dep_folder}\bin\avutil-*.dll" build-debug\pybind
+Copy-Item "${env:workplace}\${env:dep_folder}\bin\swscale-*.dll" build-debug\pybind
+Copy-Item "${env:workplace}\${env:dep_folder}\bin\swresample-*.dll" build-debug\pybind
+Copy-Item "${env:workplace}\vcpkg_installed\x64-windows\bin\zlib1.dll" build-debug\pybind

@@ -73,7 +73,7 @@ if __name__ == "__main__":
     if "-w" in sys.argv:
         input("Press Enter to continue...")
     print("Starting stream session...")
-    stream_session.start()
+    # stream_session.start()
     print("Started")
 
     while not exit_event.is_set():
