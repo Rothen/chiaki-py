@@ -21,11 +21,11 @@ void init_core_log(py::module &m)
     m.def("chiaki_log_level_char", &chiaki_log_level_char, py::arg("level"), "Get the log level char.");
 
     py::class_<LogWrapper>(m, "Log")
-        .def(py::init<uint32_t, std::function<void(ChiakiLogLevel, std::string, void *)>, void *>(),
-             py::arg("level_mask") = CHIAKI_LOG_ALL & ~CHIAKI_LOG_INFO,
+        .def(py::init<ChiakiLogLevel, ChiakiLogCbFunc, void *>(),
+             py::arg("level") = CHIAKI_LOG_INFO,
              py::arg("cb") = nullptr,
              py::arg("user") = nullptr)
-        .def_property("level_mask", &LogWrapper::get_level_mask, &LogWrapper::set_level_mask)
+        .def_property("level", &LogWrapper::get_level, &LogWrapper::set_level)
         .def_property("cb", &LogWrapper::get_cb, &LogWrapper::set_cb)
         .def_property("user", &LogWrapper::get_user, &LogWrapper::set_user)
         .def("cb_print", &LogWrapper::cb_print, py::arg("level"), py::arg("msg"), py::arg("user"), "Chiaki log callback print.")
@@ -40,11 +40,11 @@ void init_core_log(py::module &m)
         .def("error", &LogWrapper::error, py::arg("message"), "Chiaki log error.");
 
     py::class_<LogSnifferWrapper>(m, "LogSniffer")
-        .def(py::init<uint32_t, LogWrapper &>(),
-             py::arg("level_mask") = CHIAKI_LOG_ALL & ~CHIAKI_LOG_INFO,
+        .def(py::init<ChiakiLogLevel, LogWrapper &>(),
+             py::arg("level") = CHIAKI_LOG_INFO,
              py::arg("forward_log") = LogWrapper())
         .def_property("forward_log", &LogSnifferWrapper::set_forward_log, &LogSnifferWrapper::get_forward_log)
         .def_property("sniff_log", &LogSnifferWrapper::set_sniff_log, &LogSnifferWrapper::get_sniff_log)
-        .def_property("sniff_level_mask", &LogSnifferWrapper::set_sniff_level_mask, &LogSnifferWrapper::get_sniff_level_mask)
+        .def_property("sniff_level", &LogSnifferWrapper::set_sniff_level, &LogSnifferWrapper::get_sniff_level)
         .def_property("buf", &LogSnifferWrapper::set_buf, &LogSnifferWrapper::get_buf);
 }
