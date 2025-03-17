@@ -33,6 +33,7 @@ include_directories(${CMAKE_SOURCE_DIR}/pybind/include)
 # Source files
 set(SOURCES
     include/core/log.h
+    include/core/ecdh.h
     include/core/fec.h
     include/core/common.h
     include/controllermanager.h
@@ -45,6 +46,7 @@ set(SOURCES
     include/timer.h
     include/av_frame.h
     src/core/log.cpp
+    src/core/ecdh.cpp
     src/core/fec.cpp
     src/core/common.cpp
     src/host.cpp
