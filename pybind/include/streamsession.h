@@ -13,12 +13,12 @@
 #include <chrono>
 #include <atomic>
 
-#include "py_timer.h"
-#include "py_exception.h"
-#include "py_sessionlog.h"
-#include "py_controllermanager.h"
-#include "py_settings.h"
-#include "py_elapsed_timer.h"
+#include "timer.h"
+#include "exception.h"
+#include "sessionlog.h"
+#include "controllermanager.h"
+#include "settings.h"
+#include "elapsed_timer.h"
 
 #include <chiaki/session.h>
 #include <chiaki/opusdecoder.h>

@@ -32,21 +32,27 @@ include_directories(${CMAKE_SOURCE_DIR}/pybind/include)
 
 # Source files
 set(SOURCES
-    include/py_controllermanager.h
-    include/py_elapsed_timer.h
-    include/py_exception.h
-    include/py_host.h
-    include/py_sessionlog.h
-    include/py_settings.h
-    include/py_streamsession.h
-    include/py_timer.h
-    include/py_av_frame.h
-    src/py_host.cpp
-    src/py_controllermanager.cpp
-    src/py_sessionlog.cpp
-    src/py_settings.cpp
-    src/py_streamsession.cpp
-    src/py_av_frame.cpp
+    include/core/common.h
+    include/core/log.h
+    # include/core/session.h
+    include/controllermanager.h
+    include/elapsed_timer.h
+    include/exception.h
+    include/host.h
+    include/sessionlog.h
+    include/settings.h
+    include/streamsession.h
+    include/timer.h
+    include/av_frame.h
+    src/core/common.cpp
+    src/core/log.cpp
+    # src/core/session.cpp
+    src/host.cpp
+    src/controllermanager.cpp
+    src/sessionlog.cpp
+    src/settings.cpp
+    src/streamsession.cpp
+    src/av_frame.cpp
     src/bindings.cpp
 )
 
@@ -123,7 +129,7 @@ if(WIN32)
 endif()
 
 add_custom_command(TARGET chiaki_py POST_BUILD
-    VERBATIM COMMAND python -c " import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('.') ; sys.argv.append('chiaki_py') ; main() " ||(exit 0)
+    VERBATIM COMMAND python -c "import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('.') ; sys.argv.append('chiaki_py') ; main() " ||(exit 0)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT " Creating stubs for MC3D-TRECSIM "
 )

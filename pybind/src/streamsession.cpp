@@ -8,9 +8,9 @@
 #include <locale>
 #include <codecvt>
 #include <fmt/core.h>
-#include "py_streamsession.h"
-#include "py_settings.h"
-#include "py_controllermanager.h"
+#include "streamsession.h"
+#include "settings.h"
+#include "controllermanager.h"
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>

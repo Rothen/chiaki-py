@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
-#include <py_controllermanager.h>
+#include "controllermanager.h"
 #include <cassert>
 
 /* PS5 trigger effect documentation:

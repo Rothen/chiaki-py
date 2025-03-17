@@ -2,13 +2,17 @@ from typing import Any
 import threading
 import signal
 import sys
-from chiaki_py import ChiakiLog, LogLevel, Target, Settings, StreamSessionConnectInfo, StreamSession, get_frame
+from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
+from chiaki_py.core.log import LogLevel, ChiakiLog, CHIAKI_LOG_ALL
+from chiaki_py.core.common import Target
+# from chiaki_py.core.session import chiaki_rp_application_reason_string, chiaki_rp_version_string
 import numpy as np
 import cv2
 
 exit_event = threading.Event()
 
-log = ChiakiLog(level=LogLevel.INFO)
+# level_mask=CHIAKI_LOG_ALL & ~LogLevel.INFO.value
+log = ChiakiLog()
 host = "192.168.42.43"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
@@ -73,7 +77,7 @@ if __name__ == "__main__":
     if "-w" in sys.argv:
         input("Press Enter to continue...")
     print("Starting stream session...")
-    # stream_session.start()
+    stream_session.start()
     print("Started")
 
     while not exit_event.is_set():

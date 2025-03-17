@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
-#include "py_settings.h"
+#include "settings.h"
 
 #include <variant>
 #include <chiaki/config.h>
