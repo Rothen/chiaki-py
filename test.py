@@ -3,7 +3,7 @@ import threading
 import signal
 import sys
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
-from chiaki_py.core.log import LogLevel, ChiakiLog, CHIAKI_LOG_ALL
+from chiaki_py.core.log import LogLevel, Log, CHIAKI_LOG_ALL
 from chiaki_py.core.common import Target
 # from chiaki_py.core.session import chiaki_rp_application_reason_string, chiaki_rp_version_string
 import numpy as np
@@ -12,7 +12,7 @@ import cv2
 exit_event = threading.Event()
 
 # level_mask=CHIAKI_LOG_ALL & ~LogLevel.INFO.value
-log = ChiakiLog()
+log = Log()
 host = "192.168.42.43"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
