@@ -14,7 +14,6 @@
 - ctrl.h
 - discovery.h
 - discoveryservice.h
-- ecdh.h
 - feedback.h
 - feedbacksender.h
 - ffmpegdecoder.h

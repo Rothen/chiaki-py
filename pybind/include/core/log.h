@@ -2,7 +2,6 @@
 #define CHIAKI_PY_CORE_LOG_H
 
 #include "core/struct_wrapper.h"
-#include "core/common.h"
 #include <chiaki/common.h>
 #include <chiaki/log.h>
 
