@@ -6,6 +6,7 @@ from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_fra
 from chiaki_py.core.log import Log
 from chiaki_py.core.fec import chiaki_fec_decode, chiaki_fec_encode
 from chiaki_py.core.common import Target
+from chiaki_py.core.audio import AudioHeader
 # from chiaki_py.core.session import chiaki_rp_application_reason_string, chiaki_rp_version_string
 import numpy as np
 import cv2
@@ -13,6 +14,7 @@ import cv2
 exit_event = threading.Event()
 
 # level_mask=CHIAKI_LOG_ALL & ~LogLevel.INFO.value
+audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
 log = Log()
 host = "192.168.42.43"
 regist_key = "b02d1ceb"

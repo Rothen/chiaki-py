@@ -3,7 +3,6 @@
 - remote\holepunch.h
 - remote\rudp.h
 - remote\rudpsendbuffer.h
-- audio.h
 - audioreceiver.h
 - audiosender.h
 - base64.h
