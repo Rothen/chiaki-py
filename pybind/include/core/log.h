@@ -76,6 +76,8 @@ class LogSnifferWrapper : public StructWrapper<ChiakiLogSniffer>
 {
 private:
     ChiakiLogLevel sniff_level;
+    // LogWrapper &forward_log;
+    // LogWrapper &sniff_log;
 
 public:
     using StructWrapper::StructWrapper;

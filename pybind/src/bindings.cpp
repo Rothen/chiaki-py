@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 #include <time.h>
-#include "streamsession.h"
-#include "settings.h"
 #include "av_frame.h"
 #include "core/common.h"
 #include "core/audio.h"
+#include "core/base64.h"
+#include "core/bitstream.h"
+#include "core/controller.h"
 #include "core/ecdh.h"
 #include "core/fec.h"
+#include "core/feedback.h"
 #include "core/log.h"
+#include "settings.h"
+#include "streamsession.h"
 // #include "core/session.h"
 // #include "core/takion.h"
 // #include "core/remote/holepunch.h"
@@ -170,8 +174,12 @@ PYBIND11_MODULE(chiaki_py, m)
     // auto m_core_takion = m_core.def_submodule("takion", "The takion submodule.");
     auto m_core_common = m_core.def_submodule("common", "The common submodule.");
     auto m_core_audio = m_core.def_submodule("audio", "The audio submodule.");
+    auto m_core_base64 = m_core.def_submodule("base64", "The base64 submodule.");
+    auto m_core_bitstream = m_core.def_submodule("bitstream", "The bitstream submodule.");
+    auto m_core_controller = m_core.def_submodule("controller", "The controller submodule.");
     auto m_core_ecdh = m_core.def_submodule("ecdh", "The ecdh submodule.");
     auto m_core_fec = m_core.def_submodule("fec", "The fec submodule.");
+    auto m_core_feedback = m_core.def_submodule("feedback", "The feedback submodule.");
     auto m_core_log = m_core.def_submodule("log", "The log submodule.");
     // auto m_core_session = m_core.def_submodule("session", "The session submodule.");
 
@@ -181,8 +189,12 @@ PYBIND11_MODULE(chiaki_py, m)
     // init_core_takion(m_core_takion);
     init_core_common(m_core_common);
     init_core_audio(m_core_audio);
+    init_core_base64(m_core_base64);
+    init_core_bitstream(m_core_bitstream);
+    init_core_controller(m_core_controller);
     init_core_ecdh(m_core_ecdh);
     init_core_fec(m_core_fec);
+    init_core_feedback(m_core_feedback);
     init_core_log(m_core_log);
     // init_core_session(m_core_session);
     // init_core_remote_holepunch(m_remote_holepunch);

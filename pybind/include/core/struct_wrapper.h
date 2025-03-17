@@ -23,6 +23,7 @@ public:
 
     T *ptr() { return &raw_struct; }
     T &raw() { return raw_struct; }
+    const T &raw() const { return raw_struct; }
 };
 
 #endif // CHIAKI_PY_STRUCT_WRAPPER_H
