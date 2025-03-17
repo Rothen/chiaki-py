@@ -4,6 +4,7 @@ import signal
 import sys
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
 from chiaki_py.core.log import Log
+from chiaki_py.core.fec import chiaki_fec_decode, chiaki_fec_encode
 from chiaki_py.core.common import Target
 # from chiaki_py.core.session import chiaki_rp_application_reason_string, chiaki_rp_version_string
 import numpy as np
@@ -27,9 +28,6 @@ zoom = False
 stretch = False
 ps5 = True
 discover_timout = 2000
-
-# regist_key_list: list[int] = [a for a in map(ord, regist_key)]
-# morning_list: list[int] = [a for a in map(ord, morning)]
 
 settings: Settings = Settings()
 settings.set_log_verbose(False)

@@ -32,9 +32,9 @@ include_directories(${CMAKE_SOURCE_DIR}/pybind/include)
 
 # Source files
 set(SOURCES
-    include/core/common.h
     include/core/log.h
-    # include/core/session.h
+    include/core/fec.h
+    include/core/common.h
     include/controllermanager.h
     include/elapsed_timer.h
     include/exception.h
@@ -44,9 +44,9 @@ set(SOURCES
     include/streamsession.h
     include/timer.h
     include/av_frame.h
-    src/core/common.cpp
     src/core/log.cpp
-    # src/core/session.cpp
+    src/core/fec.cpp
+    src/core/common.cpp
     src/host.cpp
     src/controllermanager.cpp
     src/sessionlog.cpp

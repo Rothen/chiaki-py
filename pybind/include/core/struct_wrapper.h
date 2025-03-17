@@ -5,13 +5,24 @@ template <typename T>
 class StructWrapper
 {
 private:
-    T wrapped_struct;
+    T raw_struct;
 public:
-    StructWrapper() : wrapped_struct{} {}
-    StructWrapper(const T &wrapped) : wrapped_struct(wrapped) {}
-    StructWrapper(T &&wrapped) : wrapped_struct(std::move(wrapped)) {}
-    T *wrapped_ptr() { return &wrapped_struct; }
-    T &wrapped() { return wrapped_struct; }
+    StructWrapper() : raw_struct{} {}
+    StructWrapper(const T &raw) : raw_struct(raw) {}
+    StructWrapper(T &&raw) : raw_struct(std::move(raw)) {}
+
+    // Operator overloads
+    T *operator->() { return &raw_struct; }
+    const T *operator->() const { return &raw_struct; }
+
+    T &operator*() { return raw_struct; }
+    const T &operator*() const { return raw_struct; }
+
+    operator T *() { return &raw_struct; }
+    operator const T *() const { return &raw_struct; }
+
+    T *ptr() { return &raw_struct; }
+    T &raw() { return raw_struct; }
 };
 
 #endif // CHIAKI_PY_STRUCT_WRAPPER_H
