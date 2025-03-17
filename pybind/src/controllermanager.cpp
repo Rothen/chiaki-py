@@ -130,8 +130,8 @@ ControllerManager *ControllerManager::GetInstance()
 ControllerManager::ControllerManager() : 
     creating_controller_mapping(false),
 	joystick_allow_background_events(true),
-    dualsense_intensity(0x00),
-    is_app_active(true)
+    is_app_active(true),
+    dualsense_intensity(0x00)
 {
 	UpdateAvailableControllers();
 }
@@ -198,10 +198,17 @@ void ControllerManager::ControllerClosed(Controller *controller)
 	open_controllers.erase(controller->GetDeviceID());
 }
 
-Controller::Controller(int device_id, ControllerManager *manager)
-: ref(0), micbutton_push(false), is_dualsense(false),
-  is_dualsense_edge(false), has_led(false), firmware_version(0), updating_mapping_button(false), is_handheld(false),
-  is_steam_virtual(false), is_steam_virtual_unmasked(false), enable_analog_stick_mapping(false)
+Controller::Controller(int device_id, ControllerManager *manager) : ref(0),
+                                                                    updating_mapping_button(false),
+                                                                    enable_analog_stick_mapping(false)
+                                                                    /*micbutton_push(false),
+                                                                    is_dualsense(false),
+                                                                    is_dualsense_edge(false),
+                                                                    has_led(false),
+                                                                    firmware_version(0),
+                                                                    is_handheld(false),
+                                                                    is_steam_virtual(false),
+                                                                    is_steam_virtual_unmasked(false),*/
 {
 	this->id = device_id;
 	this->manager = manager;

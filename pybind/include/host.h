@@ -37,9 +37,9 @@ public:
     }
 };
 
-static bool operator==(const HostMAC &a, const HostMAC &b) { return memcmp(a.GetMAC(), b.GetMAC(), 6) == 0; }
-static bool operator!=(const HostMAC &a, const HostMAC &b) { return !(a == b); }
-static bool operator<(const HostMAC &a, const HostMAC &b) { return a.GetValue() < b.GetValue(); }
+// static bool operator==(const HostMAC &a, const HostMAC &b) { return memcmp(a.GetMAC(), b.GetMAC(), 6) == 0; }
+// static bool operator!=(const HostMAC &a, const HostMAC &b) { return !(a == b); }
+// static bool operator<(const HostMAC &a, const HostMAC &b) { return a.GetValue() < b.GetValue(); }
 
 class HiddenHost
 {
@@ -57,7 +57,7 @@ public:
     void SetNickname(const std::string &nickname) { this->server_nickname = nickname; }
 };
 
-static bool operator==(const HiddenHost &a, const HiddenHost &b) { return (a.GetMAC() == b.GetMAC() && a.GetNickname() == b.GetNickname()); }
+// static bool operator==(const HiddenHost &a, const HiddenHost &b) { return (a.GetMAC() == b.GetMAC() && a.GetNickname() == b.GetNickname()); }
 class RegisteredHost
 {
 public:
@@ -113,7 +113,7 @@ public:
         this->registered_mac = registered_host.GetServerMAC();
     }
 };
-static bool operator==(const ManualHost &a, const ManualHost &b) { return (a.GetID() == b.GetID() && a.GetHost() == b.GetHost() && a.GetRegistered() == b.GetRegistered() && a.GetMAC() == b.GetMAC()); }
+// static bool operator==(const ManualHost &a, const ManualHost &b) { return (a.GetID() == b.GetID() && a.GetHost() == b.GetHost() && a.GetRegistered() == b.GetRegistered() && a.GetMAC() == b.GetMAC()); }
 class PsnHost
 {
 private:

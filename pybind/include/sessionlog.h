@@ -19,9 +19,9 @@ class SessionLog
     friend class SessionLogPrivate;
 
     private:
-        StreamSession *session;
+        // StreamSession *session;
         ChiakiLog log;
-        std::ofstream *file;
+        // std::ofstream *file;
 
         void Log(ChiakiLogLevel level, const char *msg);
 

@@ -8,7 +8,7 @@
 static void LogCb(ChiakiLogLevel level, const char *msg, void *user);
 
 SessionLog::SessionLog(StreamSession *session, uint32_t level_mask, const std::string &filename)
-	: session(session)
+	// : session(session)
 {
     chiaki_log_init(&log, level_mask, LogCb, this);
 
@@ -89,10 +89,10 @@ std::string CreateLogFilename()
         return "";
 
     std::ostringstream filename;
-    auto now = std::chrono::system_clock::now();
-    auto now_time = std::chrono::system_clock::to_time_t(now);
+    // auto now = std::chrono::system_clock::now();
+    // auto now_time = std::chrono::system_clock::to_time_t(now);
 
-    filename << "chiaki_session_" << std::put_time(std::localtime(&now_time), date_format.c_str()) << ".log";
+    // filename << "chiaki_session_" << std::put_time(std::localtime(&now_time), date_format.c_str()) << ".log";
     std::string log_file = dir_str + "/" + filename.str();
 
     // Cleanup old logs

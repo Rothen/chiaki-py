@@ -65,14 +65,14 @@ class Controller
 		ChiakiControllerState state;
 		bool updating_mapping_button;
 		bool enable_analog_stick_mapping;
-		bool is_dualsense;
-		bool is_handheld;
-		bool is_steam_virtual;
-		bool is_steam_virtual_unmasked;
-		bool is_dualsense_edge;
-		bool has_led;
-		bool micbutton_push;
-		uint16_t firmware_version;
+		// bool s_dualsense;
+		// bool is_handheld;
+		// bool is_steam_virtual;
+		// bool is_steam_virtual_unmasked;
+		// bool is_dualsense_edge;
+		// bool has_led;
+		// bool micbutton_push;
+		// uint16_t firmware_version;
 
 	public:
 		~Controller();

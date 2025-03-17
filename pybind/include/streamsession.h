@@ -103,10 +103,10 @@ class StreamSession
 	private:
         std::string host;
         bool connected = false;
-        double measuredBitrate = 0.0;
-        double averagePacketLoss = 0.0;
+        // double measuredBitrate = 0.0;
+        // double averagePacketLoss = 0.0;
         bool muted = false;
-        bool cantDisplay = false;
+        // bool cantDisplay = false;
 
 		SessionLog log;
 		ChiakiSession session;
@@ -120,15 +120,15 @@ class StreamSession
 		double average_packet_loss = 0;
 		std::list<double> packet_loss_history;
 		bool cant_display = false;
-		int haptics_handheld;
-		float rumble_multiplier;
-		int ps5_rumble_intensity;
-		int ps5_trigger_intensity;
+		// int haptics_handheld;
+		// float rumble_multiplier;
+		// int ps5_rumble_intensity;
+		// int ps5_trigger_intensity;
 		uint8_t led_color[3];
         std::unordered_map<int, Controller *> controllers;
         std::queue<uint16_t> rumble_haptics;
-		bool rumble_haptics_connected;
-		bool rumble_haptics_on;
+		// bool rumble_haptics_connected;
+		// bool rumble_haptics_on;
 		float PS_TOUCHPAD_MAX_X, PS_TOUCHPAD_MAX_Y;
 		ChiakiControllerState keyboard_state;
 		ChiakiControllerState touch_state;
@@ -136,7 +136,7 @@ class StreamSession
 		int8_t mouse_touch_id;
 		ChiakiControllerState dpad_touch_state;
 		uint16_t dpad_touch_increment;
-		float trigger_override;
+		// float trigger_override;
 		float haptic_override;
 		bool dpad_regular;
 		bool dpad_regular_touch_switched;
@@ -157,9 +157,9 @@ class StreamSession
 		void TriggerFfmpegFrameAvailable();
 		std::string audio_out_device_name;
 		std::string audio_in_device_name;
-		size_t audio_out_sample_size;
-		bool audio_out_drain_queue;
-		size_t haptics_buffer_size;
+		// size_t audio_out_sample_size;
+		// bool audio_out_drain_queue;
+		// size_t haptics_buffer_size;
 		unsigned int audio_buffer_size;
 		ChiakiHolepunchSession holepunch_session;
 		uint8_t *haptics_resampler_buf;

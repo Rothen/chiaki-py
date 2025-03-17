@@ -65,7 +65,7 @@ class Settings
         // Settings
         ChiakiDisableAudioVideo audioVideoDisabled;
         bool logVerbose;
-        uint32_t logLevelMask;
+        // uint32_t logLevelMask;
         RumbleHapticsIntensity rumbleHapticsIntensity;
         bool buttonsByPosition;
         bool startMicUnmuted;
@@ -93,8 +93,8 @@ class Settings
         std::string hardwareDecoder;
         float packetLossMax;
         int audioVolume;
-        unsigned int audioBufferSizeDefault;
-        unsigned int audioBufferSizeRaw;
+        // unsigned int audioBufferSizeDefault;
+        // unsigned int audioBufferSizeRaw;
         unsigned int audioBufferSize;
         std::string audioOutDevice;
         std::string audioInDevice;
@@ -106,10 +106,10 @@ class Settings
         unsigned int dpadTouchShortcut3;
         unsigned int dpadTouchShortcut4;
         std::string psnAccountId;
-        ChiakiConnectVideoProfile videoProfileLocalPS4;
-        ChiakiConnectVideoProfile videoProfileRemotePS4;
-        ChiakiConnectVideoProfile videoProfileLocalPS5;
-        ChiakiConnectVideoProfile videoProfileRemotePS5;
+        // ChiakiConnectVideoProfile videoProfileLocalPS4;
+        // ChiakiConnectVideoProfile videoProfileRemotePS4;
+        // ChiakiConnectVideoProfile videoProfileLocalPS5;
+        // ChiakiConnectVideoProfile videoProfileRemotePS5;
         static std::string chiakiControllerButtonName;
         std::map<int, int> controllerMapping;
         std::map<int, int> controllerMappingForDecoding;

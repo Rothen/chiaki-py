@@ -109,7 +109,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
     this->host = std::move(host);
 
     std::memset(this->regist_key, '\0', CHIAKI_SESSION_AUTH_SIZE); // Zero out first
-    std::strncpy(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
+    strncpy_s(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
 
     std::memset(this->morning, 0, 0x10);
     std::memcpy(this->morning, morning.data(), morning.size());
@@ -155,9 +155,26 @@ static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user);
 
 std::string fromLocal8Bit(const std::string &localStr)
 {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    /*std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::wstring wideStr = converter.from_bytes(localStr); // Convert ANSI → Wide String
-    return converter.to_bytes(wideStr);                    // Convert Wide String → UTF-8
+    return converter.to_bytes(wideStr);                    // Convert Wide String → UTF-8*/
+    // Convert ANSI (Local Code Page) → Wide String (UTF-16)
+    int wideLen = MultiByteToWideChar(CP_ACP, 0, localStr.c_str(), -1, nullptr, 0);
+    if (wideLen == 0)
+        return ""; // Conversion failed
+
+    std::wstring wideStr(wideLen, 0);
+    MultiByteToWideChar(CP_ACP, 0, localStr.c_str(), -1, &wideStr[0], wideLen);
+
+    // Convert Wide String (UTF-16) → UTF-8
+    int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (utf8Len == 0)
+        return ""; // Conversion failed
+
+    std::string utf8Str(utf8Len, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, &utf8Str[0], utf8Len, nullptr, nullptr);
+
+    return utf8Str;
 }
 
 static const std::string base64_chars =
@@ -191,16 +208,16 @@ std::vector<uint8_t> fromBase64(const std::string &base64Str)
 
 StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
     : log(this, connect_info.log_level_mask, connect_info.log_file),
-      ffmpeg_decoder(nullptr),
-      haptics_handheld(0),
       session_started(false),
-      haptics_resampler_buf(nullptr),
+      ffmpeg_decoder(nullptr),
       holepunch_session(nullptr),
-      rumble_multiplier(1),
-      ps5_rumble_intensity(0x00),
-      ps5_trigger_intensity(0x00),
-      rumble_haptics_connected(false),
-      rumble_haptics_on(false)
+      haptics_resampler_buf(nullptr)
+      // haptics_handheld(0),
+      // rumble_multiplier(1),
+      // ps5_rumble_intensity(0x00),
+      // ps5_trigger_intensity(0x00),
+      // rumble_haptics_connected(false),
+      // rumble_haptics_on(false)
 {
 
 #ifdef _WIN32
@@ -533,11 +550,11 @@ ChiakiErrorCode StreamSession::ConnectPsnConnection(std::string duid, bool ps5)
     if (ps5)
         CHIAKI_LOGI(log, "Duid: %s", duid.data());
     size_t duid_len = duid.size();
-    size_t duid_bytes_len = duid_len / 2;
+    const size_t duid_bytes_len{duid_len / 2};
     size_t duid_bytes_lenr = duid_bytes_len;
-    uint8_t duid_bytes[duid_bytes_len];
-    memset(duid_bytes, 0, duid_bytes_len);
-    parse_hex(duid_bytes, &duid_bytes_lenr, duid.data(), duid_len);
+    std::vector<uint8_t> duid_bytes(duid_bytes_len);
+    memset(duid_bytes.data(), 0, duid_bytes_len);
+    parse_hex(duid_bytes.data(), &duid_bytes_lenr, duid.data(), duid_len);
     if (duid_bytes_len != duid_bytes_lenr)
     {
         CHIAKI_LOGE(log, "Couldn't convert duid string to bytes got size mismatch");
@@ -564,7 +581,7 @@ ChiakiErrorCode StreamSession::ConnectPsnConnection(std::string duid, bool ps5)
         return err;
     }
     CHIAKI_LOGI(log, ">> Created offer msg for ctrl connection");
-    err = chiaki_holepunch_session_start(holepunch_session, duid_bytes, console_type);
+    err = chiaki_holepunch_session_start(holepunch_session, duid_bytes.data(), console_type);
     if (err != CHIAKI_ERR_SUCCESS)
     {
         CHIAKI_LOGE(log, "!! Failed to start session");

@@ -26,7 +26,10 @@ Settings::Settings() : rumbleHapticsIntensity(RumbleHapticsIntensity::Normal),
                        codecPS4(CHIAKI_CODEC_H264),
                        codecLocalPS5(CHIAKI_CODEC_H265),
                        codecRemotePS5(CHIAKI_CODEC_H265),
-                       audioBufferSizeRaw(0),
+                       displayTargetContrast(0),
+                       displayTargetPeak(0),
+                       displayTargetTrc(0),
+                       displayTargetPrim(0),
                        decoder(Decoder::Ffmpeg),
                        hardwareDecoder("vulkan"),
                        packetLossMax(0.05),
@@ -35,11 +38,8 @@ Settings::Settings() : rumbleHapticsIntensity(RumbleHapticsIntensity::Normal),
                        dpadTouchShortcut1(9),
                        dpadTouchShortcut2(10),
                        dpadTouchShortcut3(7),
-                       dpadTouchShortcut4(0),
-                       displayTargetContrast(0),
-                       displayTargetPeak(0),
-                       displayTargetTrc(0),
-                       displayTargetPrim(0)
+                       dpadTouchShortcut4(0)
+// audioBufferSizeRaw(0),
 { }
 
 unsigned int Settings::GetAudioBufferSize() const

@@ -140,7 +140,7 @@ py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t
 
     int height = frame->height;
     int width = frame->width;
-    int channels = (frame->format == AV_PIX_FMT_RGB24 || frame->format == AV_PIX_FMT_YUV420P) ? 3 : 1;
+    // int channels = (frame->format == AV_PIX_FMT_RGB24 || frame->format == AV_PIX_FMT_YUV420P) ? 3 : 1;
     int data_size = av_image_get_buffer_size((AVPixelFormat)frame->format, width, height, 1);
 
     if (data_size <= 0)
