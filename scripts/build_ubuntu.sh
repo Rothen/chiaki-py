@@ -1,9 +1,6 @@
 git submodule update --init --recursive
 
 pip install --user protobuf grpcio-tools setuptools --break-system-packages
-conda install -c conda-forge gcc=12.1.0
-
-export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/mnt/c/' | tr '\n' ':')
 
 sudo apt install -y ninja-build \
     protobuf-compiler \
@@ -28,13 +25,19 @@ sudo apt install -y ninja-build \
     libswscale-dev \
     libavdevice-dev
 
-cmake -S . -B build -G "Ninja" \
+cmake -S . -B build-debug -G "Ninja" \
     -DCMAKE_BUILD_TYPE=Debug \
-    -DCHIAKI_ENABLE_PYBIND=ON \
+    -DPython_EXECUTABLE=$(which python) \
+    -DPython3_EXECUTABLE=$(which python3) \
+    -DCHIAKI_ENABLE_TESTS=OFF \
     -DCHIAKI_ENABLE_CLI=OFF \
     -DCHIAKI_ENABLE_GUI=OFF \
+    -DCHIAKI_ENABLE_ANDROID=OFF \
+    -DCHIAKI_ENABLE_BOREALIS=OFF \
     -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF \
     -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF \
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_C_COMPILER=/usr/bin/gcc \
+    -DCMAKE_CXX_COMPILER=/usr/bin/g++
 
-cmake --build build --config Debug --clean-first --target chiaki_py
+cmake --build build-debug --config Debug --clean-first --target chiaki-lib
