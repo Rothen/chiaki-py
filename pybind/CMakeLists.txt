@@ -1,12 +1,3 @@
-# set(SOURCE
-#     include/chiaki-pybind.h
-#     src/py_discover.c
-#     src/py_wakeup.c)
-
-# add_library(chiaki-pybind-lib STATIC ${SOURCE})
-# target_include_directories(chiaki-pybind-lib PUBLIC "include")
-# target_link_libraries(chiaki-pybind-lib chiaki)
-
 if(NOT DEPS_FOLDER)
     set(DEPS_FOLDER ${CMAKE_SOURCE_DIR}/deps)
 endif(NOT DEPS_FOLDER)
@@ -14,7 +5,6 @@ endif(NOT DEPS_FOLDER)
 # Include directories
 find_package(Python REQUIRED COMPONENTS Interpreter Development)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
-# find_package(Boost REQUIRED COMPONENTS filesystem)
 find_package(fmt REQUIRED)
 
 
@@ -50,6 +40,7 @@ set(SOURCES
     include/streamsession.h
     include/timer.h
     include/av_frame.h
+    include/utils.h
     src/core/common.cpp
     src/core/audio.cpp
     src/core/base64.cpp
@@ -65,11 +56,13 @@ set(SOURCES
     src/settings.cpp
     src/streamsession.cpp
     src/av_frame.cpp
+    src/utils.cpp
     src/bindings.cpp
 )
 
 # Create the shared library (Python module)
-pybind11_add_module(chiaki_py ${SOURCES})
+pybind11_add_module(chiaki-py ${SOURCES})
+set_target_properties(chiaki-py PROPERTIES OUTPUT_NAME "chiaki_py")
 
 # set(FFMPEG_LIBRARIES
 #     ${CMAKE_SOURCE_DIR}/deps/lib/avcodec.lib
@@ -113,19 +106,27 @@ include_directories(" C:/Users/benir/Documents/Projects/chiaki-py/libs/chiaki-ng
 link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
 
 # Link against chiaki
-# target_link_libraries(chiaki_py PRIVATE chiaki-pybind-lib fmt::fmt ${FFMPEG_LIBRARIES})
-target_link_libraries(chiaki_py PRIVATE fmt::fmt)
-# target_include_directories(chiaki_py PRIVATE ${FFMPEG_INCLUDE_DIRS})
+# target_link_libraries(chiaki-py PRIVATE chiaki-pybind-lib fmt::fmt ${FFMPEG_LIBRARIES})
+target_link_libraries(chiaki-py PRIVATE fmt::fmt)
+# target_include_directories(chiaki-py PRIVATE ${FFMPEG_INCLUDE_DIRS})
+
+find_package(Threads REQUIRED)
+target_link_libraries(chiaki-py PRIVATE Threads::Threads)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-target_link_libraries(chiaki_py PRIVATE chiaki-lib)
-
+# target_link_libraries(chiaki-py PRIVATE chiaki)
+target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.a)
+target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/libjerasure.a)
+target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/libgf_complete.a)
+target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/curl/lib/libcurl-d.a)
+target_link_libraries(chiaki-py PRIVATE Nanopb::nanopb)
+target_link_libraries(chiaki-py PRIVATE Jerasure::Jerasure)
 if(WIN32)
-    target_link_libraries(chiaki_py PRIVATE wsock32 ws2_32 bcrypt iphlpapi)
+    target_link_libraries(chiaki-py PRIVATE wsock32 ws2_32 bcrypt iphlpapi)
 endif()
 
-add_custom_command(TARGET chiaki_py POST_BUILD
-    VERBATIM COMMAND python -c "import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('.') ; sys.argv.append('chiaki_py') ; main() " ||(exit 0)
+add_custom_command(TARGET chiaki-py POST_BUILD
+    VERBATIM COMMAND python -c "import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('.') ; sys.argv.append('chiaki-py') ; main() " ||(exit 0)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT " Creating stubs for MC3D-TRECSIM "
 )

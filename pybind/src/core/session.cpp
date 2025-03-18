@@ -46,7 +46,7 @@ public:
     void set_regist_key(const std::string &key)
     {
         memset(info.regist_key, 0, CHIAKI_SESSION_AUTH_SIZE);
-        strncpy_s(info.regist_key, key.c_str(), CHIAKI_SESSION_AUTH_SIZE);
+        strncpy(info.regist_key, key.c_str(), CHIAKI_SESSION_AUTH_SIZE);
     }
 
     std::vector<uint8_t> get_morning() const

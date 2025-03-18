@@ -22,17 +22,13 @@ brew install --force streetpea/streetpea/chiaki-ng-qt@6 \
     libevdev \
     json-c miniupnpc
 
-cmake -S . -B build -G "Ninja" \
-    -DCMAKE_BUILD_TYPE=Debug \
+cmake -S . -B build-debug  -G Ninja \
     -DCHIAKI_ENABLE_PYBIND=ON \
-    -DCHIAKI_ENABLE_CLI=OFF \
-    -DCHIAKI_ENABLE_GUI=OFF \
     -DPython_EXECUTABLE=$(which python) \
     -DPython3_EXECUTABLE=$(which python3) \
-    -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF \
-    -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF \
-    -DCMAKE_PREFIX_PATH="$(brew --prefix openssl);$(brew --prefix chiaki-ng-qt)" \
+    -DCMAKE_C_COMPILER=/usr/bin/clang \
+    -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 
 export CPATH=$(brew --prefix)/opt/ffmpeg/include
-cmake --build build --config Debug --clean-first --target chiaki_py
+cmake --build build-debug --config Debug --clean-first --target chiaki-py

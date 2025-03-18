@@ -32,6 +32,8 @@ cmake -S . -B build-debug -G "Ninja" \
     -DCHIAKI_ENABLE_BOREALIS=OFF \
     -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF \
     -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF \
+    -DBUILD_PYTHON=ON \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/@openssl@3"
 
 export CPATH=$(brew --prefix)/opt/ffmpeg/include

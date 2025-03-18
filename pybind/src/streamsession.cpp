@@ -1,6 +1,11 @@
 // SPDX - License - Identifier : LicenseRef - AGPL - 3.0 - only - OpenSSL
 
 #include "../../lib/src/utils.h"
+#include "utils.h"
+#include "streamsession.h"
+#include "settings.h"
+#include "controllermanager.h"
+
 #include <ios>
 #include <cstring>
 #include <iostream>
@@ -8,9 +13,6 @@
 #include <locale>
 #include <codecvt>
 #include <fmt/core.h>
-#include "streamsession.h"
-#include "settings.h"
-#include "controllermanager.h"
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
@@ -28,6 +30,8 @@
 #else
     #include <netdb.h>
     #include <netinet/in.h>
+    #define CP_ACP 0
+    #define CP_UTF8 65001
 #endif
 
 #define SETSU_UPDATE_INTERVAL_MS 4
@@ -109,7 +113,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
     this->host = std::move(host);
 
     std::memset(this->regist_key, '\0', CHIAKI_SESSION_AUTH_SIZE); // Zero out first
-    strncpy_s(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
+    strncpy(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
 
     std::memset(this->morning, 0, 0x10);
     std::memcpy(this->morning, morning.data(), morning.size());
@@ -152,30 +156,6 @@ static void HapticsFrameCb(uint8_t *buf, size_t buf_size, void *user);
 static void CantDisplayCb(void *user, bool cant_display);
 static void EventCb(ChiakiEvent *event, void *user);
 static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user);
-
-std::string fromLocal8Bit(const std::string &localStr)
-{
-    /*std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    std::wstring wideStr = converter.from_bytes(localStr); // Convert ANSI → Wide String
-    return converter.to_bytes(wideStr);                    // Convert Wide String → UTF-8*/
-    // Convert ANSI (Local Code Page) → Wide String (UTF-16)
-    int wideLen = MultiByteToWideChar(CP_ACP, 0, localStr.c_str(), -1, nullptr, 0);
-    if (wideLen == 0)
-        return ""; // Conversion failed
-
-    std::wstring wideStr(wideLen, 0);
-    MultiByteToWideChar(CP_ACP, 0, localStr.c_str(), -1, &wideStr[0], wideLen);
-
-    // Convert Wide String (UTF-16) → UTF-8
-    int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (utf8Len == 0)
-        return ""; // Conversion failed
-
-    std::string utf8Str(utf8Len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, &utf8Str[0], utf8Len, nullptr, nullptr);
-
-    return utf8Str;
-}
 
 static const std::string base64_chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
