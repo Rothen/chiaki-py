@@ -1,6 +1,8 @@
 #ifndef CHIAKI_PY_STRUCT_WRAPPER_H
 #define CHIAKI_PY_STRUCT_WRAPPER_H
 
+#include <utility>
+
 template <typename T>
 class StructWrapper
 {

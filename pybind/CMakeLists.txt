@@ -71,46 +71,36 @@ set(SOURCES
 # Create the shared library (Python module)
 pybind11_add_module(chiaki_py ${SOURCES})
 
-set(FFMPEG_LIBRARIES
-    ${CMAKE_SOURCE_DIR}/deps/lib/avcodec.lib
-    ${CMAKE_SOURCE_DIR}/deps/lib/avformat.lib
-    ${CMAKE_SOURCE_DIR}/deps/lib/avutil.lib
-    ${CMAKE_SOURCE_DIR}/deps/lib/swscale.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/chiaki.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/jerasure.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/gf_complete.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/curl/lib/libcurl-d.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/nanopb/protobuf-nanopbd.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/fftw3.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/fftw3f.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/fftw3l.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/hidapi.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/json-c-static.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/json-c.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/lcms2.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libcrypto.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libprotobuf-lite.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libprotobuf.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libprotoc.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libssl.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/miniupnpc.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/opus.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/pkgconf.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/SDL2.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/speexdsp.lib
-    ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/vulkan-1.lib
-    ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/lib/zlib.lib
-)
-find_package(Libssh2)
-find_package(Libssh2 CONFIG REQUIRED)
-target_link_libraries(chiaki_py PRIVATE $<IF:$<TARGET_EXISTS:Libssh2::libssh2_shared>,Libssh2::libssh2_shared,Libssh2::libssh2_static>)
-target_link_libraries(chiaki_py PRIVATE crypt32.lib)
-if(LIBSSH2_FOUND)
-    list(APPEND CURL_LIBS ${LIBSSH2_LIBRARIES})
-    list(APPEND LIBCURL_PC_REQUIRES_PRIVATE "libssh2")
-    include_directories(SYSTEM ${LIBSSH2_INCLUDE_DIRS})
-    set(USE_LIBSSH2 ON)
-endif()
+# set(FFMPEG_LIBRARIES
+#     ${CMAKE_SOURCE_DIR}/deps/lib/avcodec.lib
+#     ${CMAKE_SOURCE_DIR}/deps/lib/avformat.lib
+#     ${CMAKE_SOURCE_DIR}/deps/lib/avutil.lib
+#     ${CMAKE_SOURCE_DIR}/deps/lib/swscale.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/chiaki.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/jerasure.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/gf_complete.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/curl/lib/libcurl-d.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/nanopb/protobuf-nanopbd.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/fftw3.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/fftw3f.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/fftw3l.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/hidapi.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/json-c-static.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/json-c.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/lcms2.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libcrypto.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libprotobuf-lite.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libprotobuf.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libprotoc.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/libssl.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/miniupnpc.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/opus.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/pkgconf.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/SDL2.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/speexdsp.lib
+#     ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/vcpkg_installed/x64-windows/lib/vulkan-1.lib
+#     ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/lib/zlib.lib
+# )
 
 set(FFMPEG_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/deps/include
@@ -124,19 +114,13 @@ link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
 
 # Link against chiaki
 # target_link_libraries(chiaki_py PRIVATE chiaki-pybind-lib fmt::fmt ${FFMPEG_LIBRARIES})
-target_link_libraries(chiaki_py PRIVATE fmt::fmt ${FFMPEG_LIBRARIES})
-target_include_directories(chiaki_py PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_libraries(chiaki_py PRIVATE fmt::fmt)
+# target_include_directories(chiaki_py PRIVATE ${FFMPEG_INCLUDE_DIRS})
 
-# find_library(CHIAKI_LIB NAMES chiaki PATHS "${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/chiaki.lib")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-if(CHIAKI_LIB)
-    # target_link_libraries(chiaki_py PRIVATE chiaki)
-else()
-    message(FATAL_ERROR " Chiaki library not found! ")
-endif()
+target_link_libraries(chiaki_py PRIVATE chiaki-lib)
 
 if(WIN32)
-    # target_link_libraries(chiaki-pybind-lib ws2_32)
     target_link_libraries(chiaki_py PRIVATE wsock32 ws2_32 bcrypt iphlpapi)
 endif()
 
