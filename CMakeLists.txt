@@ -20,6 +20,8 @@ set(CHIAKI_USE_SYSTEM_CURL OFF)
 list(APPEND CMAKE_REQUIRED_LIBRARIES "ws2_32" "crypt32")
 
 add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY_VERSION_MINOR=${CHIAKI_PY_VERSION_MINOR} -DCHIAKI_PY_VERSION_PATCH=${CHIAKI_PY_VERSION_PATCH} -DCHIAKI_PY_VERSION=\"${CHIAKI_PY_VERSION}\")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake;${CMAKE_CURRENT_SOURCE_DIR}/setsu/cmake")
-add_subdirectory(libs/chiaki-ng/third-party)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/cmake;${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/setsu/cmake")
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/third-party)
+
+
 add_subdirectory(pybind)

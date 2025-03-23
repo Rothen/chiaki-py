@@ -6,6 +6,7 @@ endif(NOT DEPS_FOLDER)
 find_package(Python REQUIRED COMPONENTS Interpreter Development)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 find_package(fmt REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 
 set(PYBIND11_PYTHON_VERSION 3.11)
@@ -99,10 +100,10 @@ set(FFMPEG_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/deps/include
 )
 
-include_directories(SYSTEM BEFORE "${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include")
+# include_directories(SYSTEM BEFORE "${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include")
 
 # Ensure that CMake correctly finds FFmpeg
-include_directories(" C:/Users/benir/Documents/Projects/chiaki-py/libs/chiaki-ng/lib/include ")
+# include_directories(" C:/Users/benir/Documents/Projects/chiaki-py/libs/chiaki-ng/lib/include ")
 link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
 
 # Link against chiaki
@@ -110,15 +111,34 @@ link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
 target_link_libraries(chiaki-py PRIVATE fmt::fmt)
 # target_include_directories(chiaki-py PRIVATE ${FFMPEG_INCLUDE_DIRS})
 
+find_package(FFMPEG COMPONENTS avcodec avutil avformat swscale)
+if(FFMPEG_FOUND)
+    set(CHIAKI_ENABLE_FFMPEG_DECODER ON)
+else()
+    if(NOT CHIAKI_ENABLE_FFMPEG_DECODER STREQUAL AUTO)
+        message(FATAL_ERROR "CHIAKI_ENABLE_FFMPEG_DECODER is set to ON, but ffmpeg could not be found.")
+    endif()
+    set(CHIAKI_ENABLE_FFMPEG_DECODER OFF)
+endif()
+
+target_link_libraries(chiaki-py PRIVATE FFMPEG::avcodec FFMPEG::avutil FFMPEG::avformat FFMPEG::swscale)
+
 find_package(Threads REQUIRED)
 target_link_libraries(chiaki-py PRIVATE Threads::Threads)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-# target_link_libraries(chiaki-py PRIVATE chiaki)
-target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.a)
+
+add_library(chiaki-lib STATIC IMPORTED)
+set_target_properties(chiaki-lib PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.dylib
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
+)
+
+target_link_libraries(chiaki-py PRIVATE chiaki-lib)
 target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/libjerasure.a)
 target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/libgf_complete.a)
 target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/curl/lib/libcurl-d.a)
+# target_link_libraries(chiaki-py PRIVATE ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.a)
 target_link_libraries(chiaki-py PRIVATE Nanopb::nanopb)
 target_link_libraries(chiaki-py PRIVATE Jerasure::Jerasure)
 if(WIN32)
