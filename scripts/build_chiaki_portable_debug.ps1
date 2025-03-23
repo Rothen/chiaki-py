@@ -7,15 +7,19 @@ cmake `
     -DCMAKE_TOOLCHAIN_FILE:STRING="vcpkg/scripts/buildsystems/vcpkg.cmake" `
     -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE `
     -DCMAKE_BUILD_TYPE=Debug `
+    -DCHIAKI_ENABLE_TESTS=OFF `
     -DCHIAKI_ENABLE_CLI=OFF `
-    -DCHIAKI_ENABLE_PYBIND=OFF `
-    -DCHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER=ON `
+    -DCHIAKI_ENABLE_GUI=OFF `
+    -DCHIAKI_ENABLE_ANDROID=OFF `
+    -DCHIAKI_ENABLE_BOREALIS=OFF `
     -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF `
+    -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF `
+    -DCHIAKI_ENABLE_FFMPEG_DECODER=ON `
     -DPYTHON_EXECUTABLE="${env:python_path}\python.exe" `
     -DCMAKE_PREFIX_PATH="${env:workplace}\${env:dep_folder}; ${env:VULKAN_SDK}"
 
 # Build chiaki-ng
-cmake --build build-debug --config Debug --clean-first --target chiaki
+cmake --build build-debug --config Debug --clean-first --target chiaki-lib
 
 # Prepare Qt deployment package
 if (!(Test-Path "chiaki-ng-Win-debug")) {

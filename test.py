@@ -3,7 +3,7 @@ import threading
 import signal
 import sys
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
-from chiaki_py.core.log import Log
+from chiaki_py.core.log import Log, LogLevel
 from chiaki_py.core.fec import chiaki_fec_decode, chiaki_fec_encode
 from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
@@ -11,11 +11,15 @@ from chiaki_py.core.audio import AudioHeader
 import numpy as np
 import cv2
 
+if "-w" in sys.argv:
+    input("Press Enter to continue...")
+
 exit_event = threading.Event()
+print(1)
 
 # level_mask=CHIAKI_LOG_ALL & ~LogLevel.INFO.value
 audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
-log = Log()
+log = Log(level=LogLevel.DEBUG)
 host = "192.168.42.43"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
@@ -30,9 +34,11 @@ zoom = False
 stretch = False
 ps5 = True
 discover_timout = 2000
+print(2)
 
 settings: Settings = Settings()
-settings.set_log_verbose(False)
+settings.set_log_verbose(True)
+print(3)
 
 connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     settings=settings,
@@ -48,6 +54,7 @@ connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     zoom=zoom,
     stretch=stretch
 )
+print(morning_ints)
 
 img = np.zeros((1080, 1920, 3), np.uint8)
 
@@ -62,6 +69,7 @@ stream_session.connected_changed = lambda : print('connected_changed')
 stream_session.measured_bitrate_changed = lambda : print('measured_bitrate_changed')
 stream_session.average_packet_loss_changed = lambda : print('average_packet_loss_changed')
 stream_session.cant_display_changed = lambda a: print('cant_display_changed')
+print(5)
 
 
 def signal_handler(sig: int, frame: Any) -> None:
@@ -73,7 +81,8 @@ def signal_handler(sig: int, frame: Any) -> None:
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
-    
+
+    print(6)
     if "-w" in sys.argv:
         input("Press Enter to continue...")
     print("Starting stream session...")

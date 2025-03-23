@@ -23,5 +23,4 @@ add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/cmake;${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/setsu/cmake")
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/third-party)
 
-
 add_subdirectory(pybind)

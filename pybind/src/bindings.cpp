@@ -354,7 +354,7 @@ PYBIND11_MODULE(chiaki_py, m)
 
     py::class_<StreamSessionConnectInfo>(m, "StreamSessionConnectInfo")
         .def(py::init<>())
-        .def(py::init<Settings *, ChiakiTarget, std::string, std::string, std::string &,
+        /*.def(py::init<Settings *, ChiakiTarget, std::string, std::string, std::string &,
                       std::vector<uint8_t> &, std::string, std::string, bool, bool, bool, bool>(),
              py::arg("settings"),
              py::arg("target"),
@@ -367,7 +367,20 @@ PYBIND11_MODULE(chiaki_py, m)
              py::arg("auto_regist"),
              py::arg("fullscreen"),
              py::arg("zoom"),
-             py::arg("stretch"));
+             py::arg("stretch"))*/
+        .def(py::init([](Settings *settings, ChiakiTarget target, std::string host, std::string nickname, std::string regist_key,
+                         std::vector<uint8_t> morning, std::string initial_login_pin, std::string duid, bool auto_regist, bool fullscreen, bool zoom, bool stretch)
+                      {
+        auto obj = new StreamSessionConnectInfo(
+            settings, target, host, nickname, regist_key,
+            morning, initial_login_pin, duid,
+            auto_regist, fullscreen, zoom, stretch
+        );
+        return obj; }),
+             py::arg("settings"), py::arg("target"), py::arg("host"), py::arg("nickname"),
+             py::arg("regist_key"), py::arg("morning"), py::arg("initial_login_pin"),
+             py::arg("duid"), py::arg("auto_regist"), py::arg("fullscreen"),
+             py::arg("zoom"), py::arg("stretch"));
 
     py::class_<StreamSession>(m, "StreamSession")
         .def(py::init<const StreamSessionConnectInfo &>(), py::arg("connect_info"))
