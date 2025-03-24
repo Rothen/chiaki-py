@@ -1,6 +1,7 @@
 from typing import Any
 import threading
 import signal
+import base64
 import sys
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
 from chiaki_py.core.log import Log, LogLevel
@@ -15,7 +16,6 @@ if "-w" in sys.argv:
     input("Press Enter to continue...")
 
 exit_event = threading.Event()
-print(1)
 
 # level_mask=CHIAKI_LOG_ALL & ~LogLevel.INFO.value
 audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
@@ -24,8 +24,10 @@ host = "192.168.42.43"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
 ps5Id = "78c881a8214a"
-morning = "ª?RÿGC\\x1d/,ðñA\\x10öy³"
-morning_ints: list[int] = [170, 63, 82, 255, 71, 67, 29, 47, 44, 240, 241, 65, 16, 246, 121, 179]
+# morning = "ª?RÿGC\\x1d/,ðñA\\x10öy³"
+morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
+# morning_ints: list[int] = [170, 63, 82, 255, 71, 67, 29, 47, 44, 240, 241, 65, 16, 246, 121, 179]
+# morning_bytes = bytes([170, 63, 82, 255, 71, 67, 29, 47, 44, 240, 241, 65, 16, 246, 121, 179])
 initial_login_pin = ""  # None
 duid = ""  # None
 auto_regist = False
@@ -34,11 +36,10 @@ zoom = False
 stretch = False
 ps5 = True
 discover_timout = 2000
-print(2)
 
 settings: Settings = Settings()
 settings.set_log_verbose(True)
-print(3)
+
 
 connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     settings=settings,
@@ -46,7 +47,7 @@ connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     host=host,
     nickname=nickname,
     regist_key=regist_key,
-    morning=morning_ints,
+    morning=bytes.fromhex(morning),
     initial_login_pin=initial_login_pin,
     duid=duid,
     auto_regist=auto_regist,
@@ -54,7 +55,6 @@ connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     zoom=zoom,
     stretch=stretch
 )
-print(morning_ints)
 
 img = np.zeros((1080, 1920, 3), np.uint8)
 
@@ -69,7 +69,6 @@ stream_session.connected_changed = lambda : print('connected_changed')
 stream_session.measured_bitrate_changed = lambda : print('measured_bitrate_changed')
 stream_session.average_packet_loss_changed = lambda : print('average_packet_loss_changed')
 stream_session.cant_display_changed = lambda a: print('cant_display_changed')
-print(5)
 
 
 def signal_handler(sig: int, frame: Any) -> None:
@@ -82,7 +81,6 @@ def signal_handler(sig: int, frame: Any) -> None:
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
-    print(6)
     if "-w" in sys.argv:
         input("Press Enter to continue...")
     print("Starting stream session...")

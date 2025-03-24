@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "common.h": "c",
+        "chiaki_time.h": "c",
+        "session.h": "c",
+        "random": "cpp",
+        "stacktrace": "cpp",
+        "string": "cpp",
+        "functional": "cpp",
+        "base64.h": "c",
+        "xstring": "cpp",
+        "vector": "cpp"
+    }
+}

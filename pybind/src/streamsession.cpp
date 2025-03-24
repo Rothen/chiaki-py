@@ -84,7 +84,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
     std::string host,
     std::string nickname,
     std::string &regist_key,
-    std::vector<uint8_t> &morning,
+    std::vector<uint8_t> morning,
     std::string initial_login_pin,
     std::string duid,
     bool auto_regist,

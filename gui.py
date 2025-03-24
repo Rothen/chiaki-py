@@ -8,7 +8,10 @@ from PyQt6.QtWidgets import QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt
 import numpy.typing as npt
 import threading
-from chiaki_py import ChiakiLog, LogLevel, Target, Settings, StreamSessionConnectInfo, StreamSession, get_frame
+from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
+from chiaki_py.core.log import Log, LogLevel
+from chiaki_py.core.common import Target
+from chiaki_py.core.audio import AudioHeader
 import numpy as np
 
 class FrameProducer(QThread):
@@ -96,13 +99,15 @@ class ImageStream(QMainWindow):
             a0.accept()
 
 
-log = ChiakiLog(level=LogLevel.INFO)
+log = Log(level=LogLevel.INFO)
+audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
+
 host = "192.168.42.43"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
 ps5Id = "78c881a8214a"
-morning = "ª?RÿGC\\x1d/,ðñA\\x10öy³"
-morning_ints: list[int] = [170, 63, 82, 255, 71, 67, 29, 47, 44, 240, 241, 65, 16, 246, 121, 179]
+morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
+initial_login_pin = ""  # None
 initial_login_pin = ""  # None
 duid = ""  # None
 auto_regist = False
@@ -111,9 +116,6 @@ zoom = False
 stretch = False
 ps5 = True
 discover_timout = 2000
-
-# regist_key_list: list[int] = [a for a in map(ord, regist_key)]
-# morning_list: list[int] = [a for a in map(ord, morning)]
 
 settings: Settings = Settings()
 settings.set_log_verbose(False)
@@ -124,7 +126,7 @@ connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     host=host,
     nickname=nickname,
     regist_key=regist_key,
-    morning=morning_ints,
+    morning=bytes.fromhex(morning),
     initial_login_pin=initial_login_pin,
     duid=duid,
     auto_regist=auto_regist,
