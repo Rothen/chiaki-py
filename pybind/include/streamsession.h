@@ -25,6 +25,10 @@
 #include <chiaki/opusencoder.h>
 #include <chiaki/ffmpegdecoder.h>
 
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11;
+
 class KeyEvent {
     public:
         int key() { return 0; }
@@ -87,7 +91,7 @@ struct StreamSessionConnectInfo
         std::string host,
         std::string nickname,
         std::string &regist_key,
-        std::vector<uint8_t> morning,
+        py::bytes morning,
         std::string initial_login_pin,
         std::string duid,
         bool auto_regist,

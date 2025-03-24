@@ -5,7 +5,6 @@ import base64
 import sys
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
 from chiaki_py.core.log import Log, LogLevel
-from chiaki_py.core.fec import chiaki_fec_decode, chiaki_fec_encode
 from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
 # from chiaki_py.core.session import chiaki_rp_application_reason_string, chiaki_rp_version_string
@@ -57,9 +56,15 @@ connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
 )
 
 img = np.zeros((1080, 1920, 3), np.uint8)
+img_to_show = np.zeros((1080, 1920, 3), np.uint8)
+
+def get_ffmpeg_frame() -> None:
+    """Get the frame from the stream session."""
+    get_frame(stream_session, False, img)
+    cv2.cvtColor(img, cv2.COLOR_RGB2BGR, img_to_show)
 
 stream_session: StreamSession = StreamSession(connect_info)
-stream_session.ffmpeg_frame_available = lambda: get_frame(stream_session, False, img)
+stream_session.ffmpeg_frame_available = lambda: get_ffmpeg_frame()
 stream_session.session_quit = lambda a, b: print('session_quit')
 stream_session.login_pin_requested = lambda a: print('login_pin_requested')
 stream_session.data_holepunch_progress = lambda a: print('data_holepunch_progress')
@@ -88,7 +93,7 @@ if __name__ == "__main__":
     print("Started")
 
     while not exit_event.is_set():
-        cv2.imshow('frame', img)
+        cv2.imshow('frame', img_to_show)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     
