@@ -166,11 +166,12 @@ if ($cc) {
 }
 
 set_env.ps1
+$ProgressPreference = 'SilentlyContinue'
 
 # Install Vulkan SDK
 $ver = (Invoke-WebRequest -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
 Write-Host "Installing Vulkan SDK Version ${ver}"
-# Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.4.304.1/windows/VulkanSDK-1.4.304.1-Installer.exe" -OutFile "VulkanSDK.exe"
+Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.4.304.1/windows/VulkanSDK-1.4.304.1-Installer.exe" -OutFile "VulkanSDK.exe"
 Start-Process -Verb RunAs -Wait -FilePath "VulkanSDK.exe" -ArgumentList "--root ${env:VULKAN_SDK} --accept-licenses --default-answer --confirm-command install"
 Remove-Item "VulkanSDK.exe"
 
@@ -183,10 +184,10 @@ Rename-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1" "${env:dep_folder}"
 Remove-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
 
 # Install QT
-python.exe -m pip install setuptools wheel py7zr==0.20.*
-python.exe -m pip install aqtinstall==3.1.*
-python.exe -m aqt version
-python.exe -m aqt install-qt windows desktop 6.8.* win64_msvc2022_64 --autodesktop --outputdir ${env:workplace}\Qt --modules qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport
+pip install setuptools wheel py7zr==0.20.*
+pip install aqtinstall==3.1.*
+python -m aqt version
+python -m aqt install-qt windows desktop 6.8.2 win64_msvc2022_64 --autodesktop --outputdir ${env:workplace}\Qt --modules qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport
 
 # Build SPIRV-Cross
 if (!(Test-Path "SPIRV-Cross")) {
@@ -221,7 +222,7 @@ if (!(Test-Path "vcpkg")) {
     .\bootstrap-vcpkg.bat
     Set-Location ..
 }
-vcpkg install --recurse --clean-after-build --x-install-root ./vcpkg_installed/ --triplet=${env:triplet}
+vcpkg\vcpkg.exe install --recurse --clean-after-build --x-install-root ./vcpkg_installed/ --triplet=${env:triplet}
 
 # Build libplacebo
 if (!(Test-Path "libplacebo")) {

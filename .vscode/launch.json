@@ -7,7 +7,7 @@
             "name": "Debug C++ in Python Extension",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "C:\\Users\\benir\\anaconda3\\envs\\chiaki-ng\\python.exe",
+            "program": "C:/Users/benir/anaconda3/envs/chiaki-ng/python.exe",
             "args": [
                 "${workspaceFolder}/test.py"
             ],
@@ -26,5 +26,19 @@
             },
             "symbolSearchPath": "${workspaceFolder}/build-debug",
             "externalConsole": false
+        }, {
+            "name": "Launch Qt Debug App",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "chiaki.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/libs/chiaki-ng/chiaki-ng-Win-debug",
+            "environment": [],
+            "console": "externalTerminal",
+            "symbolSearchPath": "${workspaceFolder}/libs/chiaki-ng/build-portable-debug/gui",
+            "logging": {
+                "engineLogging": true
+            }
         }]
 }

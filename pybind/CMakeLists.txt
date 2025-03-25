@@ -48,6 +48,7 @@ set(SOURCES
     include/core/fec.h
     include/core/feedback.h
     include/core/log.h
+    include/backend.h
     include/controllermanager.h
     include/elapsed_timer.h
     include/exception.h
@@ -68,6 +69,7 @@ set(SOURCES
     src/core/fec.cpp
     src/core/feedback.cpp
     src/core/log.cpp
+    src/backend.cpp
     src/host.cpp
     src/controllermanager.cpp
     src/sessionlog.cpp

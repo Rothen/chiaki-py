@@ -7,6 +7,7 @@
 #include "host.h"
 #include "discovery_manager.h"
 #include "utils.h"
+#include "core/common.h"
 
 #include <chiaki/discovery.h>
 
@@ -198,12 +199,12 @@ public:
     // void profileChanged();
 
     // void addManualHost(int index, const std::string &address);
-    bool registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, int target, const std::function<void(/*optional args*/)> &callback)
+    bool registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target, const std::function<void(/*optional args*/)> &callback)
     {
         ChiakiRegistInfo info = {};
 
         info.host = host.data();
-        info.target = static_cast<ChiakiTarget>(target);
+        info.target = target;
         info.broadcast = broadcast;
         info.pin = static_cast<uint32_t>(std::stoul(pin));
         info.console_pin = static_cast<uint32_t>(std::stoul(cpin));
