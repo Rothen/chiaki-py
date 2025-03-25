@@ -32,3 +32,63 @@ std::string fromLocal8Bit(const std::string &localStr)
     return localStr;
 #endif
 }
+
+static const std::string base64_chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
+
+std::vector<uint8_t> fromBase64(const std::string &base64Str)
+{
+    std::vector<uint8_t> decoded;
+    int val = 0, valb = -8;
+
+    for (char c : base64Str)
+    {
+        if (c == '=')
+            break;
+        int pos = base64_chars.find(c);
+        if (pos == std::string::npos)
+            continue;
+
+        val = (val << 6) + pos;
+        valb += 6;
+        if (valb >= 0)
+        {
+            decoded.push_back((val >> valb) & 0xFF);
+            valb -= 8;
+        }
+    }
+    return decoded;
+}
+
+std::vector<unsigned char> fromHex(const std::string &hex)
+{
+    if (hex.size() % 2 != 0)
+    {
+        throw std::invalid_argument("Hex string length must be even");
+    }
+
+    std::vector<unsigned char> result;
+    result.reserve(hex.size() / 2);
+
+    auto hexCharToInt = [](char c) -> unsigned char
+    {
+        if (c >= '0' && c <= '9')
+            return c - '0';
+        if (c >= 'a' && c <= 'f')
+            return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F')
+            return c - 'A' + 10;
+        throw std::invalid_argument("Invalid hex character");
+    };
+
+    for (size_t i = 0; i < hex.size(); i += 2)
+    {
+        unsigned char high = hexCharToInt(hex[i]);
+        unsigned char low = hexCharToInt(hex[i + 1]);
+        result.push_back((high << 4) | low);
+    }
+
+    return result;
+}

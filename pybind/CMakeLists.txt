@@ -55,6 +55,7 @@ set(SOURCES
     include/sessionlog.h
     include/settings.h
     include/streamsession.h
+    include/discovery_manager.h
     include/timer.h
     include/av_frame.h
     include/utils.h
@@ -72,6 +73,7 @@ set(SOURCES
     src/sessionlog.cpp
     src/settings.cpp
     src/streamsession.cpp
+    src/discovery_manager.cpp
     src/av_frame.cpp
     src/utils.cpp
     src/bindings.cpp

@@ -6,3 +6,4 @@ vcpkg/
 vcpkg_installed/
 *.log
 log.pch
+__pycache__/

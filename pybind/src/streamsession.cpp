@@ -158,35 +158,6 @@ static void CantDisplayCb(void *user, bool cant_display);
 static void EventCb(ChiakiEvent *event, void *user);
 static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user);
 
-static const std::string base64_chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789+/";
-
-std::vector<uint8_t> fromBase64(const std::string &base64Str)
-{
-    std::vector<uint8_t> decoded;
-    int val = 0, valb = -8;
-
-    for (char c : base64Str)
-    {
-        if (c == '=')
-            break;
-        int pos = base64_chars.find(c);
-        if (pos == std::string::npos)
-            continue;
-
-        val = (val << 6) + pos;
-        valb += 6;
-        if (valb >= 0)
-        {
-            decoded.push_back((val >> valb) & 0xFF);
-            valb -= 8;
-        }
-    }
-    return decoded;
-}
-
 StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
     : log(this, connect_info.log_level_mask, connect_info.log_file),
       session_started(false),

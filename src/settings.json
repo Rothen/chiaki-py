@@ -1,0 +1,15 @@
+{
+    "host": "192.168.42.43",
+    "regist_key": "b02d1ceb",
+    "nickname": "PS5-083",
+    "ps5Id": "78c881a8214a",
+    "morning": "aa3f52ff47431d2f2cf0f14110f679b3",
+    "initial_login_pin": "",
+    "duid": "",
+    "auto_regist": false,
+    "fullscreen": false,
+    "zoom": false,
+    "stretch": false,
+    "ps5": true,
+    "discover_timout": 2000
+}

@@ -39,7 +39,7 @@ public:
 
 // static bool operator==(const HostMAC &a, const HostMAC &b) { return memcmp(a.GetMAC(), b.GetMAC(), 6) == 0; }
 // static bool operator!=(const HostMAC &a, const HostMAC &b) { return !(a == b); }
-// static bool operator<(const HostMAC &a, const HostMAC &b) { return a.GetValue() < b.GetValue(); }
+static bool operator<(const HostMAC &a, const HostMAC &b) { return a.GetValue() < b.GetValue(); }
 
 class HiddenHost
 {
@@ -80,8 +80,8 @@ public:
     ChiakiTarget GetTarget() const { return target; }
     const HostMAC &GetServerMAC() const { return server_mac; }
     const std::string &GetServerNickname() const { return server_nickname; }
-    const std::vector<uint8_t> GetRPRegistKey() const { return std::vector<uint8_t>(rp_regist_key, rp_regist_key + sizeof(rp_regist_key)); }
-    const std::vector<uint8_t> GetRPKey() const { return std::vector<uint8_t>(rp_key, rp_key + sizeof(rp_key)); }
+    const std::string GetRPRegistKey() const { return std::string(reinterpret_cast<const char *>(rp_regist_key)); }
+    const std::string GetRPKey() const { return std::string(reinterpret_cast<const char *>(rp_key)); }
     const std::string GetConsolePin() const { return console_pin; }
     const std::string &GetAPSSID() { return ap_ssid; }
     const std::string &GetAPBSSID() { return ap_bssid; }

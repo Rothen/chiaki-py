@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 #include <time.h>
 #include "av_frame.h"
 #include "core/common.h"
@@ -12,6 +11,8 @@
 #include "core/log.h"
 #include "settings.h"
 #include "streamsession.h"
+#include "discovery_manager.h"
+#include "backend.h"
 // #include "core/session.h"
 // #include "core/takion.h"
 // #include "core/remote/holepunch.h"
@@ -186,7 +187,7 @@ PYBIND11_MODULE(chiaki_py, m)
     // auto m_remote = m.def_submodule("remote", "The remote submodule.");
     // auto m_remote_holepunch = m.def_submodule("holepunch", "The holepunch submodule.");
 
-    // init_core_takion(m_core_takion);
+    init_backend(m);
     init_core_common(m_core_common);
     init_core_audio(m_core_audio);
     init_core_base64(m_core_base64);
@@ -397,4 +398,30 @@ PYBIND11_MODULE(chiaki_py, m)
         .def_readwrite("measured_bitrate_changed", &StreamSession::MeasuredBitrateChanged)
         .def_readwrite("average_packet_loss_changed", &StreamSession::AveragePacketLossChanged)
         .def_readwrite("cant_display_changed", &StreamSession::CantDisplayChanged);
+
+    py::class_<DiscoveryHostWrapper>(m, "DiscoveryHost")
+        .def(py::init<>())
+        .def("get_host_mac", &DiscoveryHostWrapper::GetHostMAC, "Get the host MAC address.")
+        .def_property("ps5", &DiscoveryHostWrapper::getPs5, &DiscoveryHostWrapper::setPs5, "Get or set the PS5.")
+        .def_property("state", &DiscoveryHostWrapper::getState, &DiscoveryHostWrapper::setState, "Get or set the state.")
+        .def_property("target", &DiscoveryHostWrapper::getTarget, &DiscoveryHostWrapper::setTarget, "Get or set the target.")
+        .def_property("host_request_port", &DiscoveryHostWrapper::getHostRequestPort, &DiscoveryHostWrapper::setHostRequestPort, "Get or set the host request port.")
+        .def_property("host_addr", &DiscoveryHostWrapper::getHostAddr, &DiscoveryHostWrapper::setHostAddr, "Get or set the host address.")
+        .def_property("system_version", &DiscoveryHostWrapper::getSystemVersion, &DiscoveryHostWrapper::setSystemVersion, "Get or set the system version.")
+        .def_property("device_discovery_protocol_version", &DiscoveryHostWrapper::getDeviceDiscoveryProtocolVersion, &DiscoveryHostWrapper::setDeviceDiscoveryProtocolVersion, "Get or set the device discovery protocol version.")
+        .def_property("host_name", &DiscoveryHostWrapper::getHostName, &DiscoveryHostWrapper::setHostName, "Get or set the host name.")
+        .def_property("host_type", &DiscoveryHostWrapper::getHostType, &DiscoveryHostWrapper::setHostType, "Get or set the host type.")
+        .def_property("host_id", &DiscoveryHostWrapper::getHostId, &DiscoveryHostWrapper::setHostId, "Get or set the host ID.")
+        .def_property("running_app_titleid", &DiscoveryHostWrapper::getRunningAppTitleId, &DiscoveryHostWrapper::setRunningAppTitleId, "Get or set the running app title ID.")
+        .def_property("running_app_name", &DiscoveryHostWrapper::getRunningAppName, &DiscoveryHostWrapper::setRunningAppName, "Get or set the running app name.");
+
+    py::class_<DiscoveryManager>(m, "DiscoveryManager")
+        .def(py::init<>())
+        .def("set_active", &DiscoveryManager::SetActive, py::arg("active"))
+        .def("set_settings", &DiscoveryManager::SetSettings, py::arg("settings"))
+        .def("send_wakeup", &DiscoveryManager::SendWakeup, py::arg("host"), py::arg("regist_key"), py::arg("ps5"))
+        .def("get_active", &DiscoveryManager::GetActive)
+        .def("discovery_service_hosts", &DiscoveryManager::GetHosts)
+        .def("update_manual_services", &DiscoveryManager::DiscoveryServiceHosts, py::arg("hosts"))
+        .def("hosts_updated", &DiscoveryManager::UpdateManualServices);
 }

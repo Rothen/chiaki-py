@@ -3,6 +3,8 @@
 #ifndef CHIAKI_PY_SETTINGS_H
 #define CHIAKI_PY_SETTINGS_H
 
+#include "host.h"
+
 #include <unordered_map>
 #include <string>
 #include <fstream>
@@ -49,12 +51,23 @@ enum class Decoder
 	Pi
 };
 
+template <typename K, typename V>
+std::vector<V> get_values(const std::map<K, V> &m)
+{
+    std::vector<V> values;
+    values.reserve(m.size()); // optional optimization
+    for (const auto &[key, value] : m)
+    {
+        values.push_back(value);
+    }
+    return values;
+}
+
 class Settings
 {
 	private:
 		// std::string time_format;
 		// std::map<HostMAC, HiddenHost> hidden_hosts;
-		// std::map<HostMAC, RegisteredHost> registered_hosts;
 		// std::map<std::string, RegisteredHost> nickname_registered_hosts;
 		// std::map<std::string, std::string> controller_mappings;
 		// std::list<std::string> profiles;
@@ -114,7 +127,10 @@ class Settings
         std::map<int, int> controllerMapping;
         std::map<int, int> controllerMappingForDecoding;
 
-	public:
+        std::map<int, ManualHost> manual_hosts;
+        std::map<HostMAC, RegisteredHost> registered_hosts;
+
+    public:
 		explicit Settings();
 
 		ChiakiDisableAudioVideo GetAudioVideoDisabled() const { return audioVideoDisabled;  }
@@ -249,7 +265,10 @@ class Settings
         std::map<int, int> GetControllerMapping();
 		std::map<int, int> GetControllerMappingForDecoding();
 
-		/*std::function<void()> RegisteredHostsUpdated;
+        bool GetRegisteredHostRegistered(const HostMAC &mac) const { return registered_hosts.find(mac) != registered_hosts.end(); }
+        std::vector<ManualHost> GetManualHosts() const { return get_values(manual_hosts); }
+
+        /*std::function<void()> RegisteredHostsUpdated;
 		std::function<void()> HiddenHostsUpdated;
 		std::function<void()> ManualHostsUpdated;
 		std::function<void()> ControllerMappingsUpdated;

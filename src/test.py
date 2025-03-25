@@ -1,7 +1,6 @@
 from typing import Any
 import threading
 import signal
-import base64
 import sys
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
 from chiaki_py.core.log import Log, LogLevel
@@ -11,48 +10,28 @@ from chiaki_py.core.audio import AudioHeader
 import numpy as np
 import cv2
 
-if "-w" in sys.argv:
-    input("Press Enter to continue...")
+from .chiaki_py_settings import ChiakiPySettings
+
+chiaki_py_settings: ChiakiPySettings = ChiakiPySettings.from_file("settings.json")
 
 exit_event = threading.Event()
-
-# level_mask=CHIAKI_LOG_ALL & ~LogLevel.INFO.value
-audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
-log = Log(level=LogLevel.DEBUG)
-host = "192.168.42.43"
-regist_key = "b02d1ceb"
-nickname = "PS5-083"
-ps5Id = "78c881a8214a"
-# morning = "ª?RÿGC\\x1d/,ðñA\\x10öy³"
-morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
-# morning_ints: list[int] = [170, 63, 82, 255, 71, 67, 29, 47, 44, 240, 241, 65, 16, 246, 121, 179]
-# morning_bytes = bytes([170, 63, 82, 255, 71, 67, 29, 47, 44, 240, 241, 65, 16, 246, 121, 179])
-initial_login_pin = ""  # None
-duid = ""  # None
-auto_regist = False
-fullscreen = False
-zoom = False
-stretch = False
-ps5 = True
-discover_timout = 2000
 
 settings: Settings = Settings()
 settings.set_log_verbose(True)
 
-
 connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     settings=settings,
     target=Target.PS5_1,
-    host=host,
-    nickname=nickname,
-    regist_key=regist_key,
-    morning=bytes.fromhex(morning),
-    initial_login_pin=initial_login_pin,
-    duid=duid,
-    auto_regist=auto_regist,
-    fullscreen=fullscreen,
-    zoom=zoom,
-    stretch=stretch
+    host=chiaki_py_settings.host,
+    nickname=chiaki_py_settings.nickname,
+    regist_key=chiaki_py_settings.regist_key,
+    morning=bytes.fromhex(chiaki_py_settings.morning),
+    initial_login_pin=chiaki_py_settings.initial_login_pin,
+    duid=chiaki_py_settings.duid,
+    auto_regist=chiaki_py_settings.auto_regist,
+    fullscreen=chiaki_py_settings.fullscreen,
+    zoom=chiaki_py_settings.zoom,
+    stretch=chiaki_py_settings.stretch
 )
 
 img = np.zeros((1080, 1920, 3), np.uint8)
