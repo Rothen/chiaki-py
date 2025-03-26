@@ -259,22 +259,6 @@ public:
 
         return true;
     }
-
-    void enterPin(const std::string &pin)
-    {
-        // qCInfo(chiakiGui) << "Set login pin " << pin;
-        if (session) {
-            session->SetLoginPIN(pin);
-        }
-    }
-    void setConsolePin(int index, std::string console_pin)
-    {
-        /*auto server = displayServerAt(index);
-        if (!server.valid)
-            return;
-        server.registered_host.SetConsolePin(server.registered_host, std::move(console_pin));
-        settings->AddRegisteredHost(server.registered_host);*/
-    }
     
     // Signals
     void connectStateChanged() { };

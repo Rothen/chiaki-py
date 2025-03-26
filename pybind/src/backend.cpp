@@ -42,6 +42,6 @@ void init_backend(py::module &m)
         .def("hosts", &Backend::hosts)
         .def("finish_auto_register", &Backend::finishAutoRegister, py::arg("host"))
         .def("register_host", &Backend::registerHost, py::arg("host"), py::arg("psn_id"), py::arg("pin"), py::arg("cpin"), py::arg("broadcast"), py::arg("target"), py::arg("callback"))
-        .def("enter_pin", &Backend::enterPin, py::arg("pin"))
+        // .def("auto_register", &Backend::autoRegister)
         .def("set_connect_state", &Backend::setConnectState, py::arg("connect_state"));
 }

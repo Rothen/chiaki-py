@@ -9,6 +9,7 @@
 #include "core/fec.h"
 #include "core/feedback.h"
 #include "core/log.h"
+#include "event_source.h"
 #include "settings.h"
 #include "streamsession.h"
 #include "discovery_manager.h"
@@ -187,6 +188,7 @@ PYBIND11_MODULE(chiaki_py, m)
     // auto m_remote = m.def_submodule("remote", "The remote submodule.");
     // auto m_remote_holepunch = m.def_submodule("holepunch", "The holepunch submodule.");
 
+    init_event_source(m);
     init_backend(m);
     init_core_common(m_core_common);
     init_core_audio(m_core_audio);

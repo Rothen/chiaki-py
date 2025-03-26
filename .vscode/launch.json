@@ -39,6 +39,7 @@
             "symbolSearchPath": "${workspaceFolder}/libs/chiaki-ng/build-portable-debug/gui",
             "logging": {
                 "engineLogging": true
-            }
+            },
+            "externalConsole": false
         }]
 }

@@ -53,6 +53,7 @@ set(SOURCES
     include/elapsed_timer.h
     include/exception.h
     include/host.h
+    include/event_source.h
     include/sessionlog.h
     include/settings.h
     include/streamsession.h
@@ -60,10 +61,10 @@ set(SOURCES
     include/timer.h
     include/av_frame.h
     include/utils.h
-    src/core/common.cpp
     src/core/audio.cpp
     src/core/base64.cpp
     src/core/bitstream.cpp
+    src/core/common.cpp
     src/core/controller.cpp
     src/core/ecdh.cpp
     src/core/fec.cpp
@@ -71,6 +72,7 @@ set(SOURCES
     src/core/log.cpp
     src/backend.cpp
     src/host.cpp
+    src/event_source.cpp
     src/controllermanager.cpp
     src/sessionlog.cpp
     src/settings.cpp

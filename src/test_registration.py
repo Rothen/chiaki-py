@@ -22,6 +22,14 @@ except FileNotFoundError:
 
 exit_event = threading.Event()
 
+import base64
+
+encoded_bytes = psn_account.user_rpid.encode("utf-8")  # Equivalent to `toUtf8()`
+decoded_bytes = base64.b64decode(encoded_bytes)  # Equivalent to `QByteArray::fromBase64()`
+
+print(decoded_bytes)  # This is the decoded output
+sys.exit()
+
 host: str = "192.168.42.32"
 psn_id: str = psn_account.user_rpid # base64
 pin: str = ""
