@@ -1,0 +1,1 @@
+echo (Resolve-Path ${PSScriptRoot}\..)

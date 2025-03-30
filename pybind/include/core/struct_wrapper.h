@@ -24,6 +24,7 @@ public:
     operator const T *() const { return &raw_struct; }
 
     T *ptr() { return &raw_struct; }
+    const T *ptr() const { return &raw_struct; }
     T &raw() { return raw_struct; }
     const T &raw() const { return raw_struct; }
 };

@@ -3,58 +3,102 @@
 
 #include <functional>
 #include <exception>
+#include <vector>
+#include <algorithm>
 
 #include <pybind11/pybind11.h>
+#include <pybind11/functional.h>
+#include <pybind11/stl.h>
+#include <stdexcept>
 
 namespace py = pybind11;
 
 void init_event_source(py::module &m);
 
+template <typename T>
 class EventSource
 {
-private:
-    std::function<void(int)> on_next_callback;
-    std::function<void(std::exception_ptr)> on_error_callback;
-    std::function<void()> on_completed_callback;
-
 public:
-    void set_on_next(std::function<void(int)> on_next_cb)
+    struct Subscription
     {
-        on_next_callback = on_next_cb;
-    }
+        std::function<void(const py::object &)> on_next;
+        std::function<void(const py::object &)> on_error;
+        std::function<void()> on_completed;
+        bool active = true;
+        EventSource<T> *parent = nullptr;
 
-    void set_on_error(std::function<void(std::exception_ptr)> on_error_cb)
-    {
-        on_error_callback = on_error_cb;
-    }
-
-    void set_on_completed(std::function<void()> on_completed_cb)
-    {
-        on_completed_callback = on_completed_cb;
-    }
-
-    void on_next(int value)
-    {
-        if (on_next_callback)
+        void unsubscribe()
         {
-            on_next_callback(value);
+            active = false;
+
+            if (parent)
+            {
+                parent->cleanup_subscribers();
+            }
+        }
+    };
+    
+    void on_next(const T &value) const
+    {
+        for (auto &sub : subscribers)
+        {
+            if (sub->active && sub->on_next)
+                sub->on_next(py::cast(value));
         }
     }
 
-    void on_error(const std::exception &e)
+    void on_error(const std::exception &exception)
     {
-        if (on_error_callback)
+        py::object err = Exception(exception.what());
+        for (auto &sub : subscribers)
         {
-            on_error_callback(std::make_exception_ptr(e));
+            if (sub->active && sub->on_error)
+                sub->on_error(err);
         }
     }
 
     void on_completed()
     {
-        if (on_completed_callback)
+        for (auto &sub : subscribers)
         {
-            on_completed_callback();
+            if (sub->active && sub->on_completed)
+                sub->on_completed();
         }
+        subscribers.clear();
+    }
+
+    Subscription &subscribe(
+        std::function<void(const py::object &)> on_next,
+        std::function<void(const py::object &)> on_error = py::none(),
+        std::function<void()> on_completed = py::none(),
+        py::object scheduler = py::none())
+    {
+        subscribers.emplace_back(Subscription{on_next, on_error, on_completed, true});
+        return subscribers.back();
+    }
+
+    template <typename Fn>
+    auto cb_to_event() const
+    {
+        return [this](auto... args)
+        {
+            T event{};
+            event.map_cb(args...);
+            on_next(event);
+        };
+    }
+
+private:
+    std::vector<Subscription> subscribers;
+    py::object Exception = py::module_::import("builtins").attr("Exception");
+
+    void cleanup_subscribers()
+    {
+        subscribers.erase(
+            std::remove_if(subscribers.begin(), subscribers.end(),
+                           [](const Subscription &sub)
+                           { return !sub.active; }),
+            subscribers.end());
     }
 };
 

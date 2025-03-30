@@ -62,7 +62,7 @@ $env:vcpkg_baseline = "42bb0d9e8d4cf33485afb9ee2229150f79f61a1f"
 $env:VCPKG_INSTALLED_DIR = "./vcpkg_installed/"
 $env:dep_folder = "deps"
 $env:libplacebo_tag = "v7.349.0"
-$env:workplace = Get-Location
+$env:workplace = (Resolve-Path ${PSScriptRoot}\..)
 $env:python_path = "C:\Users\benir\anaconda3\envs\chiaki-ng"
 
 # Set Qt environment variables
