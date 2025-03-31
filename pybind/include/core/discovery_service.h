@@ -30,7 +30,7 @@ public:
     }
 };
 
-class OptionsWrapper : public StructWrapper<ChiakiDiscoveryServiceOptions>
+class DiscoveryServiceOptionsWrapper : public StructWrapper<ChiakiDiscoveryServiceOptions>
 {
 private:
     const EventSource<DiscoveryServiceEvent> &discoveryServiceEvent{};
@@ -38,7 +38,7 @@ private:
 public:
     using StructWrapper::StructWrapper;
 
-    OptionsWrapper() : StructWrapper<ChiakiDiscoveryServiceOptions>() {
+    DiscoveryServiceOptionsWrapper() : StructWrapper<ChiakiDiscoveryServiceOptions>() {
         raw().cb = discoveryServiceEvent.cb_to_event<ChiakiDiscoveryServiceCb>();
         raw().cb_user = const_cast<EventSource<DiscoveryServiceEvent> *>(&discoveryServiceEvent);
     }
@@ -86,15 +86,49 @@ class DiscoveryServiceWrapper : public StructWrapper<ChiakiDiscoveryService>
 public:
     using StructWrapper::StructWrapper;
 
-    DiscoveryServiceWrapper(OptionsWrapper &options, LogWrapper &log) : StructWrapper<ChiakiDiscoveryService>()
+    DiscoveryServiceWrapper(DiscoveryServiceOptionsWrapper &options, LogWrapper &log) : StructWrapper<ChiakiDiscoveryService>()
     {
-        chiaki_discovery_service_init(ptr(), options.ptr(), log.ptr());
+        ChiakiErrorCode err = chiaki_discovery_service_init(ptr(), options.ptr(), log.ptr());
+        if (err != CHIAKI_ERR_SUCCESS)
+        {
+            throw std::runtime_error("Failed to initialize DiscoveryService: " + std::string(chiaki_error_string(err)));
+        }
     }
 
     ~DiscoveryServiceWrapper()
     {
         chiaki_discovery_service_fini(ptr());
     }
+
+    ChiakiLog *get_log() { return raw().log; }
+    void set_log(ChiakiLog *log) { raw().log = log; }
+
+    ChiakiDiscoveryServiceOptions get_options() { return raw().options; }
+    void set_options(ChiakiDiscoveryServiceOptions options) { raw().options = options; }
+
+    ChiakiDiscovery get_discovery() { return raw().discovery; }
+    void set_discovery(ChiakiDiscovery discovery) { raw().discovery = discovery; }
+
+    uint64_t get_ping_index() { return raw().ping_index; }
+    void set_ping_index(uint64_t ping_index) { raw().ping_index = ping_index; }
+
+    ChiakiDiscoveryHost *get_hosts() { return raw().hosts; }
+    void set_hosts(ChiakiDiscoveryHost *hosts) { raw().hosts = hosts; }
+
+    ChiakiDiscoveryServiceHostDiscoveryInfo *get_host_discovery_infos() { return raw().host_discovery_infos; }
+    void set_host_discovery_infos(ChiakiDiscoveryServiceHostDiscoveryInfo *host_discovery_infos) { raw().host_discovery_infos = host_discovery_infos; }
+
+    size_t get_hosts_count() { return raw().hosts_count; }
+    void set_hosts_count(size_t hosts_count) { raw().hosts_count = hosts_count; }
+
+    ChiakiMutex get_state_mutex() { return raw().state_mutex; }
+    void set_state_mutex(ChiakiMutex state_mutex) { raw().state_mutex = state_mutex; }
+
+    ChiakiThread get_thread() { return raw().thread; }
+    void set_thread(ChiakiThread thread) { raw().thread = thread; }
+
+    ChiakiBoolPredCond get_stop_cond() { return raw().stop_cond; }
+    void set_stop_cond(ChiakiBoolPredCond stop_cond) { raw().stop_cond = stop_cond; }
 };
 
 #endif //CHIAKI_PY_DISCOVERY_SERVICE_H
