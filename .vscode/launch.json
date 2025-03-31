@@ -9,7 +9,7 @@
             "request": "launch",
             "program": "C:/Users/benir/anaconda3/envs/chiaki-ng/python.exe",
             "args": [
-                "${workspaceFolder}/test.py"
+                "${file}"
             ],
             "cwd": "${workspaceFolder}",
             "environment": [

@@ -5,6 +5,7 @@
 #include "core/base64.h"
 #include "core/bitstream.h"
 #include "core/controller.h"
+#include "core/discovery_service.h"
 #include "core/ecdh.h"
 #include "core/fec.h"
 #include "core/feedback.h"
@@ -179,6 +180,7 @@ PYBIND11_MODULE(chiaki_py, m)
     auto m_core_base64 = m_core.def_submodule("base64", "The base64 submodule.");
     auto m_core_bitstream = m_core.def_submodule("bitstream", "The bitstream submodule.");
     auto m_core_controller = m_core.def_submodule("controller", "The controller submodule.");
+    auto m_core_discovery_service = m_core.def_submodule("discovery_service", "The discovery service submodule.");
     auto m_core_ecdh = m_core.def_submodule("ecdh", "The ecdh submodule.");
     auto m_core_fec = m_core.def_submodule("fec", "The fec submodule.");
     auto m_core_feedback = m_core.def_submodule("feedback", "The feedback submodule.");
@@ -195,6 +197,7 @@ PYBIND11_MODULE(chiaki_py, m)
     init_core_base64(m_core_base64);
     init_core_bitstream(m_core_bitstream);
     init_core_controller(m_core_controller);
+    init_core_discovery_service(m_core_discovery_service);
     init_core_ecdh(m_core_ecdh);
     init_core_fec(m_core_fec);
     init_core_feedback(m_core_feedback);

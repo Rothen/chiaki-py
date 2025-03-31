@@ -37,13 +37,13 @@ public:
             }
         }
     };
-    
+
     void on_next(const T &value) const
     {
         for (auto &sub : subscribers)
         {
-            if (sub->active && sub->on_next)
-                sub->on_next(py::cast(value));
+            if (sub.active && sub.on_next)
+                sub.on_next(py::cast(value));
         }
     }
 
@@ -52,8 +52,8 @@ public:
         py::object err = Exception(exception.what());
         for (auto &sub : subscribers)
         {
-            if (sub->active && sub->on_error)
-                sub->on_error(err);
+            if (sub.active && sub.on_error)
+                sub.on_error(err);
         }
     }
 
@@ -61,8 +61,8 @@ public:
     {
         for (auto &sub : subscribers)
         {
-            if (sub->active && sub->on_completed)
-                sub->on_completed();
+            if (sub.active && sub.on_completed)
+                sub.on_completed();
         }
         subscribers.clear();
     }
@@ -70,21 +70,21 @@ public:
     Subscription &subscribe(
         std::function<void(const py::object &)> on_next,
         std::function<void(const py::object &)> on_error = py::none(),
-        std::function<void()> on_completed = py::none(),
-        py::object scheduler = py::none())
+        std::function<void()> on_completed = py::none())
     {
-        subscribers.emplace_back(Subscription{on_next, on_error, on_completed, true});
+        subscribers.emplace_back(Subscription{on_next, on_error, on_completed, true, this});
+        this->on_error(std::exception("Error: No error handler provided."));
         return subscribers.back();
     }
 
-    template <typename Fn>
-    auto cb_to_event() const
+    template <typename CallbackType>
+    CallbackType cb_to_event() const
     {
-        return [this](auto... args)
+        return [=](auto... args) -> void
         {
             T event{};
             event.map_cb(args...);
-            on_next(event);
+            this->on_next(event);
         };
     }
 
