@@ -44,7 +44,7 @@ set(SOURCES
     include/core/base64.h
     include/core/bitstream.h
     include/core/controller.h
-    include/core/discovery_service.h
+    # include/core/discovery_service.h
     include/core/ecdh.h
     include/core/fec.h
     include/core/feedback.h
@@ -67,7 +67,7 @@ set(SOURCES
     src/core/bitstream.cpp
     src/core/common.cpp
     src/core/controller.cpp
-    src/core/discovery_service.cpp
+    # src/core/discovery_service.cpp
     src/core/ecdh.cpp
     src/core/fec.cpp
     src/core/feedback.cpp

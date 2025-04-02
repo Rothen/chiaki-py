@@ -5,7 +5,7 @@
 #include "core/base64.h"
 #include "core/bitstream.h"
 #include "core/controller.h"
-#include "core/discovery_service.h"
+// #include "core/discovery_service.h"
 #include "core/ecdh.h"
 #include "core/fec.h"
 #include "core/feedback.h"
@@ -191,17 +191,17 @@ PYBIND11_MODULE(chiaki_py, m)
     // auto m_remote_holepunch = m.def_submodule("holepunch", "The holepunch submodule.");
 
     init_event_source(m);
-    init_backend(m);
     init_core_common(m_core_common);
     init_core_audio(m_core_audio);
     init_core_base64(m_core_base64);
     init_core_bitstream(m_core_bitstream);
     init_core_controller(m_core_controller);
-    init_core_discovery_service(m_core_discovery_service);
+    // init_core_discovery_service(m_core_discovery_service);
     init_core_ecdh(m_core_ecdh);
     init_core_fec(m_core_fec);
     init_core_feedback(m_core_feedback);
     init_core_log(m_core_log);
+    init_backend(m);
     // init_core_session(m_core_session);
     // init_core_remote_holepunch(m_remote_holepunch);
 

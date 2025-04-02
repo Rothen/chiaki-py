@@ -33,18 +33,13 @@ static std::mutex chiaki_log_mutex;
 static ChiakiLog *chiaki_log_ctx = nullptr;
 
 using HostVariantMap = std::variant<HostMAC, HiddenHost, RegisteredHost, ManualHost, PsnHost>;
-using LogCallback = std::function<void(ChiakiLogLevel, const std::string &)>;
-using FailedCallback = std::function<void()>;
-using SuccessCallback = std::function<void(const RegisteredHost &)>;
+using FailedCallback = std::function<void(int32_t)>;
+using SuccessCallback = std::function<void(ChiakiRegistEvent *)>;
 
 class Regist
 {
 public:
-    Regist(uint32_t log_mask, LogCallback log_cb, FailedCallback failed_cb, SuccessCallback success_cb) :
-        logCallback(log_cb),
-        failedCallback(failed_cb),
-        successCallback(success_cb)
-    {
+    Regist(uint32_t log_mask) {
         chiaki_log_init(&chiaki_log, log_mask, &Regist::log_cb, this);
     }
 
@@ -53,19 +48,23 @@ public:
         chiaki_regist_start(&chiaki_regist, &chiaki_log, &regist_info, &Regist::regist_cb, this);
     }
 
+    void setSuccessCallback(SuccessCallback successCallback)
+    {
+        this->successCallback = successCallback;
+    }
+
+    void setFailedCallback(FailedCallback failedCallback)
+    {
+        this->failedCallback = failedCallback;
+    }
+
 private:
-    LogCallback logCallback;
-    FailedCallback failedCallback;
     SuccessCallback successCallback;
+    FailedCallback failedCallback;
 
     static void log_cb(ChiakiLogLevel level, const char *msg, void *user)
     {
-        Regist *self = static_cast<Regist *>(user);
-        // chiaki_log_cb_print(level, msg, self);
-        if (self->logCallback)
-        {
-            self->logCallback(level, msg);
-        }
+        chiaki_log_cb_print(level, msg, user);
     }
 
     static void regist_cb(ChiakiRegistEvent *event, void *user)
@@ -73,16 +72,16 @@ private:
         auto *self = static_cast<Regist *>(user);
         if (event->type == CHIAKI_REGIST_EVENT_TYPE_FINISHED_FAILED)
         {
-            if (self->successCallback)
+            if (self->failedCallback)
             {
-                self->successCallback(*event->registered_host);
+                self->failedCallback(CHIAKI_REGIST_EVENT_TYPE_FINISHED_FAILED);
             }
         }
         else
         {
-            if (self->failedCallback)
+            if (self->successCallback)
             {
-                self->failedCallback();
+                self->successCallback(event);
             }
         }
     }
@@ -111,7 +110,7 @@ class Backend
 public:
     Regist regist;
 
-    Backend(Settings *settings, LogCallback logCallback, FailedCallback failedCallback, SuccessCallback successCallback) : settings(settings), regist(settings->GetLogLevelMask(), logCallback, failedCallback, successCallback)
+    Backend(Settings *settings) : regist(settings->GetLogLevelMask()), settings(settings)
     {
         discovery_manager.SetSettings(settings);
         wakeup_start_timer = new Timer();
@@ -127,8 +126,8 @@ public:
             session = nullptr;
         }
     }
-    
-    bool registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
+
+    EventSource<ChiakiRegistEvent *> &registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
     {
         ChiakiRegistInfo info = {};
 
@@ -150,16 +149,29 @@ public:
             std::vector<uint8_t> account_id = fromBase64(psn_id);
             if (account_id.size() != CHIAKI_PSN_ACCOUNT_ID_SIZE)
             {
-                // emit error(tr("Invalid Account-ID"), tr("The PSN Account-ID must be exactly %1 bytes encoded as base64.").arg(CHIAKI_PSN_ACCOUNT_ID_SIZE));
-                return false;
+                throw std::runtime_error("Invalid Account-ID: The PSN Account-ID must be exactly " + std::to_string(CHIAKI_PSN_ACCOUNT_ID_SIZE) + " bytes encoded as base64.");
             }
             info.psn_online_id = nullptr;
             memcpy(info.psn_account_id, account_id.data(), CHIAKI_PSN_ACCOUNT_ID_SIZE);
         }
 
-        regist.start(info, settings->GetLogLevelMask());
+        EventSource<ChiakiRegistEvent *> event_source = EventSource<ChiakiRegistEvent *>();
 
-        return true;
+        event_source.set_on_subscribe([this, info]() mutable {
+            regist.start(info, settings->GetLogLevelMask());
+        });
+
+        regist.setSuccessCallback([this](ChiakiRegistEvent *event) {
+            event_source.next(event);
+            event_source.completed();
+        });
+
+        regist.setFailedCallback([this](int32_t error_code) {
+            event_source.error(error_code, "Failed to register host");
+            event_source.completed();
+        });
+
+        return event_source;
     }
 private:
     bool sendWakeup(const std::string &host, const std::string &regist_key, bool ps5)

@@ -5,6 +5,7 @@
 #include <exception>
 #include <vector>
 #include <algorithm>
+#include <string>
 
 #include <chiaki/discovery.h>
 
@@ -12,6 +13,8 @@
 #include <pybind11/functional.h>
 #include <pybind11/stl.h>
 #include <stdexcept>
+#include <iostream>
+#include <mutex>
 
 namespace py = pybind11;
 
@@ -24,7 +27,7 @@ public:
     struct Subscription
     {
         std::function<void(const py::object &)> on_next;
-        std::function<void(const py::object &)> on_error;
+        std::function<void(const int32_t, const std::string &)> on_error;
         std::function<void()> on_completed;
         bool active = true;
         EventSource<T> *parent = nullptr;
@@ -39,11 +42,30 @@ public:
             }
         }
     };
-    
-    EventSource() {}
 
-    void on_next(const T &value) const
+    std::function<void()> on_subscribe;
+
+    EventSource() { }
+
+    EventSource(const EventSource &other)
     {
+        std::cout << "EventSource copied!" << std::endl;
+    }
+
+    ~EventSource()
+    {
+        std::cout << "EventSource destroyed at " << this << std::endl;
+    }
+
+    void set_on_subscribe(std::function<void()> on_subscribe)
+    {
+        this->on_subscribe = on_subscribe;
+    }
+
+    void next(const T &value) const
+    {
+        py::gil_scoped_acquire gil;
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
         for (auto &sub : subscribers)
         {
             if (sub.active && sub.on_next)
@@ -51,59 +73,65 @@ public:
         }
     }
 
-    void on_error(const std::exception &exception)
+    void error(const int code, const std::string &message) const
     {
-        py::object err = Exception(exception.what());
+        py::gil_scoped_acquire gil;
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
+
         for (auto &sub : subscribers)
         {
             if (sub.active && sub.on_error)
-                sub.on_error(err);
+            {
+                sub.on_error(code, message);
+            }
         }
     }
 
-    void on_completed()
+    void completed()
     {
+        has_completed = true;
+        py::gil_scoped_acquire gil;
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
         for (auto &sub : subscribers)
         {
             if (sub.active && sub.on_completed)
+            {
                 sub.on_completed();
+            }
         }
         subscribers.clear();
     }
 
     Subscription &subscribe(
         std::function<void(const py::object &)> on_next,
-        std::function<void(const py::object &)> on_error = py::none(),
+        std::function<void(const int32_t, const std::string &)> on_error = py::none(),
         std::function<void()> on_completed = py::none())
     {
-        subscribers.emplace_back(Subscription{on_next, on_error, on_completed, true, this});
-        this->on_error(std::exception("Error: No error handler provided."));
+        py::gil_scoped_acquire gil;
+        if (has_completed)
+        {
+            throw std::runtime_error("Cannot subscribe to a completed EventSource");
+        }
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
+        subscribers.push_back(Subscription{on_next, on_error, on_completed, true, this});
+        if (!has_started)
+        {
+            has_started = true;
+            on_subscribe();
+        }
         return subscribers.back();
     }
 
-    static void cb_wrapper(chiaki_discovery_host_t *host, unsigned long long timestamp, void *user_data)
-    {
-        if (user_data)
-        {
-            auto *event_source = static_cast<EventSource<DiscoveryServiceEvent> *>(user_data);
-            T event{};
-            event.map_cb(host, timestamp, user_data); // ✅ Add missing argument
-            event_source->on_next(event);
-        }
-    }
-
-    template <typename CallbackType>
-    CallbackType cb_to_event() const
-    {
-        return &cb_wrapper;
-    }
-
 private:
+    mutable std::mutex subscribers_mutex;
     std::vector<Subscription> subscribers;
-    py::object Exception = py::module_::import("builtins").attr("Exception");
+    bool has_started = false;
+    bool has_completed = false;
 
     void cleanup_subscribers()
     {
+        py::gil_scoped_acquire gil;
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
         subscribers.erase(
             std::remove_if(subscribers.begin(), subscribers.end(),
                            [](const Subscription &sub)

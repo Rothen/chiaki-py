@@ -7,7 +7,6 @@ namespace py = pybind11;
 void init_event_source(py::module &m)
 {
     py::class_<EventSource<int>>(m, "EventSource")
-        .def(py::init<>())
         .def("subscribe", &EventSource<int>::subscribe,
              py::arg("on_next"),
              py::arg("on_error") = py::none(),

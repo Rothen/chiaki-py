@@ -9,13 +9,12 @@ from psn_account import PSNAccount
 import time
 from psn_login_qt import PSNLoginQt
 from platformdirs import user_data_dir
+
 appname = "ChiakiPy"
 author = "Banana-Bros"
 app_dir: str = user_data_dir(appname, author)
 if not os.path.exists(app_dir):
     os.makedirs(app_dir)
-
-gc.disable()
 
 psn_account_path: str = os.path.join(app_dir, "psn_account.json")
 psn_account: PSNAccount = PSNLoginQt.load_or_get(psn_account_path)
@@ -31,21 +30,21 @@ target: Target = Target.PS5_1
 
 settings: Settings = Settings()
 settings.set_log_verbose(False)
-backend: Backend = Backend(
-    settings,
-    log_callback=lambda x, y: print('PyLog:', x, y),
-    failed_callback=lambda: print('failed'),
-    success_callback=lambda x: print(x)
-)
+backend: Backend = Backend(settings)
 
 
-backend.register_host(
+test = backend.register_host(
     host=host,
     psn_id=psn_id,
     pin=pin,
     cpin=cpin,
     broadcast=broadcast,
     target=target
+)
+
+test.subscribe(
+    on_next=lambda x: print("Success", x),
+    on_error=lambda code, message: print("Failure", code, message),
 )
 
 def signal_handler(sig: int, frame: Any) -> None:
@@ -57,13 +56,6 @@ def signal_handler(sig: int, frame: Any) -> None:
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     
-    # discovery_manager.send_wakeup(chiaki_py_settings.host, chiaki_py_settings.regist_key, True)
-
-    print("Starting stream session...")
-
-    print("Started")
-    
-    while True:
+    while not exit_event.is_set():
         time.sleep(1)
-
-    print("Session closed. Exiting...")
+        print('Waiting for exit event...')

@@ -34,7 +34,22 @@ void init_backend(py::module &m)
         .value("ConnectFailedConsoleUnreachable", PsnConnectState::ConnectFailedConsoleUnreachable)
         .export_values();
 
+    py::class_<EventSource<ChiakiRegistEvent *>::Subscription>(m, "RegistEventSourceSubscription")
+        .def("unsubscribe", &EventSource<ChiakiRegistEvent *>::Subscription::unsubscribe);
+
+    py::class_<EventSource<ChiakiRegistEvent *>>(m, "RegistEventSource")
+        .def("subscribe", &EventSource<ChiakiRegistEvent *>::subscribe,
+             py::arg("on_next"),
+             py::arg("on_error") = py::none(),
+             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
+
     py::class_<Backend>(m, "Backend")
-        .def(py::init<Settings *, LogCallback, FailedCallback, SuccessCallback>(), py::arg("settings"), py::arg("log_callback"), py::arg("failed_callback"), py::arg("success_callback"))
-        .def("register_host", &Backend::registerHost, py::arg("host"), py::arg("psn_id"), py::arg("pin"), py::arg("cpin"), py::arg("broadcast"), py::arg("target"));
+        .def(py::init<Settings *>(), py::arg("settings"))
+        .def("register_host", &Backend::registerHost,
+             py::arg("host"),
+             py::arg("psn_id"),
+             py::arg("pin"),
+             py::arg("cpin"),
+             py::arg("broadcast"),
+             py::arg("target"), py::return_value_policy::reference);
 }
