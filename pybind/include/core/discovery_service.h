@@ -33,7 +33,7 @@ public:
 class DiscoveryServiceOptionsWrapper : public StructWrapper<ChiakiDiscoveryServiceOptions>
 {
 private:
-    const EventSource<DiscoveryServiceEvent> &discoveryServiceEvent{};
+    EventSource<DiscoveryServiceEvent> discoveryServiceEvent{};
 
 public:
     using StructWrapper::StructWrapper;

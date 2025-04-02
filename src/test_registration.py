@@ -1,45 +1,42 @@
-import sys
+import os
+import gc
 from typing import Any
 import threading
 import signal
 from chiaki_py import Backend, Settings
 from chiaki_py.core.common import Target
-from psn_login_qt import PSNLoginQt
 from psn_account import PSNAccount
+import time
+from psn_login_qt import PSNLoginQt
+from platformdirs import user_data_dir
+appname = "ChiakiPy"
+author = "Banana-Bros"
+app_dir: str = user_data_dir(appname, author)
+if not os.path.exists(app_dir):
+    os.makedirs(app_dir)
 
-psn_account: PSNAccount
+gc.disable()
 
-try:
-    psn_account = PSNAccount.load("psn_account.json")
-except FileNotFoundError:
-    print("PSN Account not found")
-    try:
-        psn_account = PSNLoginQt.get_psn_account()
-        psn_account.save("psn_account.json")
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+psn_account_path: str = os.path.join(app_dir, "psn_account.json")
+psn_account: PSNAccount = PSNLoginQt.load_or_get(psn_account_path)
 
 exit_event = threading.Event()
 
-import base64
-
-encoded_bytes = psn_account.user_rpid.encode("utf-8")  # Equivalent to `toUtf8()`
-decoded_bytes = base64.b64decode(encoded_bytes)  # Equivalent to `QByteArray::fromBase64()`
-
-print(decoded_bytes)  # This is the decoded output
-sys.exit()
-
 host: str = "192.168.42.32"
 psn_id: str = psn_account.user_rpid # base64
-pin: str = ""
+pin: str = "11572734"
 cpin: str = ""
 broadcast: bool = False
 target: Target = Target.PS5_1
-callback: lambda: None = lambda: exit_event.set()
 
 settings: Settings = Settings()
-backend: Backend = Backend(settings)
+settings.set_log_verbose(False)
+backend: Backend = Backend(
+    settings,
+    log_callback=lambda x, y: print('PyLog:', x, y),
+    failed_callback=lambda: print('failed'),
+    success_callback=lambda x: print(x)
+)
 
 
 backend.register_host(
@@ -48,10 +45,8 @@ backend.register_host(
     pin=pin,
     cpin=cpin,
     broadcast=broadcast,
-    target=target,
-    callback=callback
+    target=target
 )
-
 
 def signal_handler(sig: int, frame: Any) -> None:
     """Handles Ctrl+C to stop the session gracefully."""
@@ -59,14 +54,16 @@ def signal_handler(sig: int, frame: Any) -> None:
     # stream_session.stop()
     exit_event.set()
 
-
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     
-    discovery_manager.send_wakeup(chiaki_py_settings.host, chiaki_py_settings.regist_key, True)
+    # discovery_manager.send_wakeup(chiaki_py_settings.host, chiaki_py_settings.regist_key, True)
 
     print("Starting stream session...")
 
     print("Started")
+    
+    while True:
+        time.sleep(1)
 
     print("Session closed. Exiting...")

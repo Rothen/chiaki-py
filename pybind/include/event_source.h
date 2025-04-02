@@ -6,6 +6,8 @@
 #include <vector>
 #include <algorithm>
 
+#include <chiaki/discovery.h>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
 #include <pybind11/stl.h>
@@ -37,6 +39,8 @@ public:
             }
         }
     };
+    
+    EventSource() {}
 
     void on_next(const T &value) const
     {
@@ -77,15 +81,21 @@ public:
         return subscribers.back();
     }
 
+    static void cb_wrapper(chiaki_discovery_host_t *host, unsigned long long timestamp, void *user_data)
+    {
+        if (user_data)
+        {
+            auto *event_source = static_cast<EventSource<DiscoveryServiceEvent> *>(user_data);
+            T event{};
+            event.map_cb(host, timestamp, user_data); // ✅ Add missing argument
+            event_source->on_next(event);
+        }
+    }
+
     template <typename CallbackType>
     CallbackType cb_to_event() const
     {
-        return [=](auto... args) -> void
-        {
-            T event{};
-            event.map_cb(args...);
-            this->on_next(event);
-        };
+        return &cb_wrapper;
     }
 
 private:

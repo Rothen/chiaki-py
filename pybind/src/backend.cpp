@@ -35,13 +35,6 @@ void init_backend(py::module &m)
         .export_values();
 
     py::class_<Backend>(m, "Backend")
-        .def(py::init<Settings *>(), py::arg("settings"))
-        .def("qml_session", &Backend::qmlSession, py::return_value_policy::reference)
-        .def("discovery_enabled", &Backend::discoveryEnabled)
-        .def("set_discovery_enabled", &Backend::setDiscoveryEnabled, py::arg("enabled"))
-        .def("hosts", &Backend::hosts)
-        .def("finish_auto_register", &Backend::finishAutoRegister, py::arg("host"))
-        .def("register_host", &Backend::registerHost, py::arg("host"), py::arg("psn_id"), py::arg("pin"), py::arg("cpin"), py::arg("broadcast"), py::arg("target"), py::arg("callback"))
-        // .def("auto_register", &Backend::autoRegister)
-        .def("set_connect_state", &Backend::setConnectState, py::arg("connect_state"));
+        .def(py::init<Settings *, LogCallback, FailedCallback, SuccessCallback>(), py::arg("settings"), py::arg("log_callback"), py::arg("failed_callback"), py::arg("success_callback"))
+        .def("register_host", &Backend::registerHost, py::arg("host"), py::arg("psn_id"), py::arg("pin"), py::arg("cpin"), py::arg("broadcast"), py::arg("target"));
 }

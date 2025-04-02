@@ -29,3 +29,18 @@ class PSNLoginQt(QMainWindow):
         window.show()
         app.exec()
         return cast(PSNAccount, window.psn_account)
+
+    @classmethod
+    def load_or_get(cls, json_path: str) -> PSNAccount:
+        psn_account: PSNAccount
+        try:
+            psn_account = PSNAccount.load(json_path)
+        except FileNotFoundError:
+            print("PSN Account not found")
+            try:
+                psn_account = cls.get_psn_account()
+                psn_account.save("psn_account.json")
+            except Exception as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+        return psn_account
