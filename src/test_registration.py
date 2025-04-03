@@ -1,12 +1,11 @@
 import os
-import gc
+import sys
 from typing import Any
 import threading
 import signal
 from chiaki_py import Backend, Settings
 from chiaki_py.core.common import Target
 from psn_account import PSNAccount
-import time
 from psn_login_qt import PSNLoginQt
 from platformdirs import user_data_dir
 
@@ -60,6 +59,7 @@ regist_event_source = backend.register_host_async(
 regist_event_source.subscribe(
     on_next=lambda x: print("Success", x),
     on_error=lambda code, message: print("Failure", code, message),
+    on_completed=lambda: exit_event.set()
 )
 
 def signal_handler(sig: int, frame: Any) -> None:
@@ -70,5 +70,4 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     
     while not exit_event.is_set():
-        time.sleep(1)
-        print('Waiting for exit event...')
+        exit_event.wait(0.1)  # Check every 100ms

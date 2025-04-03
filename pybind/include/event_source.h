@@ -49,7 +49,19 @@ public:
 
     EventSource(const EventSource &other)
     {
-        std::cout << "EventSource copied!" << std::endl;
+        subscribers = other.subscribers; // Deep copy subscriber list
+    }
+
+    // Copy Assignment Operator
+    EventSource &operator=(const EventSource &other)
+    {
+        if (this == &other)
+        {
+            return *this;
+        }
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
+        subscribers = other.subscribers;
+        return *this;
     }
 
     ~EventSource()

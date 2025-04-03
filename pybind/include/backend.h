@@ -109,7 +109,7 @@ enum class PsnConnectState
 class Backend
 {
 public:
-    Backend(Settings *settings) : regist(settings->GetLogLevelMask()), settings(settings)
+    Backend(Settings *settings) : settings(settings), regist(settings->GetLogLevelMask())
     {
         discovery_manager.SetSettings(settings);
         wakeup_start_timer = new Timer();
@@ -153,6 +153,8 @@ public:
             info.psn_online_id = nullptr;
             memcpy(info.psn_account_id, account_id.data(), CHIAKI_PSN_ACCOUNT_ID_SIZE);
         }
+
+        event_source = EventSource<ChiakiRegistEvent *>();
 
         event_source.set_on_subscribe([this, info]() mutable {
             regist.start(info, settings->GetLogLevelMask());
@@ -202,12 +204,12 @@ public:
         std::promise<ChiakiRegistEvent *> promise;
         std::future<ChiakiRegistEvent *> future = promise.get_future();
 
-        regist.setSuccessCallback([this, &promise](ChiakiRegistEvent *event)
+        regist.setSuccessCallback([&promise](ChiakiRegistEvent *event)
         {
             promise.set_value(event);
         });
 
-        regist.setFailedCallback([this, &promise](int32_t error_code)
+        regist.setFailedCallback([&promise](int32_t error_code)
         {
             promise.set_exception(std::make_exception_ptr(std::runtime_error("Failed to register host")));
         });
@@ -237,10 +239,10 @@ private:
     Timer *wakeup_start_timer = {};
     DiscoveryManager discovery_manager;
     Regist regist;
-    EventSource<ChiakiRegistEvent *> event_source = EventSource<ChiakiRegistEvent *>();
+    EventSource<ChiakiRegistEvent *> event_source;
     std::vector<std::string> waking_sleeping_nicknames;
     std::string wakeup_nickname = "";
-    bool wakeup_start = false;
+    // bool wakeup_start = false;
 };
 
 #endif // CHIAKI_PY_BACKEND_H

@@ -113,7 +113,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
     this->host = std::move(host);
 
     std::memset(this->regist_key, '\0', CHIAKI_SESSION_AUTH_SIZE); // Zero out first
-    strncpy(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
+    strncpy_s(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
     std::memset(this->morning, 0, 0x10);
     std::string morning_str = morning;
     std::vector<uint8_t> morning_converted(morning_str.begin(), morning_str.end());
