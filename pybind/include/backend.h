@@ -20,6 +20,7 @@
 #include <any>
 #include <algorithm>
 #include <cstdlib>
+#include <future>
 
 void init_backend(py::module &m);
 
@@ -108,8 +109,6 @@ enum class PsnConnectState
 class Backend
 {
 public:
-    Regist regist;
-
     Backend(Settings *settings) : regist(settings->GetLogLevelMask()), settings(settings)
     {
         discovery_manager.SetSettings(settings);
@@ -127,7 +126,7 @@ public:
         }
     }
 
-    EventSource<ChiakiRegistEvent *> &registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
+    EventSource<ChiakiRegistEvent *> &registerHostAsync(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
     {
         ChiakiRegistInfo info = {};
 
@@ -155,8 +154,6 @@ public:
             memcpy(info.psn_account_id, account_id.data(), CHIAKI_PSN_ACCOUNT_ID_SIZE);
         }
 
-        EventSource<ChiakiRegistEvent *> event_source = EventSource<ChiakiRegistEvent *>();
-
         event_source.set_on_subscribe([this, info]() mutable {
             regist.start(info, settings->GetLogLevelMask());
         });
@@ -173,6 +170,52 @@ public:
 
         return event_source;
     }
+
+    ChiakiRegistEvent *registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
+    {
+        ChiakiRegistInfo info = {};
+
+        info.host = host.data();
+        info.target = target;
+        info.broadcast = broadcast;
+        info.pin = static_cast<uint32_t>(std::stoul(pin));
+        info.console_pin = (cpin.size() > 0) ? static_cast<uint32_t>(std::stoul(cpin)) : 0;
+        info.holepunch_info = nullptr;
+        info.rudp = nullptr;
+        std::string psn_idb;
+        if (target == CHIAKI_TARGET_PS4_8)
+        {
+            psn_idb = psn_id;
+            info.psn_online_id = psn_idb.data();
+        }
+        else
+        {
+            std::vector<uint8_t> account_id = fromBase64(psn_id);
+            if (account_id.size() != CHIAKI_PSN_ACCOUNT_ID_SIZE)
+            {
+                throw std::runtime_error("Invalid Account-ID: The PSN Account-ID must be exactly " + std::to_string(CHIAKI_PSN_ACCOUNT_ID_SIZE) + " bytes encoded as base64.");
+            }
+            info.psn_online_id = nullptr;
+            memcpy(info.psn_account_id, account_id.data(), CHIAKI_PSN_ACCOUNT_ID_SIZE);
+        }
+
+        std::promise<ChiakiRegistEvent *> promise;
+        std::future<ChiakiRegistEvent *> future = promise.get_future();
+
+        regist.setSuccessCallback([this, &promise](ChiakiRegistEvent *event)
+        {
+            promise.set_value(event);
+        });
+
+        regist.setFailedCallback([this, &promise](int32_t error_code)
+        {
+            promise.set_exception(std::make_exception_ptr(std::runtime_error("Failed to register host")));
+        });
+
+        regist.start(info, settings->GetLogLevelMask());
+        return future.get();
+    }
+
 private:
     bool sendWakeup(const std::string &host, const std::string &regist_key, bool ps5)
     {
@@ -193,6 +236,8 @@ private:
     StreamSession *session = {};
     Timer *wakeup_start_timer = {};
     DiscoveryManager discovery_manager;
+    Regist regist;
+    EventSource<ChiakiRegistEvent *> event_source = EventSource<ChiakiRegistEvent *>();
     std::vector<std::string> waking_sleeping_nicknames;
     std::string wakeup_nickname = "";
     bool wakeup_start = false;

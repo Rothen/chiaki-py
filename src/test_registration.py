@@ -33,7 +33,22 @@ settings.set_log_verbose(False)
 backend: Backend = Backend(settings)
 
 
-test = backend.register_host(
+try:
+    test = backend.register_host(
+        host=host,
+        psn_id=psn_id,
+        pin=pin,
+        cpin=cpin,
+        broadcast=broadcast,
+        target=target
+    )
+    
+    print(test)
+except Exception as e:
+    print(f"Error: {e}")
+    
+
+regist_event_source = backend.register_host_async(
     host=host,
     psn_id=psn_id,
     pin=pin,
@@ -42,15 +57,13 @@ test = backend.register_host(
     target=target
 )
 
-test.subscribe(
+regist_event_source.subscribe(
     on_next=lambda x: print("Success", x),
     on_error=lambda code, message: print("Failure", code, message),
 )
 
 def signal_handler(sig: int, frame: Any) -> None:
     """Handles Ctrl+C to stop the session gracefully."""
-    print("\nCtrl+C detected! Stopping stream session...")
-    # stream_session.stop()
     exit_event.set()
 
 if __name__ == "__main__":
