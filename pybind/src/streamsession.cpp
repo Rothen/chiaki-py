@@ -1,5 +1,3 @@
-// SPDX - License - Identifier : LicenseRef - AGPL - 3.0 - only - OpenSSL
-
 #include "../../lib/src/utils.h"
 #include "utils.h"
 #include "streamsession.h"
@@ -336,7 +334,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
         if (packet_loss != average_packet_loss) {
             average_packet_loss = packet_loss;
             std::cout << "Average Packet Loss Changed: " << average_packet_loss << std::endl;
-            AveragePacketLossChanged();
+            AveragePacketLossChanged.next(average_packet_loss);
         }
     });
 }
@@ -419,7 +417,7 @@ void StreamSession::Event(ChiakiEvent *event)
     case CHIAKI_EVENT_CONNECTED:
         connect_timer.invalidate();
         connected = true;
-        ConnectedChanged();
+        ConnectedChanged.next(connected);
         break;
     case CHIAKI_EVENT_QUIT:
         if (!connected && !holepunch_session && chiaki_quit_reason_is_error(event->quit.reason) && connect_timer.elapsed() < SESSION_RETRY_SECONDS * 1000)
@@ -428,20 +426,21 @@ void StreamSession::Event(ChiakiEvent *event)
             return;
         }
         connected = false;
-        ConnectedChanged();
-        SessionQuit(event->quit.reason, event->quit.reason_str ? std::string(event->quit.reason_str) : std::string());
+        ConnectedChanged.next(connected);
+        // SessionQuit.next(event->quit.reason, event->quit.reason_str ? std::string(event->quit.reason_str) : std::string());
+        SessionQuit.next(event->quit.reason);
         break;
     case CHIAKI_EVENT_REGIST:
-        AutoRegistSucceeded(event->host);
+        AutoRegistSucceeded.next(event->host);
         break;
     case CHIAKI_EVENT_LOGIN_PIN_REQUEST:
-        LoginPINRequested(event->login_pin_request.pin_incorrect);
+        LoginPINRequested.next(event->login_pin_request.pin_incorrect);
         break;
     case CHIAKI_EVENT_HOLEPUNCH:
-        DataHolepunchProgress(event->data_holepunch.finished);
+        DataHolepunchProgress.next(event->data_holepunch.finished);
         break;
     case CHIAKI_EVENT_NICKNAME_RECEIVED:
-        NicknameReceived(event->server_nickname);
+        NicknameReceived.next(event->server_nickname);
         break;
     case CHIAKI_EVENT_RUMBLE:
     {
@@ -481,7 +480,7 @@ void StreamSession::Event(ChiakiEvent *event)
 void StreamSession::CantDisplayMessage(bool cant_display)
 {
     this->cant_display = cant_display;
-    CantDisplayChanged(cant_display);
+    CantDisplayChanged.next(cant_display);
 }
 
 ChiakiErrorCode StreamSession::InitiatePsnConnection(std::string psn_token)
@@ -558,11 +557,11 @@ void StreamSession::CancelPsnConnection(bool stop_thread)
 
 void StreamSession::TriggerFfmpegFrameAvailable()
 {
-    FfmpegFrameAvailable();
+    FfmpegFrameAvailable.next(true);
     if (measured_bitrate != session.stream_connection.measured_bitrate)
     {
         measured_bitrate = session.stream_connection.measured_bitrate;
-        MeasuredBitrateChanged();
+        MeasuredBitrateChanged.next(measured_bitrate);
     }
 }
 

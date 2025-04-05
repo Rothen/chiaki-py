@@ -91,6 +91,22 @@ private:
     ChiakiRegist chiaki_regist;
 };
 
+struct RegistResult
+{
+    ChiakiRegistEventType type;
+    ChiakiTarget target;
+    char ap_ssid[0x30];
+    char ap_bssid[0x20];
+    char ap_key[0x50];
+    char ap_name[0x20];
+    uint8_t server_mac[6];
+    char server_nickname[0x20];
+    char rp_regist_key[CHIAKI_SESSION_AUTH_SIZE]; // must be completely filled (pad with \0)
+    uint32_t rp_key_type;
+    uint8_t rp_key[0x10];
+    uint32_t console_pin;
+};
+
 enum class PsnConnectState
 {
     NotStarted,
@@ -173,7 +189,7 @@ public:
         return event_source;
     }
 
-    ChiakiRegistEvent *registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
+    RegistResult &registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
     {
         ChiakiRegistInfo info = {};
 
@@ -201,12 +217,23 @@ public:
             memcpy(info.psn_account_id, account_id.data(), CHIAKI_PSN_ACCOUNT_ID_SIZE);
         }
 
-        std::promise<ChiakiRegistEvent *> promise;
-        std::future<ChiakiRegistEvent *> future = promise.get_future();
+        std::promise<RegistResult> promise;
+        std::future<RegistResult> future = promise.get_future();
 
-        regist.setSuccessCallback([&promise](ChiakiRegistEvent *event)
-        {
-            promise.set_value(event);
+        regist.setSuccessCallback([this, &promise](ChiakiRegistEvent *event) {
+            result.type = event->type;
+            result.target = event->registered_host->target;
+            std::memcpy(result.ap_ssid, event->registered_host->ap_ssid, 0x30);
+            std::memcpy(result.ap_bssid, event->registered_host->ap_bssid, 0x20);
+            std::memcpy(result.ap_key, event->registered_host->ap_key, 0x50);
+            std::memcpy(result.ap_name, event->registered_host->ap_name, 0x20);
+            std::memcpy(result.server_mac, event->registered_host->server_mac, 6);
+            std::memcpy(result.server_nickname, event->registered_host->server_nickname, 0x20);
+            std::memcpy(result.rp_regist_key, event->registered_host->rp_regist_key, CHIAKI_SESSION_AUTH_SIZE);
+            result.rp_key_type = event->registered_host->rp_key_type;
+            std::memcpy(result.rp_key, event->registered_host->rp_key, 0x10);
+            result.console_pin = event->registered_host->console_pin;
+            promise.set_value(result);
         });
 
         regist.setFailedCallback([&promise](int32_t error_code)
@@ -215,7 +242,8 @@ public:
         });
 
         regist.start(info, settings->GetLogLevelMask());
-        return future.get();
+        future.get();
+        return result;
     }
 
 private:
@@ -242,6 +270,7 @@ private:
     EventSource<ChiakiRegistEvent *> event_source;
     std::vector<std::string> waking_sleeping_nicknames;
     std::string wakeup_nickname = "";
+    RegistResult result;
     // bool wakeup_start = false;
 };
 

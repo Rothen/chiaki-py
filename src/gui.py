@@ -23,7 +23,7 @@ class FrameProducer(QThread):
         self.running = True  # Control flag
         
         self.stream_session = stream_session
-        self.stream_session.ffmpeg_frame_available = lambda: self.ffmpeg_frame_available()
+        self.stream_session.ffmpeg_frame_available.subscribe(lambda a: self.ffmpeg_frame_available())
         self.frame = np.zeros((1080, 1920, 3), np.uint8)
         self.frame_ready_event = threading.Event()
 
@@ -102,12 +102,11 @@ class ImageStream(QMainWindow):
 log = Log(level=LogLevel.INFO)
 audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
 
-host = "192.168.42.43"
+host = "192.168.42.32"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
-ps5Id = "78c881a8214a"
+ps5Id = ""
 morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
-initial_login_pin = ""  # None
 initial_login_pin = ""  # None
 duid = ""  # None
 auto_regist = False
@@ -141,15 +140,14 @@ window = ImageStream(stream_session)
 img = np.zeros((1080, 1920, 3), np.uint8)
 
 # stream_session.ffmpeg_frame_available = ffmpeg_frame_available
-stream_session.session_quit = lambda a, b: print('session_quit')
-stream_session.login_pin_requested = lambda a: print('login_pin_requested')
-stream_session.data_holepunch_progress = lambda a: print('data_holepunch_progress')
-stream_session.auto_regist_succeeded = lambda a: print('auto_regist_succeeded')
-stream_session.nickname_received = lambda a: print('nickname_received')
-stream_session.connected_changed = lambda : print('connected_changed')
-stream_session.measured_bitrate_changed = lambda : print('measured_bitrate_changed')
-stream_session.average_packet_loss_changed = lambda : print('average_packet_loss_changed')
-stream_session.cant_display_changed = lambda a: print('cant_display_changed')
+stream_session.session_quit.subscribe(on_next=lambda a: print('session_quit'))
+stream_session.login_pin_requested.subscribe(lambda a: print('login_pin_requested'))
+stream_session.data_holepunch_progress.subscribe(lambda a: print('data_holepunch_progress'))
+stream_session.nickname_received.subscribe(lambda a: print('nickname_received'))
+stream_session.connected_changed.subscribe(lambda a: print('connected_changed'))
+stream_session.measured_bitrate_changed.subscribe(lambda a: print('measured_bitrate_changed'))
+stream_session.average_packet_loss_changed.subscribe(lambda a: print('average_packet_loss_changed'))
+stream_session.cant_display_changed.subscribe(lambda a: print('cant_display_changed'))
 
 if __name__ == "__main__":
     stream_session.start()

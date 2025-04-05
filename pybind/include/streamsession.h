@@ -19,6 +19,7 @@
 #include "controllermanager.h"
 #include "settings.h"
 #include "elapsed_timer.h"
+#include "event_source.h"
 
 #include <chiaki/session.h>
 #include <chiaki/opusdecoder.h>
@@ -216,7 +217,7 @@ class StreamSession
         }
         ChiakiFfmpegDecoder *GetFfmpegDecoder()	{ return ffmpeg_decoder; }
 
-		std::function<void()> FfmpegFrameAvailable;
+		/*std::function<void()> FfmpegFrameAvailable;
         std::function<void(ChiakiQuitReason, const std::string &)> SessionQuit;
 		std::function<void(bool)> LoginPINRequested;
 		std::function<void(bool)> DataHolepunchProgress;
@@ -225,7 +226,29 @@ class StreamSession
 		std::function<void()> ConnectedChanged;
 		std::function<void()> MeasuredBitrateChanged;
 		std::function<void()> AveragePacketLossChanged;
-        std::function<void(bool)> CantDisplayChanged;
+        std::function<void(bool)> CantDisplayChanged;*/
+
+        EventSource<bool> FfmpegFrameAvailable;
+        EventSource<ChiakiQuitReason> SessionQuit;
+        EventSource<bool> LoginPINRequested;
+        EventSource<bool> DataHolepunchProgress;
+        EventSource<const ChiakiRegisteredHost &> AutoRegistSucceeded;
+        EventSource<std::string> NicknameReceived;
+        EventSource<bool> ConnectedChanged;
+        EventSource<double> MeasuredBitrateChanged;
+        EventSource<double> AveragePacketLossChanged;
+        EventSource<bool> CantDisplayChanged;
+
+        EventSource<bool> &OnFfmpegFrameAvailable() { return FfmpegFrameAvailable; }
+        EventSource<ChiakiQuitReason> &OnSessionQuit() { return SessionQuit; }
+        EventSource<bool> &OnLoginPINRequested() { return LoginPINRequested; }
+        EventSource<bool> &OnDataHolepunchProgress() { return DataHolepunchProgress; }
+        EventSource<const ChiakiRegisteredHost &> &OnAutoRegistSucceeded() { return AutoRegistSucceeded; }
+        EventSource<std::string> &OnNicknameReceived() { return NicknameReceived; }
+        EventSource<bool> &OnConnectedChanged() { return ConnectedChanged; }
+        EventSource<double> &OnMeasuredBitrateChanged() { return MeasuredBitrateChanged; }
+        EventSource<double> &OnAveragePacketLossChanged() { return AveragePacketLossChanged; }
+        EventSource<bool> &OnCantDisplayChanged() { return CantDisplayChanged; }
 };
 
 #endif // CHIAKI_PY_STREAMSESSION_H

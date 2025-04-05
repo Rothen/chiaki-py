@@ -22,7 +22,7 @@ exit_event = threading.Event()
 
 host: str = "192.168.42.32"
 psn_id: str = psn_account.user_rpid # base64
-pin: str = "11572734"
+pin: str = "64907664"
 cpin: str = ""
 broadcast: bool = False
 target: Target = Target.PS5_1
@@ -33,7 +33,7 @@ backend: Backend = Backend(settings)
 
 
 try:
-    test = backend.register_host(
+    regist_event = backend.register_host(
         host=host,
         psn_id=psn_id,
         pin=pin,
@@ -42,12 +42,12 @@ try:
         target=target
     )
     
-    print(test)
+    print(regist_event)
 except Exception as e:
     print(f"Error: {e}")
     
 
-regist_event_source = backend.register_host_async(
+'''regist_event_source = backend.register_host_async(
     host=host,
     psn_id=psn_id,
     pin=pin,
@@ -60,7 +60,7 @@ regist_event_source.subscribe(
     on_next=lambda x: print("Success", x),
     on_error=lambda code, message: print("Failure", code, message),
     on_completed=lambda: exit_event.set()
-)
+)'''
 
 def signal_handler(sig: int, frame: Any) -> None:
     """Handles Ctrl+C to stop the session gracefully."""

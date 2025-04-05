@@ -66,7 +66,7 @@ public:
 
     ~EventSource()
     {
-        std::cout << "EventSource destroyed at " << this << std::endl;
+        // std::cout << "EventSource destroyed at " << this << std::endl;
     }
 
     void set_on_subscribe(std::function<void()> on_subscribe)
@@ -82,6 +82,17 @@ public:
         {
             if (sub.active && sub.on_next)
                 sub.on_next(py::cast(value));
+        }
+    }
+
+    void next() const
+    {
+        py::gil_scoped_acquire gil;
+        std::lock_guard<std::mutex> lock(subscribers_mutex);
+        for (auto &sub : subscribers)
+        {
+            if (sub.active && sub.on_next)
+                sub.on_next(py::none());
         }
     }
 
@@ -129,7 +140,10 @@ public:
         if (!has_started)
         {
             has_started = true;
-            on_subscribe();
+            if (on_subscribe)
+            {
+                on_subscribe();
+            }
         }
         return subscribers.back();
     }
