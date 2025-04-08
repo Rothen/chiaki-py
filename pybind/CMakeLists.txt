@@ -24,6 +24,25 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 find_package(fmt REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+if(MSVC)
+    add_compile_options(
+        /std:c++17
+        $<$<CONFIG:RELEASE>:/O2>
+        $<$<CONFIG:RELWITHDEBINFO>:/O2>
+        $<$<CONFIG:DEBUG>:/Od>
+    )
+else()
+    add_compile_options(
+        -std=c++17
+        $<$<CONFIG:RELEASE>:-Ofast>
+        $<$<CONFIG:RELEASE>:-march=native>
+        $<$<CONFIG:RELWITHDEBINFO>:-Ofast>
+        $<$<CONFIG:RELWITHDEBINFO>:-march=native>
+        $<$<CONFIG:DEBUG>:-O0>
+        $<$<CONFIG:DEBUG>:-ggdb3>
+    )
+endif(MSVC)
+
 
 set(PYBIND11_PYTHON_VERSION 3.11)
 include(FetchContent)

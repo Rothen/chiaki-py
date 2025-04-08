@@ -15,6 +15,7 @@ from chiaki_py.core.audio import AudioHeader
 import time
 import numpy as np
 from pydualsense import pydualsense
+from dualsense_controller import DualSenseController
 
 class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""
@@ -54,59 +55,66 @@ class LeftRightToggler(QThread):
     def __init__(self, stream_session: StreamSession):
         super().__init__()
         self.running = True  # Control flag
-        
         self.stream_session = stream_session
-
-    def dpad_up(self, state: bool):
-        if state:
-            self.stream_session.press_up()
-        else:
-            self.stream_session.release_up()
-
-    def dpad_right(self, state: bool):
-        if state:
-            self.stream_session.press_right()
-        else:
-            self.stream_session.release_right()
-
-    def dpad_down(self, state: bool):
-        if state:
-            self.stream_session.press_down()
-        else:
-            self.stream_session.release_down()
-
-    def dpad_left(self, state: bool):
-        if state:
-            self.stream_session.press_left()
-        else:
-            self.stream_session.release_left()
 
     def run(self):
         """Continuously grab frames in a separate thread."""
-        self.ds = pydualsense()  # open controller
-        self.ds.init()  # initialize controller
-        self.ds.dpad_up += self.dpad_up
-        self.ds.dpad_right += self.dpad_right
-        self.ds.dpad_down += self.dpad_down
-        self.ds.dpad_left += self.dpad_left
-        while self.running:
-            '''if self.left:
-                self.stream_session.press_left()
-                self.stream_session.send_feedback_state()
-                print("Press Left")
-                time.sleep(0.01)
-                self.stream_session.release_left()
-                self.stream_session.send_feedback_state()
-                print("Release Left")
-            else:
-                self.stream_session.press_right()
-                self.stream_session.send_feedback_state()
-                print("Press Right")
-                time.sleep(0.01)
-                self.stream_session.release_right()
-                self.stream_session.send_feedback_state()
-                print("Release Right")'''
-            
+        self.controller = DualSenseController()
+
+        self.controller.btn_cross.on_down(self.stream_session.press_cross)
+        self.controller.btn_cross.on_up(self.stream_session.release_cross)
+
+        self.controller.btn_circle.on_down(self.stream_session.press_circle)
+        self.controller.btn_circle.on_up(self.stream_session.release_circle)
+
+        self.controller.btn_square.on_down(self.stream_session.press_square)
+        self.controller.btn_square.on_up(self.stream_session.release_square)
+        
+        self.controller.btn_triangle.on_down(self.stream_session.press_triangle)
+        self.controller.btn_triangle.on_up(self.stream_session.release_triangle)
+        
+        self.controller.btn_left.on_down(self.stream_session.press_left)
+        self.controller.btn_left.on_up(self.stream_session.release_left)
+
+        self.controller.btn_right.on_down(self.stream_session.press_right)
+        self.controller.btn_right.on_up(self.stream_session.release_right)
+
+        self.controller.btn_up.on_down(self.stream_session.press_up)
+        self.controller.btn_up.on_up(self.stream_session.release_up)
+
+        self.controller.btn_down.on_down(self.stream_session.press_down)
+        self.controller.btn_down.on_up(self.stream_session.release_down)
+
+        self.controller.btn_l1.on_down(self.stream_session.press_l1)
+        self.controller.btn_l1.on_up(self.stream_session.press_l1)
+
+        self.controller.btn_r1.on_down(self.stream_session.press_r1)
+        self.controller.btn_r1.on_up(self.stream_session.press_r1)
+
+        self.controller.btn_l3.on_down(self.stream_session.press_l3)
+        self.controller.btn_l3.on_up(self.stream_session.press_l3)
+
+        self.controller.btn_r3.on_down(self.stream_session.press_r3)
+        self.controller.btn_r3.on_up(self.stream_session.press_r3)
+
+        self.controller.btn_options.on_down(self.stream_session.press_options)
+        self.controller.btn_options.on_up(self.stream_session.press_options)
+
+        self.controller.btn_create.on_down(self.stream_session.press_create)
+        self.controller.btn_create.on_up(self.stream_session.press_create)
+
+        self.controller.btn_touchpad.on_down(self.stream_session.press_touchpad)
+        self.controller.btn_touchpad.on_up(self.stream_session.press_touchpad)
+
+        self.controller.btn_ps.on_down(self.stream_session.press_ps)
+        self.controller.btn_ps.on_up(self.stream_session.press_ps)
+        
+        '''self.controller.btn_l2.on_change(lambda state: print(state))
+        
+        self.controller.left_stick.on_change(lambda x, y: self.stream_session.move_left_stick(x, y))'''
+        
+        self.controller.activate()
+        while self.running:            
             time.sleep(1.0)
 
     def stop(self):

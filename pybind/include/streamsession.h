@@ -239,17 +239,53 @@ class StreamSession
         const EventSource<double> &OnAveragePacketLossChanged() { return AveragePacketLossChanged; }
         const EventSource<bool> &OnCantDisplayChanged() { return CantDisplayChanged; }
 
-        void pressUp() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
-        void releaseUp() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
+        void pressCross() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS; SendFeedbackState(); }
+        void releaseCross() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_CROSS; SendFeedbackState(); }
+
+        void pressCircle() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_MOON; SendFeedbackState(); }
+        void releaseCircle() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_MOON; SendFeedbackState(); }
+
+        void pressSquare() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_BOX; SendFeedbackState(); }
+        void releaseSquare() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_BOX; SendFeedbackState(); }
+
+        void pressTriangle() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PYRAMID; SendFeedbackState(); }
+        void releaseTriangle() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PYRAMID; SendFeedbackState(); }
+
+        void pressLeft() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
+        void releaseLeft() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
 
         void pressRight() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); }
         void releaseRight() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); }
 
+        void pressUp() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
+        void releaseUp() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
+ 
         void pressDown() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); }
         void releaseDown() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); }
-
-        void pressLeft() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
-        void releaseLeft() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
+ 
+        void pressL1() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_L1; SendFeedbackState(); }
+        void releaseL1() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_L1; SendFeedbackState(); }
+ 
+        void pressR1() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_R1; SendFeedbackState(); }
+        void releaseR1() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_R1; SendFeedbackState(); }
+ 
+        void pressL3() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_L3; SendFeedbackState(); }
+        void releaseL3() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_L3; SendFeedbackState(); }
+ 
+        void pressR3() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_R3; SendFeedbackState(); }
+        void releaseR3() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_R3; SendFeedbackState(); }
+ 
+        void pressOptions() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_OPTIONS; SendFeedbackState(); }
+        void releaseOptions() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_OPTIONS; SendFeedbackState(); }
+ 
+        void pressCreate() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_SHARE; SendFeedbackState(); }
+        void releaseCreate() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_SHARE; SendFeedbackState(); }
+ 
+        void pressTouchpad() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD; SendFeedbackState(); }
+        void releaseTouchpad() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_TOUCHPAD; SendFeedbackState(); }
+ 
+        void pressPS() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); }
+        void releasePS() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); }
 
         ChiakiControllerState controller_state;
 

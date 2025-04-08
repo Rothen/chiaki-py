@@ -9,30 +9,44 @@ from chiaki_py.core.audio import AudioHeader
 # from chiaki_py.core.session import chiaki_rp_application_reason_string, chiaki_rp_version_string
 import numpy as np
 import cv2
-
-from .chiaki_py_settings import ChiakiPySettings
-
-chiaki_py_settings: ChiakiPySettings = ChiakiPySettings.from_file("settings.json")
+from pydualsense import pydualsense
 
 exit_event = threading.Event()
 
+log = Log(level=LogLevel.INFO)
+audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
+
+host = "192.168.42.32"
+regist_key = "b02d1ceb"
+nickname = "PS5-083"
+morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
+initial_login_pin = ""  # None
+duid = ""  # None
+auto_regist = False
+fullscreen = False
+zoom = False
+stretch = False
+ps5 = True
+discover_timout = 2000
+
 settings: Settings = Settings()
-settings.set_log_verbose(True)
+settings.set_log_verbose(False)
 
 connect_info: StreamSessionConnectInfo = StreamSessionConnectInfo(
     settings=settings,
     target=Target.PS5_1,
-    host=chiaki_py_settings.host,
-    nickname=chiaki_py_settings.nickname,
-    regist_key=chiaki_py_settings.regist_key,
-    morning=bytes.fromhex(chiaki_py_settings.morning),
-    initial_login_pin=chiaki_py_settings.initial_login_pin,
-    duid=chiaki_py_settings.duid,
-    auto_regist=chiaki_py_settings.auto_regist,
-    fullscreen=chiaki_py_settings.fullscreen,
-    zoom=chiaki_py_settings.zoom,
-    stretch=chiaki_py_settings.stretch
+    host=host,
+    nickname=nickname,
+    regist_key=regist_key,
+    morning=bytes.fromhex(morning),
+    initial_login_pin=initial_login_pin,
+    duid=duid,
+    auto_regist=auto_regist,
+    fullscreen=fullscreen,
+    zoom=zoom,
+    stretch=stretch
 )
+stream_session: StreamSession = StreamSession(connect_info)
 
 img = np.zeros((1080, 1920, 3), np.uint8)
 img_to_show = np.zeros((1080, 1920, 3), np.uint8)
@@ -43,16 +57,31 @@ def get_ffmpeg_frame() -> None:
     cv2.cvtColor(img, cv2.COLOR_RGB2BGR, img_to_show)
 
 stream_session: StreamSession = StreamSession(connect_info)
-stream_session.ffmpeg_frame_available = lambda: get_ffmpeg_frame()
-stream_session.session_quit = lambda a, b: print('session_quit')
-stream_session.login_pin_requested = lambda a: print('login_pin_requested')
-stream_session.data_holepunch_progress = lambda a: print('data_holepunch_progress')
-stream_session.auto_regist_succeeded = lambda a: print('auto_regist_succeeded')
-stream_session.nickname_received = lambda a: print('nickname_received')
-stream_session.connected_changed = lambda : print('connected_changed')
-stream_session.measured_bitrate_changed = lambda : print('measured_bitrate_changed')
-stream_session.average_packet_loss_changed = lambda : print('average_packet_loss_changed')
-stream_session.cant_display_changed = lambda a: print('cant_display_changed')
+stream_session.on_frame_available().subscribe(lambda x: get_ffmpeg_frame())
+
+def dpad_up(state: bool):
+    if state:
+        stream_session.press_up()
+    else:
+        stream_session.release_up()
+
+def dpad_right(state: bool):
+    if state:
+        stream_session.press_right()
+    else:
+        stream_session.release_right()
+
+def dpad_down(state: bool):
+    if state:
+        stream_session.press_down()
+    else:
+        stream_session.release_down()
+
+def dpad_left(state: bool):
+    if state:
+        stream_session.press_left()
+    else:
+        stream_session.release_left()
 
 
 def signal_handler(sig: int, frame: Any) -> None:
@@ -65,10 +94,16 @@ def signal_handler(sig: int, frame: Any) -> None:
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
-    if "-w" in sys.argv:
-        input("Press Enter to continue...")
     print("Starting stream session...")
     stream_session.start()
+
+    ds = pydualsense()  # open controller
+    ds.init()  # initialize controller
+    ds.dpad_up += dpad_up
+    ds.dpad_right += dpad_right
+    ds.dpad_down += dpad_down
+    ds.dpad_left += dpad_left
+
     print("Started")
 
     while not exit_event.is_set():
