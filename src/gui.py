@@ -86,28 +86,28 @@ class LeftRightToggler(QThread):
         self.controller.btn_down.on_up(self.stream_session.release_down)
 
         self.controller.btn_l1.on_down(self.stream_session.press_l1)
-        self.controller.btn_l1.on_up(self.stream_session.press_l1)
+        self.controller.btn_l1.on_up(self.stream_session.release_l1)
 
         self.controller.btn_r1.on_down(self.stream_session.press_r1)
-        self.controller.btn_r1.on_up(self.stream_session.press_r1)
+        self.controller.btn_r1.on_up(self.stream_session.release_r1)
 
         self.controller.btn_l3.on_down(self.stream_session.press_l3)
-        self.controller.btn_l3.on_up(self.stream_session.press_l3)
+        self.controller.btn_l3.on_up(self.stream_session.release_l3)
 
         self.controller.btn_r3.on_down(self.stream_session.press_r3)
-        self.controller.btn_r3.on_up(self.stream_session.press_r3)
+        self.controller.btn_r3.on_up(self.stream_session.release_r3)
 
         self.controller.btn_options.on_down(self.stream_session.press_options)
-        self.controller.btn_options.on_up(self.stream_session.press_options)
+        self.controller.btn_options.on_up(self.stream_session.release_touchpad)
 
         self.controller.btn_create.on_down(self.stream_session.press_create)
-        self.controller.btn_create.on_up(self.stream_session.press_create)
+        self.controller.btn_create.on_up(self.stream_session.release_touchpad)
 
         self.controller.btn_touchpad.on_down(self.stream_session.press_touchpad)
-        self.controller.btn_touchpad.on_up(self.stream_session.press_touchpad)
+        self.controller.btn_touchpad.on_up(self.stream_session.release_touchpad)
 
         self.controller.btn_ps.on_down(self.stream_session.press_ps)
-        self.controller.btn_ps.on_up(self.stream_session.press_ps)
+        self.controller.btn_ps.on_up(self.stream_session.release_ps)
         
         '''self.controller.btn_l2.on_change(lambda state: print(state))
         
