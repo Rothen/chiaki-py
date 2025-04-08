@@ -12,7 +12,9 @@ from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_fra
 from chiaki_py.core.log import Log, LogLevel
 from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
+import time
 import numpy as np
+from pydualsense import pydualsense
 
 class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""
@@ -23,7 +25,7 @@ class FrameProducer(QThread):
         self.running = True  # Control flag
         
         self.stream_session = stream_session
-        self.stream_session.ffmpeg_frame_available.subscribe(lambda a: self.ffmpeg_frame_available())
+        self.stream_session.on_frame_available().subscribe(lambda a: self.ffmpeg_frame_available())
         self.frame = np.zeros((1080, 1920, 3), np.uint8)
         self.frame_ready_event = threading.Event()
 
@@ -31,8 +33,11 @@ class FrameProducer(QThread):
         """Continuously grab frames in a separate thread."""
         while self.running:
             if self.frame_ready_event.wait():
+                start = time.perf_counter()
                 self.frame_ready.emit(self.frame)
                 self.frame_ready_event.clear()
+                end = time.perf_counter()
+                time.sleep(max(0, 1.0 / 60 - (end - start)))  # Limit to 60 FPS
 
     def ffmpeg_frame_available(self):
         get_frame(self.stream_session, False, self.frame)
@@ -44,6 +49,74 @@ class FrameProducer(QThread):
         self.frame_ready_event.set()
         self.quit()
         self.wait()
+
+class LeftRightToggler(QThread):
+    def __init__(self, stream_session: StreamSession):
+        super().__init__()
+        self.running = True  # Control flag
+        
+        self.stream_session = stream_session
+
+    def dpad_up(self, state: bool):
+        if state:
+            self.stream_session.press_up()
+        else:
+            self.stream_session.release_up()
+
+    def dpad_right(self, state: bool):
+        if state:
+            self.stream_session.press_right()
+        else:
+            self.stream_session.release_right()
+
+    def dpad_down(self, state: bool):
+        if state:
+            self.stream_session.press_down()
+        else:
+            self.stream_session.release_down()
+
+    def dpad_left(self, state: bool):
+        if state:
+            self.stream_session.press_left()
+        else:
+            self.stream_session.release_left()
+
+    def run(self):
+        """Continuously grab frames in a separate thread."""
+        self.ds = pydualsense()  # open controller
+        self.ds.init()  # initialize controller
+        self.ds.dpad_up += self.dpad_up
+        self.ds.dpad_right += self.dpad_right
+        self.ds.dpad_down += self.dpad_down
+        self.ds.dpad_left += self.dpad_left
+        while self.running:
+            '''if self.left:
+                self.stream_session.press_left()
+                self.stream_session.send_feedback_state()
+                print("Press Left")
+                time.sleep(0.01)
+                self.stream_session.release_left()
+                self.stream_session.send_feedback_state()
+                print("Release Left")
+            else:
+                self.stream_session.press_right()
+                self.stream_session.send_feedback_state()
+                print("Press Right")
+                time.sleep(0.01)
+                self.stream_session.release_right()
+                self.stream_session.send_feedback_state()
+                print("Release Right")'''
+            
+            time.sleep(1.0)
+
+    def stop(self):
+        """Stop the thread safely."""
+        self.running = False
+        self.quit()
+        self.wait()
+        self.stream_session.release_right()
+        self.stream_session.release_left()
+        self.stream_session.send_feedback_state()
 
 class ImageStream(QMainWindow):
     def __init__(self, stream_session: StreamSession):
@@ -71,7 +144,11 @@ class ImageStream(QMainWindow):
         # Create frame producer thread
         self.frame_thread = FrameProducer(self.stream_session)
         self.frame_thread.frame_ready.connect(self.update_frame)  # Connect signal
+        
+        self.left_right_toggler = LeftRightToggler(self.stream_session)
+        
         self.frame_thread.start()  # Start fetching frames
+        self.left_right_toggler.start()  # Start toggling left/right
 
     @pyqtSlot(np.ndarray)
     def update_frame(self, frame: npt.NDArray[np.uint8]):
@@ -86,6 +163,9 @@ class ImageStream(QMainWindow):
     
     def closeEvent(self, a0: Optional[QCloseEvent]):
         # Stop the frame thread
+        self.left_right_toggler.stop()
+        self.left_right_toggler.wait()
+
         self.frame_thread.frame_ready.disconnect(self.update_frame)
         self.frame_thread.stop()
         self.frame_thread.wait()
@@ -105,7 +185,6 @@ audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
 host = "192.168.42.32"
 regist_key = "b02d1ceb"
 nickname = "PS5-083"
-ps5Id = ""
 morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
 initial_login_pin = ""  # None
 duid = ""  # None
@@ -140,14 +219,14 @@ window = ImageStream(stream_session)
 img = np.zeros((1080, 1920, 3), np.uint8)
 
 # stream_session.ffmpeg_frame_available = ffmpeg_frame_available
-stream_session.session_quit.subscribe(on_next=lambda a: print('session_quit'))
-stream_session.login_pin_requested.subscribe(lambda a: print('login_pin_requested'))
-stream_session.data_holepunch_progress.subscribe(lambda a: print('data_holepunch_progress'))
-stream_session.nickname_received.subscribe(lambda a: print('nickname_received'))
-stream_session.connected_changed.subscribe(lambda a: print('connected_changed'))
-stream_session.measured_bitrate_changed.subscribe(lambda a: print('measured_bitrate_changed'))
-stream_session.average_packet_loss_changed.subscribe(lambda a: print('average_packet_loss_changed'))
-stream_session.cant_display_changed.subscribe(lambda a: print('cant_display_changed'))
+stream_session.on_session_quit().subscribe(on_next=lambda reason: print('Session Quit:', reason))
+stream_session.on_login_pin_requested().subscribe(lambda pin_incorrect: print('Login Pin Requested:', pin_incorrect))
+stream_session.on_data_holepunch_progress().subscribe(lambda finished: print('Data Holepunch Progress:', finished))
+stream_session.on_nickname_received().subscribe(lambda nickname: print('Nickname Received:', nickname))
+stream_session.on_connected_changed().subscribe(lambda connected: print('Connected Changed:', connected))
+stream_session.on_measured_bitrate_changed().subscribe(lambda bitrate: print('Measured Bitrate Changed:', bitrate))
+stream_session.on_average_packet_loss_changed().subscribe(lambda packet_loss: print('Average Packet Loss Changed:', packet_loss))
+stream_session.on_cant_display_changed().subscribe(lambda cant_display: print('Cant Display Changed:', cant_display))
 
 if __name__ == "__main__":
     stream_session.start()

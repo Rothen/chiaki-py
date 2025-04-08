@@ -377,67 +377,45 @@ PYBIND11_MODULE(chiaki_py, m)
              py::arg("duid"), py::arg("auto_regist"), py::arg("fullscreen"),
              py::arg("zoom"), py::arg("stretch"));
 
-    py::class_<EventSource<ChiakiQuitReason>::Subscription>(m, "ChiakiQuitReasonEventSourceSubscription")
-        .def("unsubscribe", &EventSource<ChiakiQuitReason>::Subscription::unsubscribe);
-
-    py::class_<EventSource<bool>::Subscription>(m, "BoolEventSourceSubscription")
-        .def("unsubscribe", &EventSource<bool>::Subscription::unsubscribe);
-
-    py::class_<EventSource<double>::Subscription>(m, "DoubleEventSourceSubscription")
-        .def("unsubscribe", &EventSource<double>::Subscription::unsubscribe);
-
-    py::class_<EventSource<std::string>::Subscription>(m, "StringEventSourceSubscription")
-        .def("unsubscribe", &EventSource<std::string>::Subscription::unsubscribe);
-
-    py::class_<EventSource<ChiakiQuitReason>>(m, "ChiakiQuitReasonEventSource")
-        .def("subscribe", &EventSource<ChiakiQuitReason>::subscribe,
-             py::arg("on_next"),
-             py::arg("on_error") = py::none(),
-             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
-
-    py::class_<EventSource<bool>>(m, "BoolEventSource")
-        .def("subscribe", &EventSource<bool>::subscribe,
-             py::arg("on_next"),
-             py::arg("on_error") = py::none(),
-             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
-
-    py::class_<EventSource<double>>(m, "DoubleEventSource")
-        .def("subscribe", &EventSource<double>::subscribe,
-             py::arg("on_next"),
-             py::arg("on_error") = py::none(),
-             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
-
-    py::class_<EventSource<std::string>>(m, "StringEventSource")
-        .def("subscribe", &EventSource<std::string>::subscribe,
-             py::arg("on_next"),
-             py::arg("on_error") = py::none(),
-             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
-
     py::class_<StreamSession>(m, "StreamSession")
         .def(py::init<const StreamSessionConnectInfo &>(), py::arg("connect_info"))
-        .def("start", &StreamSession::Start)
-        .def("stop", &StreamSession::Stop)
-        .def("go_to_bed", &StreamSession::GoToBed)
-        .def("set_login_pin", &StreamSession::SetLoginPIN)
-        .def("go_home", &StreamSession::GoHome)
-        .def("get_host", &StreamSession::GetHost)
-        .def("is_connected", &StreamSession::IsConnected)
-        .def("is_connecting", &StreamSession::IsConnecting)
-        .def("get_measured_bitrate", &StreamSession::GetMeasuredBitrate)
-        .def("get_average_packet_loss", &StreamSession::GetAveragePacketLoss)
-        .def("get_muted", &StreamSession::GetMuted)
-        .def("set_audio_volume", &StreamSession::SetAudioVolume)
-        .def("get_cant_display", &StreamSession::GetCantDisplay)
-        .def("get_ffmpeg_decoder", &StreamSession::GetFfmpegDecoder)
-        .def_readonly("ffmpeg_frame_available", &StreamSession::FfmpegFrameAvailable, py::return_value_policy::reference)
-        .def_readonly("session_quit", &StreamSession::SessionQuit, py::return_value_policy::reference)
-        .def_readonly("login_pin_requested", &StreamSession::LoginPINRequested, py::return_value_policy::reference)
-        .def_readonly("data_holepunch_progress", &StreamSession::DataHolepunchProgress, py::return_value_policy::reference)
-        .def_readonly("nickname_received", &StreamSession::NicknameReceived, py::return_value_policy::reference)
-        .def_readonly("connected_changed", &StreamSession::ConnectedChanged, py::return_value_policy::reference)
-        .def_readonly("measured_bitrate_changed", &StreamSession::MeasuredBitrateChanged, py::return_value_policy::reference)
-        .def_readonly("average_packet_loss_changed", &StreamSession::AveragePacketLossChanged, py::return_value_policy::reference)
-        .def_readonly("cant_display_changed", &StreamSession::CantDisplayChanged, py::return_value_policy::reference);
+        .def("start", &StreamSession::Start, "Start the stream session.")
+        .def("stop", &StreamSession::Stop, "Stop the stream session.")
+        .def("go_to_bed", &StreamSession::GoToBed, "Go to bed.")
+        .def("set_login_pin", &StreamSession::SetLoginPIN, py::arg("pin"), "Set the login PIN.")
+        .def("go_home", &StreamSession::GoHome, "Go home.")
+        .def("get_host", &StreamSession::GetHost, "Get the host.")
+        .def("is_connected", &StreamSession::IsConnected, "Check if connected.")
+        .def("is_connecting", &StreamSession::IsConnecting, "Check if connecting.")
+        .def("get_measured_bitrate", &StreamSession::GetMeasuredBitrate, "Get the measured bitrate.")
+        .def("get_average_packet_loss", &StreamSession::GetAveragePacketLoss, "Get the average packet loss.")
+        .def("get_muted", &StreamSession::GetMuted, "Get the muted status.")
+        .def("set_audio_volume", &StreamSession::SetAudioVolume, py::arg("volume"), "Set the audio volume.")
+        .def("get_cant_display", &StreamSession::GetCantDisplay, "Get the cant display status.")
+        .def("get_ffmpeg_decoder", &StreamSession::GetFfmpegDecoder, "Get the FFmpeg decoder.")
+        .def("on_frame_available", &StreamSession::OnFfmpegFrameAvailable, "Retrieve the FFmpeg frame available event.", py::return_value_policy::reference)
+        .def("on_session_quit", &StreamSession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
+        .def("on_login_pin_requested", &StreamSession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)
+        .def("on_data_holepunch_progress", &StreamSession::OnDataHolepunchProgress, "Retrieve the data holepunch progress event.", py::return_value_policy::reference)
+        .def("on_nickname_received", &StreamSession::OnNicknameReceived, "Retrieve the nickname received event.", py::return_value_policy::reference)
+        .def("on_connected_changed", &StreamSession::OnConnectedChanged, "Retrieve the connected changed event.", py::return_value_policy::reference)
+        .def("on_measured_bitrate_changed", &StreamSession::OnMeasuredBitrateChanged, "Retrieve the measured bitrate changed event.", py::return_value_policy::reference)
+        .def("on_average_packet_loss_changed", &StreamSession::OnAveragePacketLossChanged, "Retrieve the average packet loss changed event.", py::return_value_policy::reference)
+        .def("on_cant_display_changed", &StreamSession::OnCantDisplayChanged, "Retrieve the cant display changed event.", py::return_value_policy::reference)
+
+        .def("press_up", &StreamSession::pressUp, "Press the up button.")
+        .def("release_up", &StreamSession::releaseUp, "Release the up button.")
+
+        .def("press_right", &StreamSession::pressRight, "Press the right button.")
+        .def("release_right", &StreamSession::releaseRight, "Release the right button.")
+
+        .def("press_down", &StreamSession::pressDown, "Press the down button.")
+        .def("release_down", &StreamSession::releaseDown, "Release the down button.")
+
+        .def("press_left", &StreamSession::pressLeft, "Press the left button.")
+        .def("release_left", &StreamSession::releaseLeft, "Release the left button.")
+
+        .def("send_feedback_state", &StreamSession::SendFeedbackState, "Send the feedback state.");
 
     py::class_<DiscoveryHostWrapper>(m, "DiscoveryHost")
         .def(py::init<>())

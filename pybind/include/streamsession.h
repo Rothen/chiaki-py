@@ -183,6 +183,17 @@ class StreamSession
             if (OnUpdateGamepads) OnUpdateGamepads();
         }
 
+        EventSource<bool> FfmpegFrameAvailable;
+        EventSource<ChiakiQuitReason> SessionQuit;
+        EventSource<bool> LoginPINRequested;
+        EventSource<bool> DataHolepunchProgress;
+        EventSource<const ChiakiRegisteredHost &> AutoRegistSucceeded;
+        EventSource<std::string> NicknameReceived;
+        EventSource<bool> ConnectedChanged;
+        EventSource<double> MeasuredBitrateChanged;
+        EventSource<double> AveragePacketLossChanged;
+        EventSource<bool> CantDisplayChanged;
+
     public:
 		explicit StreamSession(const StreamSessionConnectInfo &connect_info);
 		~StreamSession();
@@ -217,38 +228,74 @@ class StreamSession
         }
         ChiakiFfmpegDecoder *GetFfmpegDecoder()	{ return ffmpeg_decoder; }
 
-		/*std::function<void()> FfmpegFrameAvailable;
-        std::function<void(ChiakiQuitReason, const std::string &)> SessionQuit;
-		std::function<void(bool)> LoginPINRequested;
-		std::function<void(bool)> DataHolepunchProgress;
-		std::function<void(const ChiakiRegisteredHost &)> AutoRegistSucceeded;
-		std::function<void(std::string)> NicknameReceived;
-		std::function<void()> ConnectedChanged;
-		std::function<void()> MeasuredBitrateChanged;
-		std::function<void()> AveragePacketLossChanged;
-        std::function<void(bool)> CantDisplayChanged;*/
+        const EventSource<bool> &OnFfmpegFrameAvailable() { return FfmpegFrameAvailable; }
+        const EventSource<ChiakiQuitReason> &OnSessionQuit() { return SessionQuit; }
+        const EventSource<bool> &OnLoginPINRequested() { return LoginPINRequested; }
+        const EventSource<bool> &OnDataHolepunchProgress() { return DataHolepunchProgress; }
+        const EventSource<const ChiakiRegisteredHost &> &OnAutoRegistSucceeded() { return AutoRegistSucceeded; }
+        const EventSource<std::string> &OnNicknameReceived() { return NicknameReceived; }
+        const EventSource<bool> &OnConnectedChanged() { return ConnectedChanged; }
+        const EventSource<double> &OnMeasuredBitrateChanged() { return MeasuredBitrateChanged; }
+        const EventSource<double> &OnAveragePacketLossChanged() { return AveragePacketLossChanged; }
+        const EventSource<bool> &OnCantDisplayChanged() { return CantDisplayChanged; }
 
-        EventSource<bool> FfmpegFrameAvailable;
-        EventSource<ChiakiQuitReason> SessionQuit;
-        EventSource<bool> LoginPINRequested;
-        EventSource<bool> DataHolepunchProgress;
-        EventSource<const ChiakiRegisteredHost &> AutoRegistSucceeded;
-        EventSource<std::string> NicknameReceived;
-        EventSource<bool> ConnectedChanged;
-        EventSource<double> MeasuredBitrateChanged;
-        EventSource<double> AveragePacketLossChanged;
-        EventSource<bool> CantDisplayChanged;
+        void pressUp() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
+        void releaseUp() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
 
-        EventSource<bool> &OnFfmpegFrameAvailable() { return FfmpegFrameAvailable; }
-        EventSource<ChiakiQuitReason> &OnSessionQuit() { return SessionQuit; }
-        EventSource<bool> &OnLoginPINRequested() { return LoginPINRequested; }
-        EventSource<bool> &OnDataHolepunchProgress() { return DataHolepunchProgress; }
-        EventSource<const ChiakiRegisteredHost &> &OnAutoRegistSucceeded() { return AutoRegistSucceeded; }
-        EventSource<std::string> &OnNicknameReceived() { return NicknameReceived; }
-        EventSource<bool> &OnConnectedChanged() { return ConnectedChanged; }
-        EventSource<double> &OnMeasuredBitrateChanged() { return MeasuredBitrateChanged; }
-        EventSource<double> &OnAveragePacketLossChanged() { return AveragePacketLossChanged; }
-        EventSource<bool> &OnCantDisplayChanged() { return CantDisplayChanged; }
+        void pressRight() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); }
+        void releaseRight() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); }
+
+        void pressDown() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); }
+        void releaseDown() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); }
+
+        void pressLeft() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
+        void releaseLeft() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
+
+        ChiakiControllerState controller_state;
+
+        void SendFeedbackState()
+        {
+            ChiakiControllerState state;
+            chiaki_controller_state_set_idle(&state);
+
+            chiaki_controller_state_or(&state, &state, &controller_state);
+            std::cout << "SendFeedbackState: " << state.buttons << std::endl;
+            // chiaki_controller_state_or(&state, &state, &keyboard_state);
+            // chiaki_controller_state_or(&state, &state, &touch_state);
+
+            if (input_block)
+            {
+                // Only unblock input after all buttons were released
+                if (input_block == 2 && !state.buttons)
+                    input_block = 0;
+                else
+                {
+                    // chiaki_controller_state_set_idle(&state);
+                    // chiaki_controller_state_set_idle(&keyboard_state);
+                }
+            }
+            if ((dpad_touch_shortcut1 || dpad_touch_shortcut2 || dpad_touch_shortcut3 || dpad_touch_shortcut4) && (!dpad_touch_shortcut1 || (state.buttons & dpad_touch_shortcut1)) && (!dpad_touch_shortcut2 || (state.buttons & dpad_touch_shortcut2)) && (!dpad_touch_shortcut3 || (state.buttons & dpad_touch_shortcut3)) && (!dpad_touch_shortcut4 || (state.buttons & dpad_touch_shortcut4)))
+            {
+                if (!dpad_regular_touch_switched)
+                {
+                    dpad_regular_touch_switched = true;
+                    dpad_regular = !dpad_regular;
+                }
+            }
+            else
+                dpad_regular_touch_switched = false;
+            /*if (dpad_touch_increment && !dpad_regular && (state.buttons & (CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN | CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT | CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT | CHIAKI_CONTROLLER_BUTTON_DPAD_UP)))
+            {
+                HandleDpadTouchEvent(&state);
+            }
+            else
+            {
+                if (dpad_touch_id >= 0 && !dpad_touch_stop_timer->isActive())
+                    dpad_touch_stop_timer->start(NEW_DPAD_TOUCH_INTERVAL_MS);
+            }*/
+            // chiaki_controller_state_or(&state, &state, &dpad_touch_state);
+            chiaki_session_set_controller_state(&session, &state);
+        }
 };
 
 #endif // CHIAKI_PY_STREAMSESSION_H

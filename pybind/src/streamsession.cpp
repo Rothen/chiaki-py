@@ -251,6 +251,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
 
     chiaki_controller_state_set_idle(&keyboard_state);
     chiaki_controller_state_set_idle(&touch_state);
+    chiaki_controller_state_set_idle(&controller_state);
     touch_tracker = std::map<int, uint8_t>();
     mouse_touch_id = -1;
     dpad_touch_id = -1;

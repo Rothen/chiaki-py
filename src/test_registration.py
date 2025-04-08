@@ -45,22 +45,6 @@ try:
     print(regist_event)
 except Exception as e:
     print(f"Error: {e}")
-    
-
-'''regist_event_source = backend.register_host_async(
-    host=host,
-    psn_id=psn_id,
-    pin=pin,
-    cpin=cpin,
-    broadcast=broadcast,
-    target=target
-)
-
-regist_event_source.subscribe(
-    on_next=lambda x: print("Success", x),
-    on_error=lambda code, message: print("Failure", code, message),
-    on_completed=lambda: exit_event.set()
-)'''
 
 def signal_handler(sig: int, frame: Any) -> None:
     """Handles Ctrl+C to stop the session gracefully."""

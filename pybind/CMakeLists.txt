@@ -141,7 +141,11 @@ target_link_libraries(chiaki-py PRIVATE
 
 # Ensure that CMake correctly finds FFmpeg
 # include_directories(" C:/Users/benir/Documents/Projects/chiaki-py/libs/chiaki-ng/lib/include ")
-link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
+else()
+    link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build/lib")
+endif()
 
 # Link against chiaki
 target_link_libraries(chiaki-py PRIVATE fmt::fmt)
@@ -167,16 +171,31 @@ set_target_properties(chiaki-lib PROPERTIES
 )
 
 if(WIN32)
-    set_target_properties(chiaki-lib PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/chiaki.lib
-        INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-    )
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set_target_properties(chiaki-lib PROPERTIES
+            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/chiaki.lib
+            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
+        )
+    else()
+        set_target_properties(chiaki-lib PROPERTIES
+            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build/lib/chiaki.lib
+            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
+        )
+    endif()
 else()
-    add_library(chiaki-lib STATIC IMPORTED)
-    set_target_properties(chiaki-lib PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.a
-        INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-    )
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_library(chiaki-lib STATIC IMPORTED)
+        set_target_properties(chiaki-lib PROPERTIES
+            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.a
+            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
+        )
+    else()
+        add_library(chiaki-lib STATIC IMPORTED)
+        set_target_properties(chiaki-lib PROPERTIES
+            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build/lib/libchiaki.a
+            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
+        )
+    endif()
 endif()
 
 target_link_libraries(chiaki-py PRIVATE chiaki-lib OpenSSL::Crypto)
