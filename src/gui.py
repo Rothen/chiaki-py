@@ -119,6 +119,7 @@ class LeftRightToggler(QThread):
         self.controller.accelerometer.on_change(lambda accelerometer: self.accelerometer_change(accelerometer))
         
         self.controller.gyroscope.on_change(lambda gyroscope: self.gyroscope_change(gyroscope))
+        
         self.controller.orientation.on_change(lambda orientation: self.orientation_change(orientation))
         
         self.controller.activate()
