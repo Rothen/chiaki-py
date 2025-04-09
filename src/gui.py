@@ -14,8 +14,9 @@ from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
 import time
 import numpy as np
+import math
 from pydualsense import pydualsense
-from dualsense_controller import DualSenseController
+from dualsense_controller import DualSenseController, JoyStick, Accelerometer, Gyroscope, Orientation
 
 class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""
@@ -109,13 +110,47 @@ class LeftRightToggler(QThread):
         self.controller.btn_ps.on_down(self.stream_session.press_ps)
         self.controller.btn_ps.on_up(self.stream_session.release_ps)
         
-        '''self.controller.btn_l2.on_change(lambda state: print(state))
+        self.controller.left_trigger.on_change(lambda value: self.stream_session.set_l2(int(value * 1023)))
+        self.controller.right_trigger.on_change(lambda value: self.stream_session.set_r2(int(value * 1023)))
+
+        self.controller.left_stick.on_change(lambda joy_stick: self.left_stick_change(joy_stick))
+        self.controller.right_stick.on_change(lambda joy_stick: self.right_stick_change(joy_stick))
         
-        self.controller.left_stick.on_change(lambda x, y: self.stream_session.move_left_stick(x, y))'''
+        self.controller.accelerometer.on_change(lambda accelerometer: self.accelerometer_change(accelerometer))
+        
+        self.controller.gyroscope.on_change(lambda gyroscope: self.gyroscope_change(gyroscope))
+        self.controller.orientation.on_change(lambda orientation: self.orientation_change(orientation))
         
         self.controller.activate()
         while self.running:            
             time.sleep(1.0)
+        
+    def left_stick_change(self, joy_stick: JoyStick):
+        self.stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
+    
+    def right_stick_change(self, joy_stick: JoyStick):
+        self.stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
+    
+    def accelerometer_change(self, accelecrometer: Accelerometer):
+        self.stream_session.set_accelerometer(accelecrometer.x, accelecrometer.y, accelecrometer.z)
+    
+    def gyroscope_change(self, gyroscope: Gyroscope):
+        self.stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
+    
+    def orientation_change(self, orientation: Orientation):
+        cy = math.cos((math.radians(orientation.yaw) if orientation.yaw is not None else 0.0) * 0.5)
+        sy = math.sin((math.radians(orientation.yaw) if orientation.yaw is not None else 0.0) * 0.5)
+        cp = math.cos(math.radians(orientation.pitch) * 0.5)
+        sp = math.sin(math.radians(orientation.pitch) * 0.5)
+        cr = math.cos(math.radians(orientation.roll) * 0.5)
+        sr = math.sin(math.radians(orientation.roll) * 0.5)
+
+        w = cr * cp * cy + sr * sp * sy
+        x = sr * cp * cy - cr * sp * sy
+        y = cr * sp * cy + sr * cp * sy
+        z = cr * cp * sy - sr * sp * cy
+
+        self.stream_session.set_orientation(x, y, z, w)
 
     def stop(self):
         """Stop the thread safely."""

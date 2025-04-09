@@ -434,6 +434,30 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("release_touchpad", &StreamSession::releaseTouchpad, "Release the touchpad button.")
         .def("press_ps", &StreamSession::pressPS, "Press the PS button.")
         .def("release_ps", &StreamSession::releasePS, "Release the PS button.")
+        .def("set_l2", &StreamSession::setL2, py::arg("state"), "Set the L2 trigger state [0, 255].")
+        .def("set_r2", &StreamSession::setR2, py::arg("state"), "Set the R2 trigger state [0, 255].")
+        .def("set_left_x", &StreamSession::setLeftX, py::arg("x"), "Set the left analog's stick x value [0, 1023].")
+        .def("set_left_y", &StreamSession::setLeftY, py::arg("y"), "Set the left analog's stick y value [0, 1023].")
+        .def("set_left", &StreamSession::setLeft, py::arg("x"), py::arg("y"), "Set the left analog's stick x and y value [0, 1023].")
+        .def("set_right_x", &StreamSession::setRightX, py::arg("x"), "Set the right analog's stick x value [0, 1023].")
+        .def("set_right_y", &StreamSession::setRightY, py::arg("y"), "Set the right analog's stick y value [0, 1023].")
+        .def("set_right", &StreamSession::setRight, py::arg("x"), py::arg("y"), "Set the right analog's stick x and y value [0, 1023].")
+
+        .def("set_accelerometer_x", &StreamSession::setAccelerometerX, py::arg("x"), "Set the accelerometer x value [0, 1023].")
+        .def("set_accelerometer_y", &StreamSession::setAccelerometerY, py::arg("y"), "Set the accelerometer y value [0, 1023].")
+        .def("set_accelerometer_z", &StreamSession::setAccelerometerZ, py::arg("z"), "Set the accelerometer z value [0, 1023].")
+        .def("set_accelerometer", &StreamSession::setAccelerometer, py::arg("x"), py::arg("y"), py::arg("z"), "Set the accelerometer x, y and z value [0, 1023].")
+
+        .def("set_gyroscope_x", &StreamSession::setGyroscopeX, py::arg("x"), "Set the gyroscope x value [0, 1023].")
+        .def("set_gyroscope_y", &StreamSession::setGyroscopeY, py::arg("y"), "Set the gyroscope y value [0, 1023].")
+        .def("set_gyroscope_z", &StreamSession::setGyroscopeZ, py::arg("z"), "Set the gyroscope z value [0, 1023].")
+        .def("set_gyroscope", &StreamSession::setGyroscope, py::arg("x"), py::arg("y"), py::arg("z"), "Set the gyroscope x, y and z value [0, 1023].")
+
+        .def("set_orientation_x", &StreamSession::setOrientationX, py::arg("x"), "Set the orientation x value [0, 1023].")
+        .def("set_orientation_y", &StreamSession::setOrientationY, py::arg("y"), "Set the orientation y value [0, 1023].")
+        .def("set_orientation_z", &StreamSession::setOrientationZ, py::arg("z"), "Set the orientation z value [0, 1023].")
+        .def("set_orientation_w", &StreamSession::setOrientationW, py::arg("w"), "Set the orientation w value [0, 1023].")
+        .def("set_orientation", &StreamSession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation x, y, z and w value [0, 1023].")
 
         .def("send_feedback_state", &StreamSession::SendFeedbackState, "Send the feedback state.");
 

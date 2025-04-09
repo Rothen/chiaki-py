@@ -287,6 +287,34 @@ class StreamSession
         void pressPS() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); }
         void releasePS() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); }
 
+        void setL2(uint8_t state) { controller_state.l2_state = state; SendFeedbackState(); }
+
+        void setR2(uint8_t state) { controller_state.r2_state = state; SendFeedbackState(); }
+
+        void setLeftX(int16_t x) { controller_state.left_x = x; SendFeedbackState(); }
+        void setLeftY(int16_t y) { controller_state.left_y = y; SendFeedbackState(); }
+        void setLeft(int16_t x, int16_t y) { controller_state.left_x = x; controller_state.left_y = y; SendFeedbackState(); }
+
+        void setRightX(int16_t x) { controller_state.right_x = x; SendFeedbackState(); }
+        void setRightY(int16_t y) { controller_state.right_y = y; SendFeedbackState(); }
+        void setRight(int16_t x, int16_t y) { controller_state.right_x = x; controller_state.right_y = y; SendFeedbackState(); }
+
+        void setAccelerometerX(float x) { controller_state.accel_x = x; SendFeedbackState(); }
+        void setAccelerometerY(float y) { controller_state.accel_y = y; SendFeedbackState(); }
+        void setAccelerometerZ(float z) { controller_state.accel_z = z; SendFeedbackState(); }
+        void setAccelerometer(float x, float y, float z) { controller_state.accel_x = x; controller_state.accel_y = y; controller_state.accel_z = z; SendFeedbackState(); }
+
+        void setGyroscopeX(float x) { controller_state.gyro_x = x; SendFeedbackState(); }
+        void setGyroscopeY(float y) { controller_state.gyro_y = y; SendFeedbackState(); }
+        void setGyroscopeZ(float z) { controller_state.gyro_z = z; SendFeedbackState(); }
+        void setGyroscope(float x, float y, float z) { controller_state.gyro_x = x; controller_state.gyro_y = y; controller_state.gyro_z = z; SendFeedbackState(); }
+
+        void setOrientationX(float x) { controller_state.orient_x = x; SendFeedbackState(); }
+        void setOrientationY(float y) { controller_state.orient_y = y; SendFeedbackState(); }
+        void setOrientationZ(float z) { controller_state.orient_z = z; SendFeedbackState(); }
+        void setOrientationW(float w) { controller_state.orient_w = w; SendFeedbackState(); }
+        void setOrientation(float x, float y, float z, float w) { controller_state.orient_x = x; controller_state.orient_y = y; controller_state.orient_z = z; controller_state.orient_w = w; SendFeedbackState(); }
+
         ChiakiControllerState controller_state;
 
         void SendFeedbackState()
