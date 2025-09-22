@@ -19,6 +19,7 @@ import math
 from dualsense.utils import get_available_controllers
 from dualsense.states import JoyStick, Accelerometer, Gyroscope, Orientation
 from dualsense.backends import SDL3Backend
+from controller_registry import register_controller
 
 class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""
@@ -64,103 +65,12 @@ class LeftRightToggler(QThread):
         """Continuously grab frames in a separate thread."""
         SDL3Backend.init()
         available_controllers = get_available_controllers()
+
         if len(available_controllers) == 0:
             print("No DualSense controllers found.")
             exit(1)
 
-        self.controller = available_controllers[0]
-        self.controller.open()
-        
-
-        self.controller.cross_pressed(self.stream_session.press_cross)
-        self.controller.cross_released(self.stream_session.release_cross)
-
-        self.controller.circle_pressed(self.stream_session.press_circle)
-        self.controller.circle_released(self.stream_session.release_circle)
-
-        self.controller.square_pressed(self.stream_session.press_square)
-        self.controller.square_released(self.stream_session.release_square)
-        
-        self.controller.triangle_pressed(self.stream_session.press_triangle)
-        self.controller.triangle_released(self.stream_session.release_triangle)
-        
-        self.controller.dpad_left_pressed(self.stream_session.press_left)
-        self.controller.dpad_left_released(self.stream_session.release_left)
-
-        self.controller.dpad_right_pressed(self.stream_session.press_right)
-        self.controller.dpad_right_released(self.stream_session.release_right)
-
-        self.controller.dpad_up_pressed(self.stream_session.press_up)
-        self.controller.dpad_up_released(self.stream_session.release_up)
-
-        self.controller.dpad_down_pressed(self.stream_session.press_down)
-        self.controller.dpad_down_released(self.stream_session.release_down)
-
-        self.controller.l1_pressed(self.stream_session.press_l1)
-        self.controller.l1_released(self.stream_session.release_l1)
-
-        self.controller.r1_pressed(self.stream_session.press_r1)
-        self.controller.r1_released(self.stream_session.release_r1)
-
-        self.controller.l3_pressed(self.stream_session.press_l3)
-        self.controller.l3_released(self.stream_session.release_l3)
-
-        self.controller.r3_pressed(self.stream_session.press_r3)
-        self.controller.r3_released(self.stream_session.release_r3)
-
-        self.controller.options_pressed(self.stream_session.press_options)
-        self.controller.options_released(self.stream_session.release_touchpad)
-
-        self.controller.share_pressed(self.stream_session.press_create)
-        self.controller.share_released(self.stream_session.release_touchpad)
-
-        self.controller.touch_pressed(self.stream_session.press_touchpad)
-        self.controller.touch_released(self.stream_session.release_touchpad)
-
-        self.controller.ps_pressed(self.stream_session.press_ps)
-        self.controller.ps_released(self.stream_session.release_ps)
-        
-        self.controller.l2_trigger_changed(lambda value: self.stream_session.set_l2(int(value * 255)))
-        self.controller.r2_trigger_changed(lambda value: self.stream_session.set_r2(int(value * 255)))
-
-        self.controller.left_joy_stick_changed(lambda joy_stick: self.left_stick_change(joy_stick))
-        self.controller.right_joy_stick_changed(lambda joy_stick: self.right_stick_change(joy_stick))
-        
-        self.controller.accelerometer_changed(lambda accelerometer: self.accelerometer_change(accelerometer))
-        
-        self.controller.gyroscope_changed(lambda gyroscope: self.gyroscope_change(gyroscope))
-        
-        self.controller.orientation_changed(lambda orientation: self.orientation_change(orientation))
-        
-        while self.running:
-            time.sleep(1.0)
-        
-    def left_stick_change(self, joy_stick: JoyStick):
-        self.stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
-    
-    def right_stick_change(self, joy_stick: JoyStick):
-        self.stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
-    
-    def accelerometer_change(self, accelecrometer: Accelerometer):
-        self.stream_session.set_accelerometer(accelecrometer.x, accelecrometer.y, accelecrometer.z)
-    
-    def gyroscope_change(self, gyroscope: Gyroscope):
-        self.stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
-    
-    def orientation_change(self, orientation: Orientation):
-        cy = math.cos(math.radians(orientation.yaw) * 0.5)
-        sy = math.sin(math.radians(orientation.yaw) * 0.5)
-        cp = math.cos(math.radians(orientation.pitch) * 0.5)
-        sp = math.sin(math.radians(orientation.pitch) * 0.5)
-        cr = math.cos(math.radians(orientation.roll) * 0.5)
-        sr = math.sin(math.radians(orientation.roll) * 0.5)
-
-        w = cr * cp * cy + sr * sp * sy
-        x = sr * cp * cy - cr * sp * sy
-        y = cr * sp * cy + sr * cp * sy
-        z = cr * cp * sy - sr * sp * cy
-
-        self.stream_session.set_orientation(x, y, z, w)
+        register_controller(available_controllers[0], self.stream_session)
 
     def stop(self):
         """Stop the thread safely."""
