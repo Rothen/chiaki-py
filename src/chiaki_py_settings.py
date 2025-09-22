@@ -5,11 +5,11 @@ from pydantic import BaseModel
 
 class ChiakiPySettings(BaseModel):
     """A class to represent a segment."""
-    host: str = "192.168.42.43"
-    regist_key: str = "b02d1ceb"
-    nickname: str = "PS5-083"
-    ps5Id: str = "78c881a8214a"
-    morning: str = 'aa3f52ff47431d2f2cf0f14110f679b3'
+    host: str = "..."
+    regist_key: str = "..."
+    nickname: str = "..."
+    ps5Id: str = "..."
+    morning: str = '...'
     initial_login_pin = ""  # None
     duid: str = ""  # None
     auto_regist: bool = False

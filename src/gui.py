@@ -235,10 +235,10 @@ class ImageStream(QMainWindow):
 log = Log(level=LogLevel.INFO)
 audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
 
-host = "192.168.42.32"
-regist_key = "b02d1ceb"
-nickname = "PS5-083"
-morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
+host = "..."
+regist_key = "..."
+nickname = "..."
+morning = '...'
 initial_login_pin = ""  # None
 duid = ""  # None
 auto_regist = False
