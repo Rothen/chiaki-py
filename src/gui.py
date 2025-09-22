@@ -1,23 +1,20 @@
 import sys
 from typing import Optional
+import time
+import threading
 import numpy as np
+import numpy.typing as npt
 from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow
 from PyQt6.QtGui import QImage, QPixmap, QCloseEvent
 from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt
-import numpy.typing as npt
-import threading
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
 from chiaki_py.core.log import Log, LogLevel
 from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
-import time
-import numpy as np
-import math
 
 from dualsense.utils import get_available_controllers
-from dualsense.states import JoyStick, Accelerometer, Gyroscope, Orientation
 from dualsense.backends import SDL3Backend
 from controller_registry import register_controller
 
@@ -25,14 +22,16 @@ class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""
     frame_ready = pyqtSignal(np.ndarray)  # Signal to send new frames
 
-    def __init__(self, stream_session: StreamSession):
+    def __init__(self, stream_session: StreamSession, max_fps: float = 60.0):
         super().__init__()
         self.running = True  # Control flag
-        
+
         self.stream_session = stream_session
         self.stream_session.on_frame_available().subscribe(lambda a: self.ffmpeg_frame_available())
         self.frame = np.zeros((1080, 1920, 3), np.uint8)
         self.frame_ready_event = threading.Event()
+        self.max_fps = max_fps
+        self.fps_limit = (1.0 / self.max_fps) if self.max_fps > 0 else 0
 
     def run(self):
         """Continuously grab frames in a separate thread."""
@@ -42,7 +41,7 @@ class FrameProducer(QThread):
                 self.frame_ready.emit(self.frame)
                 self.frame_ready_event.clear()
                 end = time.perf_counter()
-                time.sleep(max(0, 1.0 / 60 - (end - start)))  # Limit to 60 FPS
+                time.sleep(max(0, self.fps_limit - (end - start)))
 
     def ffmpeg_frame_available(self):
         get_frame(self.stream_session, False, self.frame)
@@ -55,7 +54,7 @@ class FrameProducer(QThread):
         self.quit()
         self.wait()
 
-class LeftRightToggler(QThread):
+class ControllerThread(QThread):
     def __init__(self, stream_session: StreamSession):
         super().__init__()
         self.running = True  # Control flag
@@ -108,10 +107,10 @@ class ImageStream(QMainWindow):
         self.frame_thread = FrameProducer(self.stream_session)
         self.frame_thread.frame_ready.connect(self.update_frame)  # Connect signal
         
-        self.left_right_toggler = LeftRightToggler(self.stream_session)
+        self.controller_thread = ControllerThread(self.stream_session)
         
         self.frame_thread.start()  # Start fetching frames
-        self.left_right_toggler.start()  # Start toggling left/right
+        self.controller_thread.start()  # Start toggling left/right
 
     @pyqtSlot(np.ndarray)
     def update_frame(self, frame: npt.NDArray[np.uint8]):
@@ -126,8 +125,8 @@ class ImageStream(QMainWindow):
     
     def closeEvent(self, a0: Optional[QCloseEvent]):
         # Stop the frame thread
-        self.left_right_toggler.stop()
-        self.left_right_toggler.wait()
+        self.controller_thread.stop()
+        self.controller_thread.wait()
 
         self.frame_thread.frame_ready.disconnect(self.update_frame)
         self.frame_thread.stop()
