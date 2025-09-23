@@ -16,9 +16,9 @@ import time
 import numpy as np
 import math
 
-from dualsense.utils import get_available_controllers
-from dualsense.states import JoyStick, Accelerometer, Gyroscope, Orientation
-from dualsense.backends import SDL3Backend
+from ds_py.utils import get_available_controllers
+from ds_py.states import JoyStick, Accelerometer, Gyroscope, Orientation
+from ds_py.backends import SDL3Backend
 
 class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""

@@ -1,0 +1,97 @@
+name: Build hidapi-py Windows
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-win_x64:
+    name: Build hidapi-py win_x64
+    runs-on: windows-latest
+    env:
+      CC: clang-cl.exe
+      CXX: clang-cl.exe
+      VULKAN_SDK: C:\VulkanSDK\
+      triplet: x64-windows
+      vcpkg_baseline: 42bb0d9e8d4cf33485afb9ee2229150f79f61a1f
+      VCPKG_INSTALLED_DIR: ./vcpkg_installed/
+      dep_folder: deps
+      libplacebo_tag: v7.349.0
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Vulkan
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $ver = (Invoke-WebRequest -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
+          echo Version $ver
+          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/VulkanSDK-$ver-Installer.exe" -OutFile VulkanSDK.exe
+          echo Downloaded
+          .\VulkanSDK.exe --root ${{ env.VULKAN_SDK }}  --accept-licenses --default-answer --confirm-command install
+
+      - name: Set up Ninja
+        run: choco install ninja
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: 18
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+
+      - name: Install pip dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade setuptools wheel
+          python3 -m pip install --user --upgrade scons protobuf grpcio-tools pyinstaller
+          python3 -m pip install --user --upgrade meson
+          python3 -c 'import google.protobuf; print(google.protobuf.__file__)'
+
+      - name: Configure chiaki-py
+        run: |
+          cmake `
+          -S . `
+          -B build `
+          -G Ninja `
+          -DCMAKE_TOOLCHAIN_FILE:STRING="vcpkg/scripts/buildsystems/vcpkg.cmake" `
+          -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCHIAKI_ENABLE_TESTS=OFF `
+          -DCHIAKI_ENABLE_CLI=OFF `
+          -DCHIAKI_ENABLE_GUI=OFF `
+          -DCHIAKI_ENABLE_ANDROID=OFF `
+          -DCHIAKI_ENABLE_BOREALIS=OFF `
+          -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF `
+          -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF `
+          -DCHIAKI_ENABLE_FFMPEG_DECODER=ON `
+          -DCMAKE_PREFIX_PATH="${env:workplace}\${env:dep_folder}; ${env:VULKAN_SDK}"
+
+      - name: Build hidapi-py
+        run: |
+          cmake --build build --config Release --clean-first --target chiaki-lib
+
+      - name: Upload hidapi-py Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hidapi-py-win-x64
+          path: |
+            build/lib/chiaki.lib
+            build/third-party/gf_complete.lib
+            build/third-party/jerasure.lib
+            build/third-party/nanopb/protobuf-nanopb.lib
+            build/third-party/curl/lib/libcurl.lib
+          if-no-files-found: error
+          retention-days: 7
