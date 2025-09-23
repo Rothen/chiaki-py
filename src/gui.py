@@ -1,37 +1,38 @@
 import sys
 from typing import Optional
+import time
+import threading
 import numpy as np
+import numpy.typing as npt
 from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow
 from PyQt6.QtGui import QImage, QPixmap, QCloseEvent
 from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt
-import numpy.typing as npt
-import threading
 from chiaki_py import Settings, StreamSessionConnectInfo, StreamSession, get_frame
 from chiaki_py.core.log import Log, LogLevel
 from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
-import time
-import numpy as np
-import math
 
 from ds_py.utils import get_available_controllers
 from ds_py.states import JoyStick, Accelerometer, Gyroscope, Orientation
 from ds_py.backends import SDL3Backend
+from controller_registry import register_controller
 
 class FrameProducer(QThread):
     """Worker thread that continuously fetches new frames and emits a signal."""
     frame_ready = pyqtSignal(np.ndarray)  # Signal to send new frames
 
-    def __init__(self, stream_session: StreamSession):
+    def __init__(self, stream_session: StreamSession, max_fps: float = 60.0):
         super().__init__()
         self.running = True  # Control flag
-        
+
         self.stream_session = stream_session
         self.stream_session.on_frame_available().subscribe(lambda a: self.ffmpeg_frame_available())
         self.frame = np.zeros((1080, 1920, 3), np.uint8)
         self.frame_ready_event = threading.Event()
+        self.max_fps = max_fps
+        self.fps_limit = (1.0 / self.max_fps) if self.max_fps > 0 else 0
 
     def run(self):
         """Continuously grab frames in a separate thread."""
@@ -41,7 +42,7 @@ class FrameProducer(QThread):
                 self.frame_ready.emit(self.frame)
                 self.frame_ready_event.clear()
                 end = time.perf_counter()
-                time.sleep(max(0, 1.0 / 60 - (end - start)))  # Limit to 60 FPS
+                time.sleep(max(0, self.fps_limit - (end - start)))
 
     def ffmpeg_frame_available(self):
         get_frame(self.stream_session, False, self.frame)
@@ -54,7 +55,7 @@ class FrameProducer(QThread):
         self.quit()
         self.wait()
 
-class LeftRightToggler(QThread):
+class ControllerThread(QThread):
     def __init__(self, stream_session: StreamSession):
         super().__init__()
         self.running = True  # Control flag
@@ -64,103 +65,12 @@ class LeftRightToggler(QThread):
         """Continuously grab frames in a separate thread."""
         SDL3Backend.init()
         available_controllers = get_available_controllers()
+
         if len(available_controllers) == 0:
             print("No DualSense controllers found.")
             exit(1)
 
-        self.controller = available_controllers[0]
-        self.controller.open()
-        
-
-        self.controller.cross_pressed(self.stream_session.press_cross)
-        self.controller.cross_released(self.stream_session.release_cross)
-
-        self.controller.circle_pressed(self.stream_session.press_circle)
-        self.controller.circle_released(self.stream_session.release_circle)
-
-        self.controller.square_pressed(self.stream_session.press_square)
-        self.controller.square_released(self.stream_session.release_square)
-        
-        self.controller.triangle_pressed(self.stream_session.press_triangle)
-        self.controller.triangle_released(self.stream_session.release_triangle)
-        
-        self.controller.dpad_left_pressed(self.stream_session.press_left)
-        self.controller.dpad_left_released(self.stream_session.release_left)
-
-        self.controller.dpad_right_pressed(self.stream_session.press_right)
-        self.controller.dpad_right_released(self.stream_session.release_right)
-
-        self.controller.dpad_up_pressed(self.stream_session.press_up)
-        self.controller.dpad_up_released(self.stream_session.release_up)
-
-        self.controller.dpad_down_pressed(self.stream_session.press_down)
-        self.controller.dpad_down_released(self.stream_session.release_down)
-
-        self.controller.l1_pressed(self.stream_session.press_l1)
-        self.controller.l1_released(self.stream_session.release_l1)
-
-        self.controller.r1_pressed(self.stream_session.press_r1)
-        self.controller.r1_released(self.stream_session.release_r1)
-
-        self.controller.l3_pressed(self.stream_session.press_l3)
-        self.controller.l3_released(self.stream_session.release_l3)
-
-        self.controller.r3_pressed(self.stream_session.press_r3)
-        self.controller.r3_released(self.stream_session.release_r3)
-
-        self.controller.options_pressed(self.stream_session.press_options)
-        self.controller.options_released(self.stream_session.release_touchpad)
-
-        self.controller.share_pressed(self.stream_session.press_create)
-        self.controller.share_released(self.stream_session.release_touchpad)
-
-        self.controller.touch_pressed(self.stream_session.press_touchpad)
-        self.controller.touch_released(self.stream_session.release_touchpad)
-
-        self.controller.ps_pressed(self.stream_session.press_ps)
-        self.controller.ps_released(self.stream_session.release_ps)
-        
-        self.controller.l2_trigger_changed(lambda value: self.stream_session.set_l2(int(value * 255)))
-        self.controller.r2_trigger_changed(lambda value: self.stream_session.set_r2(int(value * 255)))
-
-        self.controller.left_joy_stick_changed(lambda joy_stick: self.left_stick_change(joy_stick))
-        self.controller.right_joy_stick_changed(lambda joy_stick: self.right_stick_change(joy_stick))
-        
-        self.controller.accelerometer_changed(lambda accelerometer: self.accelerometer_change(accelerometer))
-        
-        self.controller.gyroscope_changed(lambda gyroscope: self.gyroscope_change(gyroscope))
-        
-        self.controller.orientation_changed(lambda orientation: self.orientation_change(orientation))
-        
-        while self.running:
-            time.sleep(1.0)
-        
-    def left_stick_change(self, joy_stick: JoyStick):
-        self.stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
-    
-    def right_stick_change(self, joy_stick: JoyStick):
-        self.stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
-    
-    def accelerometer_change(self, accelecrometer: Accelerometer):
-        self.stream_session.set_accelerometer(accelecrometer.x, accelecrometer.y, accelecrometer.z)
-    
-    def gyroscope_change(self, gyroscope: Gyroscope):
-        self.stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
-    
-    def orientation_change(self, orientation: Orientation):
-        cy = math.cos(math.radians(orientation.yaw) * 0.5)
-        sy = math.sin(math.radians(orientation.yaw) * 0.5)
-        cp = math.cos(math.radians(orientation.pitch) * 0.5)
-        sp = math.sin(math.radians(orientation.pitch) * 0.5)
-        cr = math.cos(math.radians(orientation.roll) * 0.5)
-        sr = math.sin(math.radians(orientation.roll) * 0.5)
-
-        w = cr * cp * cy + sr * sp * sy
-        x = sr * cp * cy - cr * sp * sy
-        y = cr * sp * cy + sr * cp * sy
-        z = cr * cp * sy - sr * sp * cy
-
-        self.stream_session.set_orientation(x, y, z, w)
+        register_controller(available_controllers[0], self.stream_session)
 
     def stop(self):
         """Stop the thread safely."""
@@ -198,10 +108,10 @@ class ImageStream(QMainWindow):
         self.frame_thread = FrameProducer(self.stream_session)
         self.frame_thread.frame_ready.connect(self.update_frame)  # Connect signal
         
-        self.left_right_toggler = LeftRightToggler(self.stream_session)
+        self.controller_thread = ControllerThread(self.stream_session)
         
         self.frame_thread.start()  # Start fetching frames
-        self.left_right_toggler.start()  # Start toggling left/right
+        self.controller_thread.start()  # Start toggling left/right
 
     @pyqtSlot(np.ndarray)
     def update_frame(self, frame: npt.NDArray[np.uint8]):
@@ -216,8 +126,8 @@ class ImageStream(QMainWindow):
     
     def closeEvent(self, a0: Optional[QCloseEvent]):
         # Stop the frame thread
-        self.left_right_toggler.stop()
-        self.left_right_toggler.wait()
+        self.controller_thread.stop()
+        self.controller_thread.wait()
 
         self.frame_thread.frame_ready.disconnect(self.update_frame)
         self.frame_thread.stop()
@@ -235,10 +145,10 @@ class ImageStream(QMainWindow):
 log = Log(level=LogLevel.INFO)
 audio_header: AudioHeader = AudioHeader(2, 16, 480 * 100, 480)
 
-host = "192.168.42.32"
-regist_key = "b02d1ceb"
-nickname = "PS5-083"
-morning = 'aa3f52ff47431d2f2cf0f14110f679b3'
+host = "..."
+regist_key = "..."
+nickname = "..."
+morning = '...'
 initial_login_pin = ""  # None
 duid = ""  # None
 auto_regist = False
