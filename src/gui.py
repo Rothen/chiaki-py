@@ -15,7 +15,6 @@ from chiaki_py.core.common import Target
 from chiaki_py.core.audio import AudioHeader
 
 from ds_py.utils import get_available_controllers
-from ds_py.states import JoyStick, Accelerometer, Gyroscope, Orientation
 from ds_py.backends import SDL3Backend
 from controller_registry import register_controller
 

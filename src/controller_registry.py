@@ -1,22 +1,22 @@
 import math
-from dualsense.dual_sense_controller import DualSenseController
-from dualsense.states import JoyStick, Accelerometer, Gyroscope, Orientation
+from ds_py.dual_sense_controller import DualSenseController
+from ds_py.states import JoyStick, Accelerometer, Gyroscope, Orientation
 from chiaki_py import StreamSession
 
         
-def __left_stick_change(self, joy_stick: JoyStick):
-    self.stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
+def __left_stick_change(joy_stick: JoyStick, stream_session: StreamSession):
+    stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
 
-def __right_stick_change(self, joy_stick: JoyStick):
-    self.stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
+def __right_stick_change(joy_stick: JoyStick, stream_session: StreamSession):
+    stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
 
-def __accelerometer_change(self, accelerometer: Accelerometer):
-    self.stream_session.set_accelerometer(accelerometer.x, accelerometer.y, accelerometer.z)
+def __accelerometer_change(accelerometer: Accelerometer, stream_session: StreamSession):
+    stream_session.set_accelerometer(accelerometer.x, accelerometer.y, accelerometer.z)
 
-def __gyroscope_change(self, gyroscope: Gyroscope):
-    self.stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
+def __gyroscope_change(gyroscope: Gyroscope, stream_session: StreamSession):
+    stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
 
-def __orientation_change(self, orientation: Orientation):
+def __orientation_change(orientation: Orientation, stream_session: StreamSession):
     cy = math.cos(math.radians(orientation.yaw) * 0.5)
     sy = math.sin(math.radians(orientation.yaw) * 0.5)
     cp = math.cos(math.radians(orientation.pitch) * 0.5)
@@ -29,7 +29,7 @@ def __orientation_change(self, orientation: Orientation):
     y = cr * sp * cy + sr * cp * sy
     z = cr * cp * sy - sr * sp * cy
 
-    self.stream_session.set_orientation(x, y, z, w)
+    stream_session.set_orientation(x, y, z, w)
 
 def register_controller(controller: DualSenseController, stream_session: StreamSession) -> None:
     """Registers a DualSense controller."""
@@ -86,11 +86,11 @@ def register_controller(controller: DualSenseController, stream_session: StreamS
     controller.l2_trigger_changed(lambda value: stream_session.set_l2(int(value * 255)))
     controller.r2_trigger_changed(lambda value: stream_session.set_r2(int(value * 255)))
 
-    controller.left_joy_stick_changed(lambda joy_stick: __left_stick_change(joy_stick))
-    controller.right_joy_stick_changed(lambda joy_stick: __right_stick_change(joy_stick))
+    controller.left_joy_stick_changed(lambda joy_stick: __left_stick_change(joy_stick, stream_session))
+    controller.right_joy_stick_changed(lambda joy_stick: __right_stick_change(joy_stick, stream_session))
     
-    controller.accelerometer_changed(lambda accelerometer: __accelerometer_change(accelerometer))
+    controller.accelerometer_changed(lambda accelerometer: __accelerometer_change(accelerometer, stream_session))
     
-    controller.gyroscope_changed(lambda gyroscope: __gyroscope_change(gyroscope))
+    controller.gyroscope_changed(lambda gyroscope: __gyroscope_change(gyroscope, stream_session))
 
-    controller.orientation_changed(lambda orientation: __orientation_change(orientation))
+    controller.orientation_changed(lambda orientation: __orientation_change(orientation, stream_session))
