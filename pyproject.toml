@@ -2,6 +2,7 @@
 name = "chiaki-py-client"
 version = "1.9.6"
 description = "A Pythonic client library for PS4/PS5 Remote Play, built on the chiaki_py native extension"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.23",
@@ -20,6 +21,9 @@ controller = [
 gui = [
     "chiaki-py-client[psn]",
     "PyQt6>=6.6",
+]
+cv = [
+    "opencv-python>=4.8",
 ]
 
 [build-system]

@@ -263,7 +263,10 @@ void DiscoveryManager::SetActive(bool active)
         }
         manual_services.clear();
 
-        hosts = {};
+        {
+            std::lock_guard<std::mutex> lock(hosts_mutex);
+            hosts = {};
+        }
         // emit
         HostsUpdated();
     }
@@ -317,7 +320,11 @@ void DiscoveryManager::SendWakeup(const std::string &host, const std::string &re
 
 const std::vector<DiscoveryHostWrapper> DiscoveryManager::GetHosts() const
 {
-    std::vector<DiscoveryHostWrapper> ret = hosts;
+    std::vector<DiscoveryHostWrapper> ret;
+    {
+        std::lock_guard<std::mutex> lock(hosts_mutex);
+        ret = hosts;
+    }
     std::set<std::string> discovered_hosts;
     for (auto &host : ret) {
         discovered_hosts.insert(host.getHostAddr());
@@ -335,7 +342,10 @@ const std::vector<DiscoveryHostWrapper> DiscoveryManager::GetHosts() const
 
 void DiscoveryManager::DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> hosts)
 {
-    this->hosts = std::move(hosts);
+    {
+        std::lock_guard<std::mutex> lock(hosts_mutex);
+        this->hosts = std::move(hosts);
+    }
     HostsUpdated();
 }
 
@@ -427,14 +437,6 @@ public:
 class DiscoveryManagerPrivate
 {
 public:
-    static void DiscoveryServiceHosts(DiscoveryManager *discovery_manager, const std::vector<DiscoveryHostWrapper> &hosts)
-    {
-        /*discoveryManagerEventQueue.post([discovery_manager, hosts]() {
-            discovery_manager->DiscoveryServiceHosts(hosts);
-        });*/
-        // QMetaObject::invokeMethod(discovery_manager, "DiscoveryServiceHosts", Qt::ConnectionType::QueuedConnection, Q_ARG(QList<DiscoveryHost>, hosts));
-    }
-
     static void DiscoveryServiceManualHost(DiscoveryManager *discovery_manager)
     {
         // QMetaObject::invokeMethod(discovery_manager, &DiscoveryManager::HostsUpdated);
@@ -464,7 +466,8 @@ static std::vector<DiscoveryHostWrapper> CreateHostsList(ChiakiDiscoveryHost *ho
 
 static void DiscoveryServiceHostsCallback(ChiakiDiscoveryHost *hosts, size_t hosts_count, void *user)
 {
-    DiscoveryManagerPrivate::DiscoveryServiceHosts(reinterpret_cast<DiscoveryManager *>(user), CreateHostsList(hosts, hosts_count));
+    // Called from chiaki-ng's background discovery thread.
+    reinterpret_cast<DiscoveryManager *>(user)->DiscoveryServiceHosts(CreateHostsList(hosts, hosts_count));
 }
 
 static void DiscoveryServiceHostsManualCallback(ChiakiDiscoveryHost *hosts, size_t hosts_count, void *user)

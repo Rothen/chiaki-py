@@ -11,6 +11,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 
 struct DiscoveryHost
 {
@@ -96,6 +97,10 @@ class DiscoveryManager
 		ChiakiDiscoveryService service_ipv6;
 		bool service_active;
 		bool service_active_ipv6;
+		// `hosts` is written from chiaki-ng's background discovery thread
+		// (via DiscoveryServiceHostsCallback) and read from GetHosts(), so it
+		// needs its own lock rather than relying on the GIL.
+		mutable std::mutex hosts_mutex;
 		std::vector<DiscoveryHostWrapper> hosts;
 		Settings *settings = {};
         std::unordered_map<std::string, ManualService *> manual_services;

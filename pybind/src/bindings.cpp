@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <stdexcept>
 #include <string>
-#include <set>
 #include <optional> // Required for std::optional
 
 #define PYBIND11_DETAILED_ERROR_MESSAGES
@@ -36,6 +35,7 @@ extern "C"
 {
 #include <libavutil/frame.h>
 #include <libavutil/pixfmt.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
@@ -70,17 +70,16 @@ py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t
         ~AVFrameGuard() { if (frame) av_frame_free(&frame); }
     } frame_guard{frame};
 
-    static const std::set<int> zero_copy_formats = {AV_PIX_FMT_VULKAN,
-                                                    AV_PIX_FMT_D3D11
-#ifdef __linux__
-                                                    ,
-                                                    AV_PIX_FMT_VAAPI
-#endif
-    };
-
-    // Only a frame that actually lives on the GPU needs transferring; a
-    // software frame just happening to share a format name is not "hardware".
-    if (frame->hw_frames_ctx && (zero_copy_formats.find(frame->format) == zero_copy_formats.end() || disable_zero_copy))
+    // Unlike chiaki-ng's Qt GUI (which can render Vulkan/D3D11/VAAPI frames
+    // straight from the GPU and only transfers to CPU as a fallback), this
+    // function always has to hand back CPU-readable bytes for NumPy, so any
+    // hardware-resident frame must be transferred - there's no format for
+    // which skipping the transfer would still leave us with readable data.
+    // `disable_zero_copy` is accepted for API compatibility but currently
+    // has no effect, since that "zero copy" GPU-rendering path doesn't
+    // exist here.
+    (void)disable_zero_copy;
+    if (frame->hw_frames_ctx)
     {
         AVFrame *sw_frame = av_frame_alloc();
         if (!sw_frame)
@@ -155,7 +154,10 @@ py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t
     }
 
     if (output->format != AV_PIX_FMT_RGB24 && output->format != AV_PIX_FMT_GRAY8 && output->format != AV_PIX_FMT_YUV420P)
-        throw std::runtime_error("Unsupported pixel format for NumPy conversion");
+    {
+        const char *name = av_get_pix_fmt_name((AVPixelFormat)output->format);
+        throw std::runtime_error("Unsupported pixel format for NumPy conversion: " + std::string(name ? name : "unknown"));
+    }
 
     int height = output->height;
     int width = output->width;
@@ -462,6 +464,12 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("set_orientation", &StreamSession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation x, y, z and w value [0, 1023].")
 
         .def("send_feedback_state", &StreamSession::SendFeedbackState, "Send the feedback state.");
+
+    py::enum_<ChiakiDiscoveryHostState>(m, "DiscoveryHostState")
+        .value("Unknown", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN)
+        .value("Ready", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_READY)
+        .value("Standby", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_STANDBY)
+        .export_values();
 
     py::class_<DiscoveryHostWrapper>(m, "DiscoveryHost")
         .def(py::init<>())

@@ -23,3 +23,7 @@ class ChiakiPySettings(BaseModel):
     def from_file(cls, file: str) -> "ChiakiPySettings":
         with open(file, encoding="utf-8") as f:
             return cls.model_validate_json(f.read())
+
+    def to_file(self, file: str) -> None:
+        with open(file, "w", encoding="utf-8") as f:
+            f.write(self.model_dump_json(indent=2))

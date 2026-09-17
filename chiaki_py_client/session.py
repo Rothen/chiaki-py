@@ -92,7 +92,13 @@ class Session:
         try:
             last_yield = 0.0
             while True:
-                ready.wait()
+                # A timeout instead of an unbounded wait means we return to
+                # Python bytecode regularly even if no frame ever arrives -
+                # without it, a stalled stream leaves this blocked in a C
+                # call indefinitely, which also blocks KeyboardInterrupt
+                # (Ctrl+C) from ever being delivered.
+                if not ready.wait(timeout=0.5):
+                    continue
                 ready.clear()
                 dims = get_frame(self.stream_session, False, buffer)
                 if dims is None:
