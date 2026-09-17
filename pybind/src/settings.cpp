@@ -7,7 +7,8 @@
 
 #define SETTINGS_VERSION 2
 
-Settings::Settings() : rumbleHapticsIntensity(RumbleHapticsIntensity::Normal),
+Settings::Settings() : audioVideoDisabled(CHIAKI_NONE_DISABLED),
+                       rumbleHapticsIntensity(RumbleHapticsIntensity::Normal),
                        buttonsByPosition(false),
                        startMicUnmuted(false),
                        hapticOverride(1.0),

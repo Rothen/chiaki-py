@@ -209,13 +209,23 @@ PYBIND11_MODULE(chiaki_py, m)
     init_core_common(m_core_common);
     init_core_audio(m_core_audio);
     init_core_base64(m_core_base64);
+    // Log must be registered before Bitstream: Bitstream's constructor and
+    // `log` property are typed in terms of it, and pybind11 bakes the
+    // registered Python type name into a def()'d function's signature at
+    // bind time - if the type isn't registered yet, it falls back to the
+    // raw (and here, wrong - "LogWrapper" vs. the registered name "Log")
+    // C++ type name, which is what stub generators like pybind11-stubgen
+    // then pick up as the type hint. Runtime conversion is unaffected
+    // (that resolves the type registry dynamically per call, well after
+    // the whole module has finished importing), so this is a typehint-only
+    // fix, not a crash fix.
+    init_core_log(m_core_log);
     init_core_bitstream(m_core_bitstream);
     init_core_controller(m_core_controller);
     // init_core_discovery_service(m_core_discovery_service);
     init_core_ecdh(m_core_ecdh);
     init_core_fec(m_core_fec);
     init_core_feedback(m_core_feedback);
-    init_core_log(m_core_log);
     init_backend(m);
     // init_core_session(m_core_session);
     // init_core_remote_holepunch(m_remote_holepunch);
@@ -233,6 +243,45 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("Ffmpeg", Decoder::Ffmpeg)
         .value("Pi", Decoder::Pi)
         .export_values();
+
+    // These three were used as Settings getter/setter types without ever
+    // being registered, which doesn't fail to compile (pybind11 only
+    // resolves the caster at call time) but crashes every call at runtime
+    // with "Unable to convert function return value to a Python type!".
+    py::enum_<ChiakiDisableAudioVideo>(m, "DisableAudioVideo")
+        .value("None_", ChiakiDisableAudioVideo::CHIAKI_NONE_DISABLED)
+        .value("Audio", ChiakiDisableAudioVideo::CHIAKI_AUDIO_DISABLED)
+        .value("Video", ChiakiDisableAudioVideo::CHIAKI_VIDEO_DISABLED)
+        .value("AudioVideo", ChiakiDisableAudioVideo::CHIAKI_AUDIO_VIDEO_DISABLED)
+        .export_values();
+
+    py::enum_<ChiakiVideoResolutionPreset>(m, "VideoResolutionPreset")
+        .value("Resolution360p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_360p)
+        .value("Resolution540p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_540p)
+        .value("Resolution720p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_720p)
+        .value("Resolution1080p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_1080p)
+        .export_values();
+
+    py::enum_<ChiakiVideoFPSPreset>(m, "VideoFPSPreset")
+        .value("FPS30", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_30)
+        .value("FPS60", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_60)
+        .export_values();
+
+    // Opaque handle - StreamSession::GetFfmpegDecoder() returns one only so
+    // it can be threaded back into get_frame() internally; there's nothing
+    // useful to call on it from Python. Registering it with no methods is
+    // enough to make it a real bindable type instead of crashing on return,
+    // same reasoning as the three enums above.
+    py::class_<ChiakiFfmpegDecoder>(m, "FfmpegDecoder");
+
+    // Settings::GetVideoProfile*() return this plain struct without it ever
+    // being registered, same crash-on-return bug as the three enums above.
+    py::class_<ChiakiConnectVideoProfile>(m, "ChiakiConnectVideoProfile")
+        .def_readwrite("width", &ChiakiConnectVideoProfile::width)
+        .def_readwrite("height", &ChiakiConnectVideoProfile::height)
+        .def_readwrite("max_fps", &ChiakiConnectVideoProfile::max_fps)
+        .def_readwrite("bitrate", &ChiakiConnectVideoProfile::bitrate)
+        .def_readwrite("codec", &ChiakiConnectVideoProfile::codec);
 
     m.def("get_frame", &get_frame,
           py::arg("session"),
@@ -395,7 +444,7 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("get_muted", &StreamSession::GetMuted, "Get the muted status.")
         .def("set_audio_volume", &StreamSession::SetAudioVolume, py::arg("volume"), "Set the audio volume.")
         .def("get_cant_display", &StreamSession::GetCantDisplay, "Get the cant display status.")
-        .def("get_ffmpeg_decoder", &StreamSession::GetFfmpegDecoder, "Get the FFmpeg decoder.")
+        .def("get_ffmpeg_decoder", &StreamSession::GetFfmpegDecoder, "Get the FFmpeg decoder.", py::return_value_policy::reference)
         .def("on_frame_available", &StreamSession::OnFfmpegFrameAvailable, "Retrieve the FFmpeg frame available event.", py::return_value_policy::reference)
         .def("on_session_quit", &StreamSession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
         .def("on_login_pin_requested", &StreamSession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)
@@ -470,6 +519,13 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("Ready", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_READY)
         .value("Standby", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_STANDBY)
         .export_values();
+
+    // get_host_mac() below returns a HostMAC without it ever being
+    // registered, same "Unable to convert function return value to a
+    // Python type!" crash as the enums above.
+    py::class_<HostMAC>(m, "HostMAC")
+        .def("to_string", &HostMAC::ToString, "Get the MAC address as a hex string.")
+        .def("__str__", &HostMAC::ToString);
 
     py::class_<DiscoveryHostWrapper>(m, "DiscoveryHost")
         .def(py::init<>())
