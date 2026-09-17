@@ -31,7 +31,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.psn", "chiaki_py.controller"]
+packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.lib.core", "chiaki_py.psn", "chiaki_py.controller"]
 
 [tool.setuptools.package-data]
-"*" = ["*.pyi"]
+"*" = ["*.pyi", "*.pyd", "*.so", "*.dll"]

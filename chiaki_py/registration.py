@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import TypedDict
 from .lib import Backend, RegistResult, Settings
 from .lib.core.common import Target
+
+class ConnectKwargs(TypedDict):
+    host: str
+    nickname: str
+    regist_key: str
+    morning: bytes
+    target: Target
 
 
 def register(
@@ -32,7 +40,7 @@ def register(
     )
 
 
-def connect_info_kwargs(result: RegistResult, *, host: str) -> dict:
+def connect_info_kwargs(result: RegistResult, *, host: str) -> ConnectKwargs:
     """Turn a `RegistResult` into kwargs for `Session.connect()`/`StreamSessionConnectInfo`.
 
     `result.rp_regist_key` and `result.rp_key` are exactly `regist_key` and

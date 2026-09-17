@@ -106,6 +106,27 @@ set(SOURCES
 pybind11_add_module(chiaki-py ${SOURCES})
 set_target_properties(chiaki-py PROPERTIES OUTPUT_NAME "chiaki_py")
 
+# Build straight into chiaki_py/lib/ - the source-tree package that
+# re-exports this compiled module (see chiaki_py/lib/__init__.py) - instead
+# of the default build*/pybind/, so that plain `from .chiaki_py import *`
+# there resolves it as an ordinary same-directory submodule. Set both
+# LIBRARY_ (used for the .so on Linux/macOS) and RUNTIME_OUTPUT_DIRECTORY
+# (used for the .pyd on Windows, where extension modules link like DLLs),
+# plus their per-config variants for multi-config generators (e.g. the
+# Visual Studio generator, which otherwise appends a Debug/Release
+# subdirectory) - single-config generators like Ninja ignore the latter.
+set_target_properties(chiaki-py PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+)
+foreach(_config_type ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${_config_type} _config_type_upper)
+    set_target_properties(chiaki-py PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY_${_config_type_upper} "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+        RUNTIME_OUTPUT_DIRECTORY_${_config_type_upper} "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+    )
+endforeach()
+
 set(FFMPEG_LIBRARIES
     ${CMAKE_SOURCE_DIR}/deps/lib/avcodec.lib
     ${CMAKE_SOURCE_DIR}/deps/lib/avformat.lib
@@ -220,6 +241,25 @@ link_third_party_libs(chiaki-py)
 target_link_libraries(chiaki-py PRIVATE Nanopb::nanopb)
 target_link_libraries(chiaki-py PRIVATE Jerasure::Jerasure)
 
+# The FFmpeg .dlls this module needs at runtime (it decodes video via them
+# directly - see streamsession.cpp) aren't vcpkg-managed: FFMPEG_LIBRARIES
+# above links them from vendored import libs under deps/lib/, so vcpkg's own
+# POST_BUILD step (which copies a target's DLL dependencies by scanning only
+# vcpkg_installed/.../bin) can't find or copy them. Copy them here instead,
+# next to the built extension - without this, linking succeeds but importing
+# chiaki_py fails with "DLL load failed".
+file(GLOB FFMPEG_RUNTIME_DLLS
+    "${CMAKE_SOURCE_DIR}/deps/bin/avcodec-*.dll"
+    "${CMAKE_SOURCE_DIR}/deps/bin/avformat-*.dll"
+    "${CMAKE_SOURCE_DIR}/deps/bin/avutil-*.dll"
+    "${CMAKE_SOURCE_DIR}/deps/bin/swscale-*.dll"
+    "${CMAKE_SOURCE_DIR}/deps/bin/swresample-*.dll"
+)
+add_custom_command(TARGET chiaki-py POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_RUNTIME_DLLS} "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+    COMMENT " Copying FFmpeg runtime DLLs into chiaki_py/lib/ "
+)
+
 # Regenerate the .pyi stubs into chiaki_py/lib/ (the source-tree package
 # that re-exports this compiled module - see chiaki_py/lib/__init__.py), so
 # `from .chiaki_py import *` there resolves against real stub coverage for
@@ -231,7 +271,7 @@ target_link_libraries(chiaki-py PRIVATE Jerasure::Jerasure)
 # real interpreter, which silently no-ops here without `${PYTHON_EXECUTABLE}`.
 add_custom_command(TARGET chiaki-py POST_BUILD
     VERBATIM COMMAND "${PYTHON_EXECUTABLE}" -c "import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('${CMAKE_SOURCE_DIR}/chiaki_py/lib') ; sys.argv.append('chiaki_py') ; main() " || (exit 0)
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/chiaki_py/lib
     COMMENT " Generating chiaki_py .pyi stubs into chiaki_py/lib/ "
 )
 

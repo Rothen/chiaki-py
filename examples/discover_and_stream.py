@@ -32,7 +32,7 @@ from chiaki_py.config import ChiakiPySettings
 from chiaki_py.controller import attach_controller
 from chiaki_py.lib import Settings, DiscoveryHost, StreamSession
 from chiaki_py.psn.login import PSNLoginQt
-from chiaki_py.registration import connect_info_kwargs, register
+from chiaki_py.registration import ConnectKwargs, connect_info_kwargs, register
 from dualsensepy.backends import SDL3Backend
 from dualsensepy.utils import get_available_controllers
 
@@ -73,7 +73,7 @@ def pairing_cache_path(app_dir: str, host: DiscoveryHost) -> str:
     return os.path.join(hosts_dir, f"{host.host_id}.json")
 
 
-def get_connect_kwargs(settings: Settings, host: DiscoveryHost, app_dir: str, force_pair: bool) -> dict:
+def get_connect_kwargs(settings: Settings, host: DiscoveryHost, app_dir: str, force_pair: bool) -> ConnectKwargs:
     cache_path = pairing_cache_path(app_dir, host)
 
     if not force_pair and os.path.exists(cache_path):

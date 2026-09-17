@@ -27,12 +27,13 @@ an application; reach into `chiaki_py.lib` only for something that layer
 doesn't expose yet.
 
 `chiaki_py.lib` is implemented as a thin package (`chiaki_py/lib/__init__.py`)
-that locates and re-exports the compiled extension wherever CMake actually
-built it (`build/pybind/` by default) - it isn't built into that directory
-itself. This exists because the compiled module's own internal name is
-"chiaki_py" (set by `PYBIND11_MODULE(chiaki_py, m)` in
-`pybind/src/bindings.cpp`), and this whole package is now called that too;
-nesting it under `lib/` avoids the two colliding on import.
+that re-exports the compiled extension, which CMake builds directly into
+that same directory (`chiaki_py/lib/`, alongside the `.pyi` stubs it also
+generates there - see `pybind/CMakeLists.txt`). This exists because the
+compiled module's own internal name is "chiaki_py" (set by
+`PYBIND11_MODULE(chiaki_py, m)` in `pybind/src/bindings.cpp`), and this
+whole package is now called that too; nesting it under `lib/` avoids the two
+colliding on import.
 
 ## Building the native extension
 
@@ -62,11 +63,9 @@ This is a `cmd /c` one-liner rather than plain PowerShell because
 `vcvars64.bat` is a batch script that sets environment variables for the
 shell that calls it.
 
-The build produces `build/pybind/chiaki_py.cp<version>-win_amd64.pyd`
-alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...). `chiaki_py.lib`
-finds it there automatically (see above) - if your build lands somewhere
-else (e.g. `build-debug/pybind/`, also checked automatically, or a custom
-location), point `CHIAKI_PY_NATIVE_DIR` at that directory.
+The build produces `chiaki_py/lib/chiaki_py.cp<version>-win_amd64.pyd`
+alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) - `chiaki_py.lib`
+imports it straight from there (see above).
 
 ## Running without installing (development)
 
@@ -80,9 +79,8 @@ $env:PYTHONPATH = "$PWD"
 python examples\discover_and_stream.py
 ```
 
-You don't need to add `build\pybind` separately - `chiaki_py.lib` locates it
-on its own. Edits to `chiaki_py/` or `examples/` take effect immediately;
-edits under `pybind/` need a rebuild (see above).
+Edits to `chiaki_py/` or `examples/` take effect immediately; edits under
+`pybind/` need a rebuild (see above).
 
 ## Installing as a package
 
