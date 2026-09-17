@@ -24,6 +24,9 @@ void init_event_source(py::module &m)
     py::class_<EventSource<std::string>::Subscription>(m, "StringEventSourceSubscription")
         .def("unsubscribe", &EventSource<std::string>::Subscription::unsubscribe);
 
+    py::class_<EventSource<const ChiakiRegisteredHost &>::Subscription>(m, "RegisteredHostEventSourceSubscription")
+        .def("unsubscribe", &EventSource<const ChiakiRegisteredHost &>::Subscription::unsubscribe);
+
     py::class_<EventSource<ChiakiQuitReason>>(m, "ChiakiQuitReasonEventSource")
         .def("subscribe", &EventSource<ChiakiQuitReason>::subscribe,
              py::arg("on_next"),
@@ -50,6 +53,12 @@ void init_event_source(py::module &m)
 
     py::class_<EventSource<std::string>>(m, "StringEventSource")
         .def("subscribe", &EventSource<std::string>::subscribe,
+             py::arg("on_next"),
+             py::arg("on_error") = py::none(),
+             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
+
+    py::class_<EventSource<const ChiakiRegisteredHost &>>(m, "RegisteredHostEventSource")
+        .def("subscribe", &EventSource<const ChiakiRegisteredHost &>::subscribe,
              py::arg("on_next"),
              py::arg("on_error") = py::none(),
              py::arg("on_completed") = py::none(), py::return_value_policy::reference);

@@ -79,7 +79,6 @@ set(SOURCES
     include/streamsession.h
     include/discovery_manager.h
     include/timer.h
-    include/av_frame.h
     include/utils.h
     src/core/audio.cpp
     src/core/base64.cpp
@@ -99,7 +98,6 @@ set(SOURCES
     src/settings.cpp
     src/streamsession.cpp
     src/discovery_manager.cpp
-    src/av_frame.cpp
     src/utils.cpp
     src/bindings.cpp
 )

@@ -1,5 +1,4 @@
 #include <time.h>
-#include "av_frame.h"
 #include "core/common.h"
 #include "core/audio.h"
 #include "core/base64.h"
@@ -21,6 +20,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdexcept>
 #include <string>
 #include <set>
 #include <optional> // Required for std::optional
@@ -43,32 +43,33 @@ extern "C"
 
 namespace py = pybind11;
 
-// Function to return a NumPy array
+// Pulls the next decoded video frame (if any) into `target`, a caller-owned
+// NumPy array. Returns (height, width) of the frame actually written if one
+// was available, or None if no new frame was available yet (not an error).
+// Raises RuntimeError on genuine failure. The (height, width) result lets
+// callers size/slice their buffer correctly without having to separately
+// track the negotiated stream resolution.
 py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t<uint8_t> target)
 {
-    // Retrieve the FFmpeg decoder
     ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
-
     if (!decoder)
-    {
-        return py::str("Session has no FFmpeg decoder");
-    }
+        throw std::runtime_error("Session has no FFmpeg decoder");
 
     int32_t frames_lost;
     AVFrame *frame = chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
     if (!frame)
-    {
-        return py::str("Failed to pull frame from FFmpeg decoder");
-    }
+        return py::none();
 
-    // Ensure proper cleanup if an error occurs
+    // Owns whatever `frame` currently points to. Holding it by reference
+    // means reassigning `frame` (hardware transfer, below) keeps the guard
+    // in sync automatically instead of requiring a manual update at every
+    // reassignment site.
     struct AVFrameGuard
     {
-        AVFrame *frame;
-        ~AVFrameGuard() { av_frame_unref(frame); }
+        AVFrame *&frame;
+        ~AVFrameGuard() { if (frame) av_frame_free(&frame); }
     } frame_guard{frame};
 
-    // Handle hardware decoding cases
     static const std::set<int> zero_copy_formats = {AV_PIX_FMT_VULKAN,
                                                     AV_PIX_FMT_D3D11
 #ifdef __linux__
@@ -77,46 +78,62 @@ py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t
 #endif
     };
 
-    if ((zero_copy_formats.find(frame->format) != zero_copy_formats.end() || disable_zero_copy))
+    // Only a frame that actually lives on the GPU needs transferring; a
+    // software frame just happening to share a format name is not "hardware".
+    if (frame->hw_frames_ctx && (zero_copy_formats.find(frame->format) == zero_copy_formats.end() || disable_zero_copy))
     {
         AVFrame *sw_frame = av_frame_alloc();
         if (!sw_frame)
-        {
-            return py::str("Failed to allocate software frame");
-        }
+            throw std::runtime_error("Failed to allocate software frame");
 
         if (av_hwframe_transfer_data(sw_frame, frame, 0) < 0)
         {
             av_frame_free(&sw_frame);
-            return py::str("Failed to transfer frame from hardware (D3D11)");
+            throw std::runtime_error("Failed to transfer frame from hardware");
         }
 
         av_frame_copy_props(sw_frame, frame);
-        av_frame_unref(frame);
-        frame = sw_frame;
-        frame_guard.frame = frame; // Ensure cleanup
+        av_frame_free(&frame); // frame_guard.frame is now null, nothing double-freed
+        frame = sw_frame;      // frame_guard now owns sw_frame
     }
 
-    if (frame->format == AV_PIX_FMT_NV12) {
-        // Step 1: Initialize SwsContext
+    // Holds the RGB conversion output, when needed. av_image_alloc uses a
+    // raw malloc'd buffer rather than the refcounted AVBufferRef pool, so it
+    // needs its own explicit free rather than av_frame_free/av_frame_unref.
+    AVFrame *rgb_frame = nullptr;
+    struct RgbFrameGuard
+    {
+        AVFrame *&frame;
+        ~RgbFrameGuard()
+        {
+            if (frame)
+            {
+                av_freep(&frame->data[0]);
+                av_frame_free(&frame);
+            }
+        }
+    } rgb_frame_guard{rgb_frame};
+
+    AVFrame *output = frame;
+
+    if (frame->format == AV_PIX_FMT_NV12)
+    {
         struct SwsContext *sws_ctx = sws_getContext(
             frame->width, frame->height, (AVPixelFormat)frame->format,
             frame->width, frame->height, AV_PIX_FMT_RGB24,
             SWS_BILINEAR, nullptr, nullptr, nullptr);
-
         if (!sws_ctx)
-        {
-            av_frame_free(&frame);
-            return py::str("Failed to create SwsContext");
-        }
+            throw std::runtime_error("Failed to create SwsContext");
 
-        // Step 2: Allocate Target Frame
-        AVFrame *rgb_frame = av_frame_alloc();
-        if (!rgb_frame)
+        struct SwsContextGuard
         {
-            sws_freeContext(sws_ctx);
-            return py::str("Failed to allocate RGB frame");
-        }
+            SwsContext *ctx;
+            ~SwsContextGuard() { sws_freeContext(ctx); }
+        } sws_guard{sws_ctx};
+
+        rgb_frame = av_frame_alloc();
+        if (!rgb_frame)
+            throw std::runtime_error("Failed to allocate RGB frame");
 
         rgb_frame->format = AV_PIX_FMT_RGB24;
         rgb_frame->width = frame->width;
@@ -126,52 +143,48 @@ py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t
                         rgb_frame->height, AV_PIX_FMT_RGB24, 1) < 0)
         {
             av_frame_free(&rgb_frame);
-            sws_freeContext(sws_ctx);
-            return py::str("Failed to allocate RGB image buffer");
+            throw std::runtime_error("Failed to allocate RGB image buffer");
         }
 
-        // Step 3: Perform the Conversion
         sws_scale(
             sws_ctx,
             frame->data, frame->linesize, 0, frame->height,
             rgb_frame->data, rgb_frame->linesize);
 
-        // Clean up the old frame and replace it with the new one
-        av_frame_free(&frame);
-        sws_freeContext(sws_ctx);
-        frame = rgb_frame;
+        output = rgb_frame;
     }
 
-    // Ensure the frame is in a readable format
-    if (frame->format != AV_PIX_FMT_RGB24 && frame->format != AV_PIX_FMT_GRAY8 && frame->format != AV_PIX_FMT_YUV420P) // AV_PIX_FMT_D3D11
-    {
-        return py::str("Unsupported pixel format for NumPy conversion");
-    }
+    if (output->format != AV_PIX_FMT_RGB24 && output->format != AV_PIX_FMT_GRAY8 && output->format != AV_PIX_FMT_YUV420P)
+        throw std::runtime_error("Unsupported pixel format for NumPy conversion");
 
-    int height = frame->height;
-    int width = frame->width;
-    // int channels = (frame->format == AV_PIX_FMT_RGB24 || frame->format == AV_PIX_FMT_YUV420P) ? 3 : 1;
-    int data_size = av_image_get_buffer_size((AVPixelFormat)frame->format, width, height, 1);
-
+    int height = output->height;
+    int width = output->width;
+    int data_size = av_image_get_buffer_size((AVPixelFormat)output->format, width, height, 1);
     if (data_size <= 0)
-    {
-        return py::str("Failed to get image buffer size");
-    }
+        throw std::runtime_error("Failed to get image buffer size");
 
-    // Copy data into a buffer
-    std::vector<uint8_t> buffer(data_size);
-    
-    // Request buffer info from the NumPy array
     py::buffer_info array_buf = target.request();
+    if (array_buf.size < data_size)
+        throw std::runtime_error("Target buffer is too small for frame data");
 
-    av_image_copy_to_buffer(static_cast<uint8_t *>(array_buf.ptr), data_size, frame->data, frame->linesize, (AVPixelFormat)frame->format, width, height, 1);
+    av_image_copy_to_buffer(static_cast<uint8_t *>(array_buf.ptr), data_size, output->data, output->linesize, (AVPixelFormat)output->format, width, height, 1);
 
-    return py::str("Success");
+    return py::make_tuple(height, width);
 }
 
 PYBIND11_MODULE(chiaki_py, m)
 {
     m.doc() = "Python bindings for Chiaki CLI commands";
+
+#ifdef _WIN32
+    // Winsock must be initialized process-wide before any class in this
+    // module opens a socket (DiscoveryManager, Backend, StreamSession, ...).
+    // This used to happen only inside StreamSession's constructor, so any
+    // other class used without first constructing a StreamSession would
+    // fail with "failed to create socket".
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
     auto m_core = m.def_submodule("core", "The core submodule.");
     // auto m_core_takion = m_core.def_submodule("takion", "The takion submodule.");
@@ -205,19 +218,6 @@ PYBIND11_MODULE(chiaki_py, m)
     // init_core_session(m_core_session);
     // init_core_remote_holepunch(m_remote_holepunch);
 
-    py::class_<PyAVFrame>(m, "AVFrame")
-        .def(py::init<>())
-        .def("width", &PyAVFrame::width)
-        .def("set_width", &PyAVFrame::set_width)
-        .def("height", &PyAVFrame::height)
-        .def("set_height", &PyAVFrame::set_height)
-        .def("format", &PyAVFrame::format)
-        .def("set_format", &PyAVFrame::set_format)
-        .def("pts", &PyAVFrame::pts)
-        .def("set_pts", &PyAVFrame::set_pts)
-        .def("data", &PyAVFrame::data)
-        .def("to_numpy", &PyAVFrame::to_numpy, "Convert frame data to numpy array");
-
     py::enum_<RumbleHapticsIntensity>(m, "RumbleHapticsIntensity")
         .value("Off", RumbleHapticsIntensity::Off)
         .value("VeryWeak", RumbleHapticsIntensity::VeryWeak)
@@ -236,7 +236,8 @@ PYBIND11_MODULE(chiaki_py, m)
           py::arg("session"),
           py::arg("disable_zero_copy"),
           py::arg("target"),
-          "Get the next frame from the session.");
+          "Pull the next decoded video frame into `target`. Returns (height, width) of "
+          "the frame written, or None if none was available yet. Raises RuntimeError on failure.");
 
     py::class_<Settings>(m, "Settings")
         .def(py::init<>())
@@ -397,6 +398,7 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("on_session_quit", &StreamSession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
         .def("on_login_pin_requested", &StreamSession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)
         .def("on_data_holepunch_progress", &StreamSession::OnDataHolepunchProgress, "Retrieve the data holepunch progress event.", py::return_value_policy::reference)
+        .def("on_auto_regist_succeeded", &StreamSession::OnAutoRegistSucceeded, "Retrieve the auto-registration succeeded event.", py::return_value_policy::reference)
         .def("on_nickname_received", &StreamSession::OnNicknameReceived, "Retrieve the nickname received event.", py::return_value_policy::reference)
         .def("on_connected_changed", &StreamSession::OnConnectedChanged, "Retrieve the connected changed event.", py::return_value_policy::reference)
         .def("on_measured_bitrate_changed", &StreamSession::OnMeasuredBitrateChanged, "Retrieve the measured bitrate changed event.", py::return_value_policy::reference)

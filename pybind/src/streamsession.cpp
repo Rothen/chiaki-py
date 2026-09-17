@@ -169,11 +169,6 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
       // rumble_haptics_connected(false),
       // rumble_haptics_on(false)
 {
-
-#ifdef _WIN32
-    WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
     connected = false;
     muted = true;
     mic_connected = false;
@@ -324,9 +319,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
         if (packet_loss_history.size() > 10)
             packet_loss_history.erase(packet_loss_history.begin());
 
-        // Simulated packet loss value (replace with real data)
-        double new_packet_loss = 0.05;
-        packet_loss_history.push_back(new_packet_loss);
+        packet_loss_history.push_back(session.stream_connection.congestion_control.packet_loss);
 
         double packet_loss = 0;
         for (double v : packet_loss_history)
@@ -334,7 +327,6 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
 
         if (packet_loss != average_packet_loss) {
             average_packet_loss = packet_loss;
-            std::cout << "Average Packet Loss Changed: " << average_packet_loss << std::endl;
             AveragePacketLossChanged.next(average_packet_loss);
         }
     });

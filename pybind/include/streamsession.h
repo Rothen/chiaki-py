@@ -323,7 +323,7 @@ class StreamSession
             chiaki_controller_state_set_idle(&state);
 
             chiaki_controller_state_or(&state, &state, &controller_state);
-            std::cout << "SendFeedbackState: " << state.buttons << std::endl;
+            CHIAKI_LOGV(GetChiakiLog(), "SendFeedbackState: %u", state.buttons);
             // chiaki_controller_state_or(&state, &state, &keyboard_state);
             // chiaki_controller_state_or(&state, &state, &touch_state);
 

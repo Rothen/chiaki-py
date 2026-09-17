@@ -2,7 +2,6 @@ build*/
 deps/
 libs/
 old/
-vcpkg/
 vcpkg_installed/
 *.log
 log.pch

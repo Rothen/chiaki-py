@@ -1,22 +1,29 @@
-import math
-from ds_py.dual_sense_controller import DualSenseController
-from ds_py.states import JoyStick, Accelerometer, Gyroscope, Orientation
-from chiaki_py import StreamSession
+from __future__ import annotations
 
-        
-def __left_stick_change(joy_stick: JoyStick, stream_session: StreamSession):
+import math
+
+from chiaki_py import StreamSession
+from ds_py.dual_sense_controller import DualSenseController
+from ds_py.states import Accelerometer, Gyroscope, JoyStick, Orientation
+
+
+def _left_stick_change(joy_stick: JoyStick, stream_session: StreamSession) -> None:
     stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
 
-def __right_stick_change(joy_stick: JoyStick, stream_session: StreamSession):
+
+def _right_stick_change(joy_stick: JoyStick, stream_session: StreamSession) -> None:
     stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
 
-def __accelerometer_change(accelerometer: Accelerometer, stream_session: StreamSession):
+
+def _accelerometer_change(accelerometer: Accelerometer, stream_session: StreamSession) -> None:
     stream_session.set_accelerometer(accelerometer.x, accelerometer.y, accelerometer.z)
 
-def __gyroscope_change(gyroscope: Gyroscope, stream_session: StreamSession):
+
+def _gyroscope_change(gyroscope: Gyroscope, stream_session: StreamSession) -> None:
     stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
 
-def __orientation_change(orientation: Orientation, stream_session: StreamSession):
+
+def _orientation_change(orientation: Orientation, stream_session: StreamSession) -> None:
     cy = math.cos(math.radians(orientation.yaw) * 0.5)
     sy = math.sin(math.radians(orientation.yaw) * 0.5)
     cp = math.cos(math.radians(orientation.pitch) * 0.5)
@@ -31,8 +38,9 @@ def __orientation_change(orientation: Orientation, stream_session: StreamSession
 
     stream_session.set_orientation(x, y, z, w)
 
-def register_controller(controller: DualSenseController, stream_session: StreamSession) -> None:
-    """Registers a DualSense controller."""
+
+def attach_controller(controller: DualSenseController, stream_session: StreamSession) -> None:
+    """Wire a DualSense controller's inputs to a StreamSession's inputs."""
     controller.open()
 
     controller.cross_pressed(stream_session.press_cross)
@@ -43,10 +51,10 @@ def register_controller(controller: DualSenseController, stream_session: StreamS
 
     controller.square_pressed(stream_session.press_square)
     controller.square_released(stream_session.release_square)
-    
+
     controller.triangle_pressed(stream_session.press_triangle)
     controller.triangle_released(stream_session.release_triangle)
-    
+
     controller.dpad_left_pressed(stream_session.press_left)
     controller.dpad_left_released(stream_session.release_left)
 
@@ -72,25 +80,25 @@ def register_controller(controller: DualSenseController, stream_session: StreamS
     controller.r3_released(stream_session.release_r3)
 
     controller.options_pressed(stream_session.press_options)
-    controller.options_released(stream_session.release_touchpad)
+    controller.options_released(stream_session.release_options)
 
     controller.share_pressed(stream_session.press_create)
-    controller.share_released(stream_session.release_touchpad)
+    controller.share_released(stream_session.release_create)
 
     controller.touch_pressed(stream_session.press_touchpad)
     controller.touch_released(stream_session.release_touchpad)
 
     controller.ps_pressed(stream_session.press_ps)
     controller.ps_released(stream_session.release_ps)
-    
+
     controller.l2_trigger_changed(lambda value: stream_session.set_l2(int(value * 255)))
     controller.r2_trigger_changed(lambda value: stream_session.set_r2(int(value * 255)))
 
-    controller.left_joy_stick_changed(lambda joy_stick: __left_stick_change(joy_stick, stream_session))
-    controller.right_joy_stick_changed(lambda joy_stick: __right_stick_change(joy_stick, stream_session))
-    
-    controller.accelerometer_changed(lambda accelerometer: __accelerometer_change(accelerometer, stream_session))
-    
-    controller.gyroscope_changed(lambda gyroscope: __gyroscope_change(gyroscope, stream_session))
+    controller.left_joy_stick_changed(lambda joy_stick: _left_stick_change(joy_stick, stream_session))
+    controller.right_joy_stick_changed(lambda joy_stick: _right_stick_change(joy_stick, stream_session))
 
-    controller.orientation_changed(lambda orientation: __orientation_change(orientation, stream_session))
+    controller.accelerometer_changed(lambda accelerometer: _accelerometer_change(accelerometer, stream_session))
+
+    controller.gyroscope_changed(lambda gyroscope: _gyroscope_change(gyroscope, stream_session))
+
+    controller.orientation_changed(lambda orientation: _orientation_change(orientation, stream_session))
