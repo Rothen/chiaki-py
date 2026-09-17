@@ -9,8 +9,8 @@ themselves, the same way the PS Remote Play app's "device list" does.
 
 import sys
 
-from chiaki_py import Settings
-from chiaki_py_client import discover_hosts
+from chiaki_py import discover_hosts
+from chiaki_py.lib import Settings
 
 
 def main() -> None:

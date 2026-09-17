@@ -1,7 +1,7 @@
 """Pairs with a PS4/PS5 over the local network and writes a config.json
-that examples/gui_stream.py (or any chiaki_py_client.Session.connect call)
-can use directly - the end-to-end path from "I have a PSN account" to
-"I have connect credentials" that nothing in the raw bindings wires up.
+that examples/gui_stream.py (or any chiaki_py.Session.connect call) can use
+directly - the end-to-end path from "I have a PSN account" to "I have
+connect credentials" that nothing in the raw bindings wires up.
 
 Usage:
     python examples/register_console.py <host> <pin> [--ps4] [--console-pin PIN]
@@ -16,10 +16,10 @@ import os
 
 from platformdirs import user_data_dir
 
-from chiaki_py import Settings
-from chiaki_py.core.common import Target
-from chiaki_py_client.psn.login import PSNLoginQt
-from chiaki_py_client.registration import connect_info_kwargs, register
+from chiaki_py.lib import Settings
+from chiaki_py.lib.core.common import Target
+from chiaki_py.psn.login import PSNLoginQt
+from chiaki_py.registration import connect_info_kwargs, register
 
 
 def main() -> None:

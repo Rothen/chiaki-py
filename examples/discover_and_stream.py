@@ -27,20 +27,20 @@ import cv2
 
 from platformdirs import user_data_dir
 
-from chiaki_py import Settings, DiscoveryHost, StreamSession
-from chiaki_py_client import Session, discover_hosts
-from chiaki_py_client.config import ChiakiPySettings
-from chiaki_py_client.controller import attach_controller
-from chiaki_py_client.psn.login import PSNLoginQt
-from chiaki_py_client.registration import connect_info_kwargs, register
-from ds_py.backends import SDL3Backend
-from ds_py.utils import get_available_controllers
+from chiaki_py import Session, discover_hosts
+from chiaki_py.config import ChiakiPySettings
+from chiaki_py.controller import attach_controller
+from chiaki_py.lib import Settings, DiscoveryHost, StreamSession
+from chiaki_py.psn.login import PSNLoginQt
+from chiaki_py.registration import connect_info_kwargs, register
+from dualsensepy.backends import SDL3Backend
+from dualsensepy.utils import get_available_controllers
 
 
 def setup_controller(stream_session: StreamSession) -> bool:
     """Wire up the first available DualSense controller, if any.
 
-    ds_py dispatches input events on its own thread once attached, so there's
+    dualsensepy dispatches input events on its own thread once attached, so there's
     nothing to poll here - this just needs to be called once.
     """
     SDL3Backend.init()
@@ -146,7 +146,6 @@ def main() -> None:
             # focused, or Ctrl+C with the terminal focused; both work.
             print("Streaming - press 'q' in the video window, or Ctrl+C in the terminal, to quit.")
             try:
-                print("here")
                 for frame in session.frames(max_fps=60):
                     cv2.imshow("chiaki-py", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                     if cv2.waitKey(1) & 0xFF == ord("q"):

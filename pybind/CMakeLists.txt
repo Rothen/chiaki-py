@@ -220,9 +220,18 @@ link_third_party_libs(chiaki-py)
 target_link_libraries(chiaki-py PRIVATE Nanopb::nanopb)
 target_link_libraries(chiaki-py PRIVATE Jerasure::Jerasure)
 
+# Regenerate the .pyi stubs into chiaki_py/lib/ (the source-tree package
+# that re-exports this compiled module - see chiaki_py/lib/__init__.py), so
+# `from .chiaki_py import *` there resolves against real stub coverage for
+# static type checkers/IDE autocomplete instead of the dynamic star-import
+# being opaque to them. Uses ${PYTHON_EXECUTABLE} (the exact interpreter
+# this extension was built for, discovered by pybind11 itself) rather than
+# a bare `python` - depending on PATH order, `python` can resolve to
+# Windows' "install from the Store" app-execution-alias stub instead of a
+# real interpreter, which silently no-ops here without `${PYTHON_EXECUTABLE}`.
 add_custom_command(TARGET chiaki-py POST_BUILD
-    VERBATIM COMMAND python -c "import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('.') ; sys.argv.append('chiaki_py') ; main() " || (exit 0)
+    VERBATIM COMMAND "${PYTHON_EXECUTABLE}" -c "import os; import sys; sys.path.insert(1, os.getcwd()) ; from pybind11_stubgen import main; import chiaki_py; sys.argv[0] = 'pybind11-stubgen'; sys.argv.append('--ignore-all-errors') ; sys.argv.append('-o') ; sys.argv.append('${CMAKE_SOURCE_DIR}/chiaki_py/lib') ; sys.argv.append('chiaki_py') ; main() " || (exit 0)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT " Creating stubs for MC3D-TRECSIM "
+    COMMENT " Generating chiaki_py .pyi stubs into chiaki_py/lib/ "
 )
 

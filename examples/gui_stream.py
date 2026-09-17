@@ -1,10 +1,9 @@
-"""PyQt6 remote-play viewer built on chiaki_py_client's high-level API.
+"""PyQt6 remote-play viewer built on chiaki_py's high-level API.
 
 Usage:
     python examples/gui_stream.py path/to/config.json
 
-The config file is a `chiaki_py_client.config.ChiakiPySettings` JSON document,
-e.g.:
+The config file is a `chiaki_py.config.ChiakiPySettings` JSON document, e.g.:
     {
         "host": "192.168.1.50",
         "nickname": "My PS5",
@@ -12,7 +11,7 @@ e.g.:
         "morning": "...",
         "duid": ""
     }
-`regist_key`/`morning` normally come from `chiaki_py_client.registration.register()`
+`regist_key`/`morning` normally come from `chiaki_py.registration.register()`
 (see examples/register_console.py) rather than being typed in by hand.
 """
 
@@ -25,13 +24,13 @@ from PyQt6.QtGui import QCloseEvent, QImage, QPixmap
 from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
 from PyQt6.QtCore import QThread
 
-from chiaki_py import Settings
-from chiaki_py.core.common import Target
-from chiaki_py_client import Session
-from chiaki_py_client.config import ChiakiPySettings
-from chiaki_py_client.controller import attach_controller
-from ds_py.backends import SDL3Backend
-from ds_py.utils import get_available_controllers
+from chiaki_py import Session
+from chiaki_py.config import ChiakiPySettings
+from chiaki_py.controller import attach_controller
+from chiaki_py.lib import Settings
+from chiaki_py.lib.core.common import Target
+from dualsensepy.backends import SDL3Backend
+from dualsensepy.utils import get_available_controllers
 
 
 class FrameProducer(QThread):

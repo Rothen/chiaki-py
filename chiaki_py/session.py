@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from typing import Iterator
@@ -7,16 +8,18 @@ from typing import Iterator
 import numpy as np
 import numpy.typing as npt
 
-from chiaki_py import Settings, StreamSession, StreamSessionConnectInfo, get_frame
-from chiaki_py.core.common import Target
+from .lib import Settings, StreamSession, StreamSessionConnectInfo, get_frame
+from .lib.core.common import Target
 
 # chiaki-ng negotiates up to 1080p; a buffer this size fits any stream
 # resolution it can produce, regardless of what the console actually sends.
 _MAX_FRAME_SHAPE = (1080, 1920, 3)
 
+_logger = logging.getLogger(__name__)
+
 
 class Session:
-    """A Pythonic wrapper around the raw `chiaki_py.StreamSession`.
+    """A Pythonic wrapper around the raw `chiaki_py.lib.StreamSession`.
 
     Handles the connect/disconnect lifecycle as a context manager and
     exposes decoded video frames as NumPy arrays through `frames()`,
@@ -47,7 +50,7 @@ class Session:
     ) -> "Session":
         """Build a Session from already-known console pairing credentials.
 
-        `regist_key`/`morning` normally come from `chiaki_py_client.registration.register()`.
+        `regist_key`/`morning` normally come from `chiaki_py.registration.register()`.
         """
         connect_info = StreamSessionConnectInfo(
             settings=settings,
@@ -100,7 +103,21 @@ class Session:
                 if not ready.wait(timeout=0.5):
                     continue
                 ready.clear()
-                dims = get_frame(self.stream_session, False, buffer)
+                try:
+                    dims = get_frame(self.stream_session, False, buffer)
+                except RuntimeError:
+                    # A single bad/transient frame (e.g. an odd pixel format
+                    # or hardware-transfer hiccup right at stream start,
+                    # before the first real keyframe) shouldn't kill the
+                    # whole viewing session - log it and wait for the next
+                    # frame instead. Without this, a failure on the very
+                    # first frame after connecting means this generator
+                    # never yields anything at all: callers who only start
+                    # doing work (e.g. opening a preview window) once they
+                    # receive the first frame would never see anything
+                    # happen, even though the connection itself succeeded.
+                    _logger.warning("Dropping unreadable frame", exc_info=True)
+                    continue
                 if dims is None:
                     continue
                 now = time.perf_counter()

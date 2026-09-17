@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from chiaki_py import Backend, RegistResult, Settings
-from chiaki_py.core.common import Target
+from .lib import Backend, RegistResult, Settings
+from .lib.core.common import Target
 
 
 def register(
@@ -16,7 +16,7 @@ def register(
 ) -> RegistResult:
     """Pair with a console and return its `RegistResult`.
 
-    This is a thin, blocking wrapper around `chiaki_py.Backend.register_host`.
+    This is a thin, blocking wrapper around `chiaki_py.lib.Backend.register_host`.
     Use `connect_info_kwargs()` to turn the result into the keyword arguments
     `Session.connect()`/`StreamSessionConnectInfo` need - nothing in the raw
     bindings does that translation for you.

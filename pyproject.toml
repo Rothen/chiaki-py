@@ -1,7 +1,7 @@
 [project]
-name = "chiaki-py-client"
+name = "chiaki-py"
 version = "1.9.6"
-description = "A Pythonic client library for PS4/PS5 Remote Play, built on the chiaki_py native extension"
+description = "Python bindings and a Pythonic client library for PS4/PS5 Remote Play (chiaki-ng)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -16,10 +16,10 @@ psn = [
     "PyQt6-WebEngine>=6.6",
 ]
 controller = [
-    "ds_py",
+    "dualsensepy",
 ]
 gui = [
-    "chiaki-py-client[psn]",
+    "chiaki-py[psn]",
     "PyQt6>=6.6",
 ]
 cv = [
@@ -31,7 +31,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["chiaki_py_client", "chiaki_py_client.psn", "chiaki_py_client.controller"]
+packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.psn", "chiaki_py.controller"]
 
 [tool.setuptools.package-data]
 "*" = ["*.pyi"]

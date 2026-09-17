@@ -1,25 +1,38 @@
 # chiaki-py
 
-Python bindings for [chiaki-ng](https://git.streetpea.com/StreetPea/chiaki-ng) (an
-open-source PS4/PS5 Remote Play client), plus `chiaki_py_client`, a Pythonic
-wrapper around those bindings for connecting to, streaming from, and sending
-controller input to a PS4/PS5 from Python.
+A single `chiaki_py` package for PS4/PS5 Remote Play from Python, built on
+[chiaki-ng](https://git.streetpea.com/StreetPea/chiaki-ng) (an open-source
+Remote Play client): discover consoles on the network, pair with them,
+stream video, and send controller input.
 
 ## Layout
 
 ```
-pybind/               C++ pybind11 extension module (builds to `chiaki_py`)
-chiaki_py_client/      Pythonic wrapper library on top of `chiaki_py`
-examples/               Runnable scripts built on chiaki_py_client
-libs/chiaki-ng/         Vendored chiaki-ng (the underlying Remote Play library)
-scripts/                Native dependency / build setup scripts
+pybind/           C++ pybind11 extension module (builds the native part of chiaki_py.lib)
+chiaki_py/          The chiaki_py package
+  lib/                `chiaki_py.lib` - the raw native extension, re-exported here (see below)
+  psn/                PSN OAuth login (`chiaki_py.psn`)
+  controller/          DualSense input via `dualsensepy` (`chiaki_py.controller`)
+  session.py, registration.py, discovery.py, config.py
+examples/           Runnable scripts built on chiaki_py
+libs/chiaki-ng/     Vendored chiaki-ng (the underlying Remote Play library)
+scripts/            Native dependency / build setup scripts
 ```
 
-`chiaki_py` (native, from `pybind/`) mirrors chiaki-ng's C++ API closely:
-`StreamSession`, `Settings`, `Backend`, `DiscoveryManager`, raw frame/controller
-plumbing. `chiaki_py_client` (pure Python) is the layer meant for actually
-writing an application against - `Session`, `register()`, `discover_hosts()`.
-Prefer `chiaki_py_client` unless you need something it doesn't expose yet.
+`chiaki_py.lib` mirrors chiaki-ng's C++ API closely: `StreamSession`,
+`Settings`, `Backend`, `DiscoveryManager`, raw frame/controller plumbing.
+Everything else in `chiaki_py` is a Pythonic layer on top of it - `Session`,
+`register()`, `discover_hosts()` - and is what you want for actually writing
+an application; reach into `chiaki_py.lib` only for something that layer
+doesn't expose yet.
+
+`chiaki_py.lib` is implemented as a thin package (`chiaki_py/lib/__init__.py`)
+that locates and re-exports the compiled extension wherever CMake actually
+built it (`build/pybind/` by default) - it isn't built into that directory
+itself. This exists because the compiled module's own internal name is
+"chiaki_py" (set by `PYBIND11_MODULE(chiaki_py, m)` in
+`pybind/src/bindings.cpp`), and this whole package is now called that too;
+nesting it under `lib/` avoids the two colliding on import.
 
 ## Building the native extension
 
@@ -50,38 +63,41 @@ This is a `cmd /c` one-liner rather than plain PowerShell because
 shell that calls it.
 
 The build produces `build/pybind/chiaki_py.cp<version>-win_amd64.pyd`
-alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) - that one
-directory is what needs to be importable as `chiaki_py`.
+alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...). `chiaki_py.lib`
+finds it there automatically (see above) - if your build lands somewhere
+else (e.g. `build-debug/pybind/`, also checked automatically, or a custom
+location), point `CHIAKI_PY_NATIVE_DIR` at that directory.
 
 ## Running without installing (development)
 
-`chiaki_py_client` is pure Python, so there's no install step for it - just
-get the repo root and the built extension onto `PYTHONPATH`:
+`chiaki_py` (everything except `chiaki_py.lib`'s compiled part) is pure
+Python, so there's no install step needed for it - just get the repo root
+onto `PYTHONPATH`:
 
 ```powershell
 cd C:\Users\benir\Documents\Projects\chiaki-py
-$env:PYTHONPATH = "$PWD;$PWD\build\pybind"
+$env:PYTHONPATH = "$PWD"
 python examples\discover_and_stream.py
 ```
 
-Edits to `chiaki_py_client/` or `examples/` take effect immediately; edits
-under `pybind/` need a rebuild (see above).
+You don't need to add `build\pybind` separately - `chiaki_py.lib` locates it
+on its own. Edits to `chiaki_py/` or `examples/` take effect immediately;
+edits under `pybind/` need a rebuild (see above).
 
 ## Installing as a package
 
 ```powershell
 pip install -e .[psn,cv,controller]
-$env:PYTHONPATH = "build\pybind"   # still needed - chiaki_py is native, not pip-installed
 ```
 
 Optional dependency groups (`pyproject.toml`):
 
-| Extra        | Adds                                   | Needed for |
-|--------------|-----------------------------------------|------------|
-| `psn`        | requests, pycryptodomex, PyQt6(+WebEngine) | PSN OAuth login, `chiaki_py_client.psn` |
-| `gui`        | `psn` + PyQt6                          | `examples/gui_stream.py` |
-| `cv`         | opencv-python                          | `examples/discover_and_stream.py`'s preview window |
-| `controller` | `ds_py`                                | DualSense input via `chiaki_py_client.controller` |
+| Extra        | Adds                                        | Needed for |
+|--------------|----------------------------------------------|------------|
+| `psn`        | requests, pycryptodomex, PyQt6(+WebEngine)  | PSN OAuth login, `chiaki_py.psn` |
+| `gui`        | `psn` + PyQt6                               | `examples/gui_stream.py` |
+| `cv`         | opencv-python                               | `examples/discover_and_stream.py`'s preview window |
+| `controller` | `dualsensepy`                                     | DualSense input via `chiaki_py.controller` |
 
 ## Examples
 
@@ -100,9 +116,9 @@ Optional dependency groups (`pyproject.toml`):
 ## Quickstart (library usage)
 
 ```python
-from chiaki_py import Settings
-from chiaki_py_client import Session, discover_hosts, register, connect_info_kwargs
-from chiaki_py_client.psn.login import PSNLoginQt
+from chiaki_py import Session, discover_hosts, register, connect_info_kwargs
+from chiaki_py.lib import Settings
+from chiaki_py.psn.login import PSNLoginQt
 
 settings = Settings()
 host = discover_hosts(settings, timeout=3.0)[0]
@@ -126,8 +142,8 @@ with Session.connect(settings, **connect_info_kwargs(result, host=host.host_addr
 - Only verified building/running on Windows in this repo's current state;
   the vendored `pybind/CMakeLists.txt` paths (`vcpkg_installed`,
   `libs/chiaki-ng/build*`) are Windows-oriented.
-- `chiaki_py_client.controller` depends on `ds_py` for DualSense input,
-  which isn't published anywhere this README can point to - source it
-  yourself and `pip install` it before using the `controller` extra.
+- `chiaki_py.controller` depends on `dualsensepy` for DualSense input, which isn't
+  published anywhere this README can point to - source it yourself and
+  `pip install` it before using the `controller` extra.
 - PS4 pairing/registration is implemented but has seen far less real-world
   testing than PS5 in this codebase.

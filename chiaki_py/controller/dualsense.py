@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import math
 
-from chiaki_py import StreamSession
-from ds_py.dual_sense_controller import DualSenseController
-from ds_py.states import Accelerometer, Gyroscope, JoyStick, Orientation
+from ..lib import StreamSession
+from dualsensepy.dual_sense_controller import DualSenseController
+from dualsensepy.states import Accelerometer, Gyroscope, JoyStick, Orientation
 
 
 def _left_stick_change(joy_stick: JoyStick, stream_session: StreamSession) -> None:
