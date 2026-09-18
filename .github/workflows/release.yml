@@ -29,7 +29,18 @@ jobs:
       # different vcpkg/CMake pairing, instead of silently reusing binaries
       # whose exported *-targets.cmake files may be incompatible with the
       # image's current CMake (see "Cache vcpkg binary cache" below).
-      VCPKG_TAG: "2026.07.29"
+      #
+      # Deliberately held before 2026.04.27, where vcpkg bumped the CMake it
+      # bundles for building ports (scripts/vcpkg-tools.json) from 3.31.10 to
+      # 4.2.3: under a 4.x "cmake" building a port, CMake's CMake-4
+      # compatibility fallback for pre-3.5 cmake_minimum_required() calls
+      # (triggered by CMAKE_POLICY_VERSION_MINIMUM, which vcpkg's own port
+      # build sets) writes a malformed `cmake_policy(VERSION 3)` into that
+      # port's exported *-targets.cmake - which then fails with "Invalid
+      # CMAKE_POLICY_VERSION_MINIMUM value \"3\"" the moment *we* (or
+      # anything else) find_package() it, regardless of our own
+      # -DCMAKE_POLICY_VERSION_MINIMUM. Bump this once that's fixed upstream.
+      VCPKG_TAG: "2026.03.18"
 
     defaults:
       run:
