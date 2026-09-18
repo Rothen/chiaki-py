@@ -1,20 +1,3 @@
-function(link_third_party_libs target)
-    if(WIN32)
-        target_link_libraries(${target} PRIVATE
-            ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/jerasure.lib
-            ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/gf_complete.lib
-            ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/curl/lib/libcurl-d.lib
-            wsock32 ws2_32 bcrypt iphlpapi
-        )
-    else()
-        target_link_libraries(${target} PRIVATE
-            ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/libjerasure.a
-            ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/libgf_complete.a
-            ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/third-party/curl/lib/libcurl-d.a
-        )
-    endif()
-endfunction()
-
 if(NOT DEPS_FOLDER)
     set(DEPS_FOLDER ${CMAKE_SOURCE_DIR}/deps)
 endif(NOT DEPS_FOLDER)
@@ -175,16 +158,6 @@ target_link_libraries(chiaki-py PRIVATE
     ${ZLIB_LIB}
     ${HIDAPI_LIB}
 )
-# include_directories(SYSTEM BEFORE "${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include")
-
-# Ensure that CMake correctly finds FFmpeg
-# include_directories(" C:/Users/benir/Documents/Projects/chiaki-py/libs/chiaki-ng/lib/include ")
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib")
-else()
-    link_directories("${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build/lib")
-endif()
-
 # Link against chiaki
 target_link_libraries(chiaki-py PRIVATE fmt::fmt)
 target_link_libraries(chiaki-py PRIVATE ${FFMPEG_LIBRARIES})
@@ -203,43 +176,12 @@ target_link_libraries(chiaki-py PRIVATE Threads::Threads)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
-add_library(chiaki-lib STATIC IMPORTED)
-set_target_properties(chiaki-lib PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-)
-
-if(WIN32)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set_target_properties(chiaki-lib PROPERTIES
-            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/chiaki.lib
-            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-        )
-    else()
-        set_target_properties(chiaki-lib PROPERTIES
-            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build/lib/chiaki.lib
-            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-        )
-    endif()
-else()
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_library(chiaki-lib STATIC IMPORTED)
-        set_target_properties(chiaki-lib PROPERTIES
-            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build-debug/lib/libchiaki.a
-            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-        )
-    else()
-        add_library(chiaki-lib STATIC IMPORTED)
-        set_target_properties(chiaki-lib PROPERTIES
-            IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/build/lib/libchiaki.a
-            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/libs/chiaki-ng/lib/include
-        )
-    endif()
-endif()
-
+# chiaki-lib is a real in-tree target (libs/chiaki-ng is add_subdirectory'd
+# from the top-level CMakeLists.txt), so linking it also pulls in its own
+# transitive deps (Nanopb, Jerasure, curl, OpenSSL::Crypto, json-c,
+# miniupnpc, FFmpeg, Threads, Winsock, ...) and public include dirs
+# automatically - no manual path-based linking needed.
 target_link_libraries(chiaki-py PRIVATE chiaki-lib OpenSSL::Crypto)
-link_third_party_libs(chiaki-py)
-target_link_libraries(chiaki-py PRIVATE Nanopb::nanopb)
-target_link_libraries(chiaki-py PRIVATE Jerasure::Jerasure)
 
 # The FFmpeg .dlls this module needs at runtime (it decodes video via them
 # directly - see streamsession.cpp) aren't vcpkg-managed: FFMPEG_LIBRARIES

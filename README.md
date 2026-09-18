@@ -37,68 +37,39 @@ integrated terminal in VS Code gives you that automatically (see
 `Launch-VsDevShell.ps1`); from any other terminal, run that script yourself
 first. `$env:VCPKG_ROOT` is expected to point at your vcpkg install.
 
-Building has three steps: fetch chiaki-ng, build chiaki-ng itself, then
-build `pybind/` against it.
-
-### 1. Fetch chiaki-ng
-
 [chiaki-ng](https://github.com/streetpea/chiaki-ng) doesn't need to be
-cloned by hand - the top-level `CMakeLists.txt` fetches it into
-`libs/chiaki-ng` the first time it's configured (the step below), pinned to
-`CHIAKI_NG_VERSION` (a tag, branch, or commit; defaults to the version this
-repo currently targets). Pass `-DCHIAKI_NG_VERSION=<tag>` on the configure
-line to pin a different one. Once `libs/chiaki-ng` exists, it's left alone
-on later configures (never re-cloned or updated in place); delete the
-directory to fetch a different version from scratch.
+cloned or built by hand. The top-level `CMakeLists.txt`:
 
-### 2. Build chiaki-ng
+- fetches it into `libs/chiaki-ng` the first time it's configured, pinned to
+  `CHIAKI_NG_VERSION` (a tag, branch, or commit; defaults to the version
+  this repo currently targets - pass `-DCHIAKI_NG_VERSION=<tag>` to pin a
+  different one). Once `libs/chiaki-ng` exists, it's left alone on later
+  configures (never re-cloned or updated in place); delete the directory to
+  fetch a different version from scratch.
+- `add_subdirectory()`s it directly (with its GUI/CLI/tests/Android/Switch/
+  Steam Deck-native pieces all disabled - chiaki-py only needs the core
+  `chiaki-lib`), so it's built automatically as an ordinary dependency of
+  `chiaki-py` - no separate configure/build step.
 
-chiaki-ng is its own CMake project and has to be built on its own before
-`pybind/` can link against it - producing `chiaki.lib` plus a few
-third-party static libs (`jerasure`, `gf_complete`, `libcurl_static`) it
-needs alongside it. Pick one `CMAKE_BUILD_TYPE` and use it consistently
-with step 3 (Debug pairs with `build-debug` below, anything else with
-`build`, per `pybind/CMakeLists.txt`):
+`-DPYTHON_EXECUTABLE` below must point at a Python that has `protobuf`
+installed (`pip install protobuf`) - nanopb's code generator (used to build
+chiaki-ng's protocol buffers) imports `google.protobuf`, and if this is
+left unset, CMake may pick whichever Python happens to be first on `PATH`,
+which can silently lack it and fail the build partway through.
 
-```powershell
-cmake -S libs/chiaki-ng -B libs/chiaki-ng/build-debug -G Ninja `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
-  -DCMAKE_BUILD_TYPE=Debug `
-  -DCHIAKI_ENABLE_TESTS=OFF -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_GUI=OFF `
-  -DCHIAKI_ENABLE_ANDROID=OFF -DCHIAKI_ENABLE_BOREALIS=OFF `
-  -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF `
-  -DCHIAKI_ENABLE_FFMPEG_DECODER=ON `
-  -DCMAKE_PREFIX_PATH="$PWD/deps" `
-  -DPYTHON_EXECUTABLE="<python with protobuf installed>"
-
-cmake --build libs/chiaki-ng/build-debug --config Debug `
-  --target chiaki-lib jerasure gf_complete libcurl_static -- -j4
-```
-
-`-DCMAKE_PREFIX_PATH="$PWD/deps"` points chiaki-ng at this repo's vendored
-FFmpeg dev files (already under `deps/`) instead of requiring a system
-install. `-DPYTHON_EXECUTABLE` must point at a Python that has `protobuf`
-installed (`pip install protobuf`) - nanopb's code generator imports
-`google.protobuf`, and if this is left unset, CMake may pick whichever
-Python happens to be first on `PATH`, which can silently lack it and fail
-the build partway through.
-
-### 3. Build chiaki-py
-
-Configure once (`-DCMAKE_BUILD_TYPE` must match step 2 - `Debug` here to
-pair with `build-debug` above):
+Configure once:
 
 ```powershell
 cmake --fresh -S . -B build-debug -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug
+  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
+  -DPYTHON_EXECUTABLE="<python with protobuf installed>"
 ```
 
 (Re-run this whenever `pybind/CMakeLists.txt` itself changes, e.g.
 adding/removing a source file.)
 
-Then, after any C++ change under `pybind/`:
+Then, after any C++ change under `pybind/` or `libs/chiaki-ng/`:
 
 ```powershell
 cmake --build build-debug --config Debug --target chiaki-py -- -j4

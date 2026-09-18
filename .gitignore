@@ -12,3 +12,4 @@ __pycache__/
 chiaki_py/lib/chiaki_py.*
 chiaki_py/lib/*.dll
 chiaki_py/lib/chiaki_py/
+scripts/

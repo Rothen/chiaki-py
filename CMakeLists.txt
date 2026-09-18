@@ -13,9 +13,29 @@ set(CHIAKI_PY_VERSION_MINOR 9)
 set(CHIAKI_PY_VERSION_PATCH 6)
 set(CHIAKI_PY_VERSION ${CHIAKI_PY_VERSION_MAJOR}.${CHIAKI_PY_VERSION_MINOR}.${CHIAKI_PY_VERSION_PATCH})
 
-set(CHIAKI_ENABLE_STEAM_SHORTCUT OFF)
+# chiaki-ng build options, read by libs/chiaki-ng/CMakeLists.txt when it's
+# add_subdirectory'd below - pre-set here (before that happens) so they take
+# effect. chiaki-py only needs chiaki-lib itself, so everything that isn't
+# the core library (GUI, CLI, tests, Android, Switch/Borealis, Steam Deck
+# native input) is disabled.
+#
+# Forced as CACHE entries, not plain set() - chiaki-ng's own CMakeLists.txt
+# pins cmake_minimum_required(VERSION 3.2), which predates policy CMP0077
+# (CMake 3.13); under that policy's OLD behavior, the builtin option()
+# command it uses for most of these *clears* a pre-existing plain variable
+# and reasserts its own default instead of honoring it. A cache entry that
+# already exists is left alone by option() regardless of that policy, so
+# forcing these here is what actually sticks.
+set(CHIAKI_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(CHIAKI_ENABLE_CLI OFF CACHE BOOL "" FORCE)
+set(CHIAKI_ENABLE_GUI OFF CACHE BOOL "" FORCE)
+set(CHIAKI_ENABLE_ANDROID OFF CACHE BOOL "" FORCE)
+set(CHIAKI_ENABLE_BOREALIS OFF CACHE BOOL "" FORCE)
+set(CHIAKI_ENABLE_STEAMDECK_NATIVE OFF CACHE STRING "" FORCE)
+set(CHIAKI_ENABLE_STEAM_SHORTCUT OFF CACHE BOOL "" FORCE)
+set(CHIAKI_ENABLE_FFMPEG_DECODER ON CACHE STRING "" FORCE)
 set(CHIAKI_IS_SWITCH ${NSWITCH})
-set(CHIAKI_USE_SYSTEM_CURL OFF)
+set(CHIAKI_USE_SYSTEM_CURL OFF CACHE STRING "" FORCE)
 
 list(APPEND CMAKE_REQUIRED_LIBRARIES "ws2_32" "crypt32")
 
@@ -35,7 +55,7 @@ add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY
 # place, so an already-populated libs/chiaki-ng is left untouched. Delete
 # the directory (or bump CHIAKI_NG_VERSION and re-fetch into a clean spot)
 # to pick up a different version.
-set(CHIAKI_NG_VERSION "v1.10.0" CACHE STRING "chiaki-ng git tag/branch/commit to fetch")
+set(CHIAKI_NG_VERSION "v1.9.6" CACHE STRING "chiaki-ng git tag/branch/commit to fetch")
 set(CHIAKI_NG_REPOSITORY "https://github.com/streetpea/chiaki-ng" CACHE STRING "chiaki-ng git repository to fetch")
 mark_as_advanced(CHIAKI_NG_REPOSITORY)
 
@@ -53,6 +73,15 @@ if(NOT EXISTS "${CHIAKI_NG_SOURCE_DIR}/CMakeLists.txt")
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/cmake;${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/setsu/cmake")
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/third-party)
+
+# chiaki-ng's own find_package(FFMPEG ...) (pkg-config based) needs to see
+# this repo's vendored FFmpeg dev files.
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+
+# Building chiaki-ng's own CMakeLists.txt here (rather than just its
+# third-party/ subdirectory, as before) makes chiaki-lib an ordinary in-tree
+# target: it gets built automatically as a dependency of chiaki-py below,
+# with no separate out-of-tree configure/build step required.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng)
 
 add_subdirectory(pybind)
