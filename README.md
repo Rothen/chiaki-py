@@ -25,27 +25,92 @@ scripts/            Native dependency / build setup scripts
 
 ## Building the native extension
 
-Requires a native toolchain (this repo currently uses Ninja + clang-cl on Windows), the Windows SDK, and [vcpkg](https://github.com/microsoft/vcpkg) for `pybind/`'s C dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus, ...).
+Requires a native toolchain (this repo currently uses Ninja + clang-cl on
+Windows), the Windows SDK, and [vcpkg](https://github.com/microsoft/vcpkg)
+for C dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus, ...).
 
-[chiaki-ng](https://github.com/streetpea/chiaki-ng) itself doesn't need to be cloned by hand - the top-level `CMakeLists.txt` fetches it into `libs/chiaki-ng` on first configure, pinned to `CHIAKI_NG_VERSION` (a tag, branch, or commit; defaults to the version this repo currently targets). Pass `-DCHIAKI_NG_VERSION=<tag>` on the configure line to pin a different one. Once `libs/chiaki-ng` exists, it's left alone on later configures (it won't be re-cloned or updated); delete the directory to fetch a different version from scratch. It still needs to be built on its own with its own CMake project (see `scripts/build_chiaki_lib_debug.ps1`) before `pybind/` can link against it.
+All commands below assume `cmake`, `clang-cl`, and `vcpkg` are already on
+`PATH`, and that the MSVC environment (`LIB`, `INCLUDE`, etc.) is already
+loaded - i.e. you're in a Visual Studio dev shell. Opening this repo's
+integrated terminal in VS Code gives you that automatically (see
+`.vscode/settings.json`, which launches PowerShell via
+`Launch-VsDevShell.ps1`); from any other terminal, run that script yourself
+first. `$env:VCPKG_ROOT` is expected to point at your vcpkg install.
 
-Configure once:
+Building has three steps: fetch chiaki-ng, build chiaki-ng itself, then
+build `pybind/` against it.
+
+### 1. Fetch chiaki-ng
+
+[chiaki-ng](https://github.com/streetpea/chiaki-ng) doesn't need to be
+cloned by hand - the top-level `CMakeLists.txt` fetches it into
+`libs/chiaki-ng` the first time it's configured (the step below), pinned to
+`CHIAKI_NG_VERSION` (a tag, branch, or commit; defaults to the version this
+repo currently targets). Pass `-DCHIAKI_NG_VERSION=<tag>` on the configure
+line to pin a different one. Once `libs/chiaki-ng` exists, it's left alone
+on later configures (never re-cloned or updated in place); delete the
+directory to fetch a different version from scratch.
+
+### 2. Build chiaki-ng
+
+chiaki-ng is its own CMake project and has to be built on its own before
+`pybind/` can link against it - producing `chiaki.lib` plus a few
+third-party static libs (`jerasure`, `gf_complete`, `libcurl_static`) it
+needs alongside it. Pick one `CMAKE_BUILD_TYPE` and use it consistently
+with step 3 (Debug pairs with `build-debug` below, anything else with
+`build`, per `pybind/CMakeLists.txt`):
 
 ```powershell
-cmd /c '"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" && "C:\Program Files\CMake\bin\cmake.exe" --fresh -S . -B build -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_BUILD_TYPE=Release'
+cmake -S libs/chiaki-ng -B libs/chiaki-ng/build-debug -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DCMAKE_BUILD_TYPE=Debug `
+  -DCHIAKI_ENABLE_TESTS=OFF -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_GUI=OFF `
+  -DCHIAKI_ENABLE_ANDROID=OFF -DCHIAKI_ENABLE_BOREALIS=OFF `
+  -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF `
+  -DCHIAKI_ENABLE_FFMPEG_DECODER=ON `
+  -DCMAKE_PREFIX_PATH="$PWD/deps" `
+  -DPYTHON_EXECUTABLE="<python with protobuf installed>"
+
+cmake --build libs/chiaki-ng/build-debug --config Debug `
+  --target chiaki-lib jerasure gf_complete libcurl_static -- -j4
 ```
 
-(Point `-DCMAKE_TOOLCHAIN_FILE` at your own vcpkg install if it's not at `C:\vcpkg`. Re-run this whenever `pybind/CMakeLists.txt` itself changes, e.g. adding/removing a source file.)
+`-DCMAKE_PREFIX_PATH="$PWD/deps"` points chiaki-ng at this repo's vendored
+FFmpeg dev files (already under `deps/`) instead of requiring a system
+install. `-DPYTHON_EXECUTABLE` must point at a Python that has `protobuf`
+installed (`pip install protobuf`) - nanopb's code generator imports
+`google.protobuf`, and if this is left unset, CMake may pick whichever
+Python happens to be first on `PATH`, which can silently lack it and fail
+the build partway through.
+
+### 3. Build chiaki-py
+
+Configure once (`-DCMAKE_BUILD_TYPE` must match step 2 - `Debug` here to
+pair with `build-debug` above):
+
+```powershell
+cmake --fresh -S . -B build-debug -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug
+```
+
+(Re-run this whenever `pybind/CMakeLists.txt` itself changes, e.g.
+adding/removing a source file.)
 
 Then, after any C++ change under `pybind/`:
 
 ```powershell
-cmd /c '"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" && "C:\Program Files\CMake\bin\cmake.exe" --build build --config Release --target chiaki_py.cp311-win_amd64.pyd -- -j4'
+cmake --build build-debug --config Debug --target chiaki-py -- -j4
 ```
 
-The `vcvars64.bat` prefix is required - without it, `clang-cl`/`lld-link` can't find the Windows SDK's `kernel32.lib` etc. and linking fails outright. This is a `cmd /c` one-liner rather than plain PowerShell because `vcvars64.bat` is a batch script that sets environment variables for the shell that calls it.
+(The CMake target is `chiaki-py`, with a hyphen - `set_target_properties(...
+OUTPUT_NAME "chiaki_py")` in `pybind/CMakeLists.txt` only renames the
+*output file*, so `--target chiaki_py` won't resolve.)
 
-The build produces `chiaki_py/lib/chiaki_py.cp<version>-win_amd64.pyd` alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) - `chiaki_py.lib` imports it straight from there (see above).
+The build produces `chiaki_py/lib/chiaki_py.cp<version>-win_amd64.pyd`
+alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) -
+`chiaki_py.lib` imports it straight from there (see above).
 
 ## Running without installing (development)
 
