@@ -57,6 +57,14 @@ jobs:
       - name: Set up MSVC dev environment
         uses: ilammy/msvc-dev-cmd@v1
 
+      # vcvarsall.bat (run above) sets VCPKG_ROOT to the vcpkg bundled with
+      # Visual Studio's own install on newer runner images, clobbering the
+      # job-level env.VCPKG_ROOT - reassert ours so "Set up vcpkg" below
+      # clones into a workspace-local, empty directory instead of VS's
+      # (non-empty) one.
+      - name: Reset VCPKG_ROOT
+        run: echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
+
       # vcpkg builds its C dependencies (FFmpeg excluded - see below) from
       # source on a cache miss, which is slow (protobuf/openssl/opus etc.
       # each take real time) - this cache is keyed on vcpkg.json so it
