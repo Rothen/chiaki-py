@@ -1,16 +1,15 @@
-name: Build and publish
+name: Build (Windows)
 
 # Builds the native extension + wheel/sdist on every push/PR (so a broken
-# build is caught immediately), and additionally publishes to PyPI when a
-# GitHub Release is published - see "publish" below for the one-time PyPI
-# setup this needs.
+# build is caught immediately). Also callable from other workflows
+# (workflow_call) - see publish.yml, which calls this and build-ubuntu.yml
+# and only publishes once both report success.
 on:
   push:
     branches: [main]
   pull_request:
-  release:
-    types: [published]
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   build:
@@ -50,7 +49,7 @@ jobs:
           # protocol buffers) imports google.protobuf - without it present
           # on whichever Python CMake picks up, the build fails partway
           # through with a nanopb traceback, not a clear "missing dep" error.
-          python -m pip install --upgrade protobuf build twine
+          python -m pip install --upgrade protobuf build twine pybind11_stubgen
 
       - name: Set up Ninja
         run: choco install ninja --no-progress -y
@@ -132,29 +131,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-windows
           path: dist/
           if-no-files-found: error
-
-  publish:
-    name: Publish to PyPI
-    needs: build
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    # One-time setup on pypi.org (Your project > Publishing > Add a new
-    # publisher, or pre-register the project name under "trusted
-    # publishers" before the first release): owner Rothen, repo chiaki-py,
-    # workflow release.yml, environment pypi. No API token/secret needed -
-    # id-token below is what PyPI's OIDC trust exchange uses instead.
-    environment:
-      name: pypi
-      url: https://pypi.org/project/chiaki-py/
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,44 @@
+name: Publish to PyPI
+
+# Publishes to PyPI when a GitHub Release is published. Runs the Windows and
+# Ubuntu builds as reusable workflows (rather than downloading artifacts from
+# some earlier, possibly-stale push/PR run) and only publishes once both
+# report success - see "publish" job's `needs:` below.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+
+  build-ubuntu:
+    uses: ./.github/workflows/build-ubuntu.yml
+
+  publish:
+    name: Publish to PyPI
+    needs: [build-windows, build-ubuntu]
+    runs-on: ubuntu-latest
+    # One-time setup on pypi.org (Your project > Publishing > Add a new
+    # publisher, or pre-register the project name under "trusted
+    # publishers" before the first release): owner Rothen, repo chiaki-py,
+    # workflow publish.yml, environment pypi. No API token/secret needed -
+    # id-token below is what PyPI's OIDC trust exchange uses instead.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/chiaki-py/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-ubuntu
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
