@@ -17,4 +17,6 @@ from .discovery import discover_hosts
 from .registration import connect_info_kwargs, register
 from .session import Session
 
-__all__ = ["Session", "register", "connect_info_kwargs", "discover_hosts", "lib"]
+__version__ = "0.1.0"
+
+__all__ = ["Session", "register", "connect_info_kwargs", "discover_hosts", "lib", "__version__"]

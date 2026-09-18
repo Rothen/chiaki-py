@@ -3,19 +3,44 @@ name = "chiaki-py"
 version = "0.1.0"
 description = "Python bindings and a Pythonic client library for PS4/PS5 Remote Play (chiaki-ng)"
 readme = "README.md"
-requires-python = ">=3.10"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Benjamin Ricchiuto", email = "beni.heu@gmail.com" }]
+# The published wheel bundles a compiled extension built against a specific
+# CPython ABI (currently cp311) - see scripts/build_wheel.ps1. Widening this
+# without also building/publishing wheels for the added versions would let
+# pip "successfully" install a package with no usable native module on them.
+requires-python = ">=3.11,<3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development :: Libraries",
+]
+keywords = ["playstation", "remote-play", "chiaki", "chiaki-ng", "ps4", "ps5", "streaming"]
 dependencies = [
     "numpy>=2.5",
+    "pydantic>=2",
     "requests>=2.31",
     "pycryptodomex>=3.19",
     "PyQt6>=6.6",
     "PyQt6-WebEngine>=6.6",
-    "dualsensepy>=0.2.2",
     "opencv-python>=5.0",
+    "dualsense-py>=0.3.2"
 ]
 
+[project.urls]
+Homepage = "https://github.com/Rothen/chiaki-py"
+Repository = "https://github.com/Rothen/chiaki-py"
+Issues = "https://github.com/Rothen/chiaki-py/issues"
+
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

@@ -12,7 +12,7 @@ pybind/           C++ pybind11 extension module (builds the native part of chiak
 chiaki_py/          The chiaki_py package
   lib/                `chiaki_py.lib` - the raw native extension, re-exported here (see below)
   psn/                PSN OAuth login (`chiaki_py.psn`)
-  controller/          DualSense input via `dualsensepy` (`chiaki_py.controller`)
+  controller/          DualSense input via `dualsense-py` (`chiaki_py.controller`)
   session.py, registration.py, discovery.py, config.py
 examples/           Runnable scripts built on chiaki_py
 libs/chiaki-ng/     chiaki-ng (the underlying Remote Play library), fetched by CMake
@@ -98,8 +98,50 @@ Edits to `chiaki_py/` or `examples/` take effect immediately; edits under `pybin
 ## Installing as a package
 
 ```powershell
-pip install -e .
+pip install chiaki-py
 ```
+
+Only prebuilt for Windows/cp311 right now (see `requires-python` in
+`pyproject.toml`) - it bundles a compiled extension, not pure Python.
+
+Optional dependency groups (`pyproject.toml`):
+
+| Extra        | Adds                                        | Needed for |
+|--------------|----------------------------------------------|------------|
+| `psn`        | requests, pycryptodomex, PyQt6(+WebEngine)  | PSN OAuth login, `chiaki_py.psn` |
+| `gui`        | `psn` + PyQt6                               | `examples/gui_stream.py` |
+| `cv`         | opencv-python                               | `examples/discover_and_stream.py`'s preview window |
+| `controller` | `dualsense-py`                              | DualSense input via `chiaki_py.controller` |
+
+```powershell
+pip install chiaki-py[psn,cv,controller]
+```
+
+For local development, install from the repo instead:
+
+```powershell
+pip install -e .[psn,cv,controller]
+```
+
+### Releasing
+
+`.github/workflows/release.yml` builds the wheel + sdist on every push/PR
+(so a broken build is caught immediately) and publishes to PyPI whenever a
+GitHub Release is published, via [PyPI Trusted
+Publishing](https://docs.pypi.org/trusted-publishers/) - no stored API
+token. One-time setup on pypi.org, before the first release: under the
+project's (or, pre-first-publish, your account's pending publishers)
+Publishing settings, add a trusted publisher for owner `Rothen`, repo
+`chiaki-py`, workflow `release.yml`, environment `pypi`.
+
+To cut a release: bump `version` in `pyproject.toml` and
+`CHIAKI_PY_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt` (kept in sync -
+the latter only shows up in a log line, but they should still match),
+commit, tag (`vX.Y.Z`), and publish a GitHub Release from that tag - the
+workflow does the rest.
+
+To build a wheel locally without publishing, use
+`scripts/build_wheel.ps1` directly (see its header comment).
 
 ## Examples
 
@@ -136,3 +178,10 @@ with Session.connect(settings, **connect_info_kwargs(result, host=host.host_addr
 
 - Only verified building/running on Windows in this repo's current state; the vendored `pybind/CMakeLists.txt` paths (`vcpkg_installed`, `libs/chiaki-ng/build*`) are Windows-oriented.
 - PS4 pairing/registration is implemented but has seen far less real-world testing than PS5 in this codebase.
+
+## License
+
+AGPL-3.0-only (see `LICENSE`) - the compiled extension statically links
+[chiaki-ng](https://github.com/streetpea/chiaki-ng)'s AGPL-3.0-licensed
+`chiaki-lib`, which requires the combined work to be distributed under the
+same terms.

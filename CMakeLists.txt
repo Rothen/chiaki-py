@@ -8,9 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PythonInterp 3 REQUIRED) # Make sure nanopb doesn't find Python 2.7 because Python 2 should just die.set(CHIAKI_PY_VERSION_MAJOR 1)
 
-set(CHIAKI_PY_VERSION_MAJOR 1)
-set(CHIAKI_PY_VERSION_MINOR 9)
-set(CHIAKI_PY_VERSION_PATCH 6)
+set(CHIAKI_PY_VERSION_MAJOR 0)
+set(CHIAKI_PY_VERSION_MINOR 1)
+set(CHIAKI_PY_VERSION_PATCH 0)
 set(CHIAKI_PY_VERSION ${CHIAKI_PY_VERSION_MAJOR}.${CHIAKI_PY_VERSION_MINOR}.${CHIAKI_PY_VERSION_PATCH})
 
 # chiaki-ng build options, read by libs/chiaki-ng/CMakeLists.txt when it's

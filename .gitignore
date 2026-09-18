@@ -12,4 +12,10 @@ __pycache__/
 chiaki_py/lib/chiaki_py.*
 chiaki_py/lib/*.dll
 chiaki_py/lib/chiaki_py/
-scripts/
+scripts/*
+.vscode/
+!scripts/build_wheel.ps1
+
+# Python packaging artifacts (python -m build / setuptools)
+dist/
+*.egg-info/

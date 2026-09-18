@@ -29,28 +29,28 @@ from platformdirs import user_data_dir
 
 from chiaki_py import Session, discover_hosts
 from chiaki_py.config import ChiakiPySettings
-# from chiaki_py.controller import attach_controller
+from chiaki_py.controller import attach_controller
 from chiaki_py.lib import Settings, DiscoveryHost, StreamSession
 from chiaki_py.psn.login import PSNLoginQt
 from chiaki_py.registration import ConnectKwargs, connect_info_kwargs, register
-# from dualsensepy.backends import SDL3Backend
-# from dualsensepy.utils import get_available_controllers
+from dualsense_py.backends import SDL3Backend
+from dualsense_py.utils import get_available_controllers
 
 
-# def setup_controller(stream_session: StreamSession) -> bool:
-#     """Wire up the first available DualSense controller, if any.
+def setup_controller(stream_session: StreamSession) -> bool:
+    """Wire up the first available DualSense controller, if any.
 
-#     dualsensepy dispatches input events on its own thread once attached, so there's
-#     nothing to poll here - this just needs to be called once.
-#     """
-#     SDL3Backend.init()
-#     controllers = get_available_controllers()
-#     if not controllers:
-#         print("No DualSense controllers found - streaming without input.")
-#         return False
-#     attach_controller(controllers[0], stream_session)
-#     print("Controller attached.")
-#     return True
+    dualsensepy dispatches input events on its own thread once attached, so there's
+    nothing to poll here - this just needs to be called once.
+    """
+    SDL3Backend.init()
+    controllers = get_available_controllers()
+    if not controllers:
+        print("No DualSense controllers found - streaming without input.")
+        return False
+    attach_controller(controllers[0], stream_session)
+    print("Controller attached.")
+    return True
 
 
 def pick_host(hosts: list[DiscoveryHost]) -> DiscoveryHost:

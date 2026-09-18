@@ -3,8 +3,8 @@ from __future__ import annotations
 import math
 
 from ..lib import StreamSession
-from dualsensepy.dual_sense_controller import DualSenseController
-from dualsensepy.states import Accelerometer, Gyroscope, JoyStick, Orientation
+from dualsense_py.dual_sense_controller import DualSenseController
+from dualsense_py.states import Accelerometer, Gyroscope, JoyStick, Orientation
 
 
 def _left_stick_change(joy_stick: JoyStick, stream_session: StreamSession) -> None:

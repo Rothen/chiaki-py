@@ -1,0 +1,137 @@
+name: Build and publish
+
+# Builds the native extension + wheel/sdist on every push/PR (so a broken
+# build is caught immediately), and additionally publishes to PyPI when a
+# GitHub Release is published - see "publish" below for the one-time PyPI
+# setup this needs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build wheel (win_amd64, cp311)
+    runs-on: windows-latest
+    env:
+      # requires-python in pyproject.toml is pinned to this same version -
+      # the wheel this produces only works with the exact CPython ABI it
+      # was built against (cp311-win_amd64). Bumping this requires also
+      # bumping pyproject.toml's requires-python, and vice versa.
+      PYTHON_VERSION: "3.11"
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: "x64"
+
+      - name: Install Python build/CI tooling
+        run: |
+          python -m pip install --upgrade pip
+          # protobuf: nanopb's code generator (used building chiaki-ng's
+          # protocol buffers) imports google.protobuf - without it present
+          # on whichever Python CMake picks up, the build fails partway
+          # through with a nanopb traceback, not a clear "missing dep" error.
+          python -m pip install --upgrade protobuf build twine
+
+      - name: Set up Ninja
+        run: choco install ninja --no-progress -y
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: 18
+
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # vcpkg builds its C dependencies (FFmpeg excluded - see below) from
+      # source on a cache miss, which is slow (protobuf/openssl/opus etc.
+      # each take real time) - this cache is keyed on vcpkg.json so it
+      # invalidates automatically whenever a dependency is added/changed.
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Set up vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
+
+      # chiaki-lib links FFmpeg directly (not vcpkg-managed - see
+      # pybind/CMakeLists.txt) via deps/, which is gitignored/vendored
+      # locally. Reproduce it here the same way scripts/setup.ps1 does for
+      # local dev: a prebuilt shared Windows FFmpeg release. Only the
+      # FFmpeg piece is needed - libplacebo/shaderc/SPIRV-Cross (also built
+      # into deps/ locally) are chiaki-ng GUI-only, and the GUI is disabled
+      # for chiaki-py's build (see CMakeLists.txt's CHIAKI_ENABLE_* set()s).
+      - name: Fetch FFmpeg into deps/
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://github.com/r52/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -OutFile ffmpeg.zip
+          Expand-Archive -LiteralPath ffmpeg.zip -DestinationPath .
+          Rename-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1" "deps"
+          Remove-Item ffmpeg.zip
+
+      - name: Configure
+        run: |
+          $pythonExe = python -c "import sys; print(sys.executable)"
+          cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DPYTHON_EXECUTABLE="$pythonExe"
+
+      - name: Build chiaki-py
+        run: cmake --build build-release --config Release --target chiaki-py -- -j4
+
+      - name: Build wheel + sdist
+        run: python -m build
+
+      - name: Check distributions
+        run: python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    # One-time setup on pypi.org (Your project > Publishing > Add a new
+    # publisher, or pre-register the project name under "trusted
+    # publishers" before the first release): owner Rothen, repo chiaki-py,
+    # workflow release.yml, environment pypi. No API token/secret needed -
+    # id-token below is what PyPI's OIDC trust exchange uses instead.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/chiaki-py/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

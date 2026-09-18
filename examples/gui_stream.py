@@ -29,8 +29,8 @@ from chiaki_py.config import ChiakiPySettings
 from chiaki_py.controller import attach_controller
 from chiaki_py.lib import Settings
 from chiaki_py.lib.core.common import Target
-from dualsensepy.backends import SDL3Backend
-from dualsensepy.utils import get_available_controllers
+from dualsense_py.backends import SDL3Backend
+from dualsense_py.utils import get_available_controllers
 
 
 class FrameProducer(QThread):
