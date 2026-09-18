@@ -1,29 +1,17 @@
 [project]
 name = "chiaki-py"
-version = "1.9.6"
+version = "0.1.0"
 description = "Python bindings and a Pythonic client library for PS4/PS5 Remote Play (chiaki-ng)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "numpy>=1.23",
-]
-
-[project.optional-dependencies]
-psn = [
+    "numpy>=2.5",
     "requests>=2.31",
     "pycryptodomex>=3.19",
     "PyQt6>=6.6",
     "PyQt6-WebEngine>=6.6",
-]
-controller = [
-    "dualsensepy",
-]
-gui = [
-    "chiaki-py[psn]",
-    "PyQt6>=6.6",
-]
-cv = [
-    "opencv-python>=4.8",
+    "dualsensepy>=0.2.2",
+    "opencv-python>=5.0",
 ]
 
 [build-system]
