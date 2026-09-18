@@ -54,10 +54,32 @@ jobs:
       - name: Set up Ninja
         run: choco install ninja --no-progress -y
 
+      # Pinned rather than relying on whatever standalone CMake the runner
+      # image happens to preinstall (windows-latest currently ships 4.4.3,
+      # but that's an implicit dependency on the image, not something this
+      # workflow controls - the same category of surprise-version drift as
+      # clang below). choco's cmake.install package already adds itself to
+      # the machine PATH, but that PATH update doesn't reach this already-
+      # running job process, so add it to GITHUB_PATH explicitly too.
+      - name: Set up CMake
+        run: |
+          choco install cmake --version=4.4.3 --installargs "ADD_CMAKE_TO_PATH=System" --no-progress -y --allow-downgrade --force
+          echo "$env:ProgramFiles\CMake\bin" >> $env:GITHUB_PATH
+
+      # egor-tensin/setup-clang@v1's Windows path (Install-Package llvm via
+      # choco) ignores the requested "version" input entirely - it always
+      # installs/upgrades to chocolatey's latest llvm package, so this used
+      # to silently drift to whatever's newest (e.g. 22.1.8) regardless of
+      # what's asked for here. That newest-at-the-time clang has had actual
+      # miscompiles for us (clang 22.1.8 failed to see <intrin.h>'s
+      # __cpuidex declaration while building chiaki-ng's vendored
+      # gf-complete, even though the exact same source/flags compile clean
+      # under clang 20) - so install a pinned, known-good version directly
+      # instead of going through that action.
       - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
-        with:
-          version: 18
+        run: |
+          choco install llvm --version=18.1.8 --no-progress -y --allow-downgrade
+          echo "$env:ProgramFiles\LLVM\bin" >> $env:GITHUB_PATH
 
       - name: Set up MSVC dev environment
         uses: ilammy/msvc-dev-cmd@v1
