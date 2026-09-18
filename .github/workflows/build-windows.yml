@@ -70,15 +70,14 @@ jobs:
       # choco) ignores the requested "version" input entirely - it always
       # installs/upgrades to chocolatey's latest llvm package, so this used
       # to silently drift to whatever's newest (e.g. 22.1.8) regardless of
-      # what's asked for here. That newest-at-the-time clang has had actual
-      # miscompiles for us (clang 22.1.8 failed to see <intrin.h>'s
-      # __cpuidex declaration while building chiaki-ng's vendored
-      # gf-complete, even though the exact same source/flags compile clean
-      # under clang 20) - so install a pinned, known-good version directly
-      # instead of going through that action.
+      # what's asked for here. Install a pinned version directly instead.
+      # 20.1.8 specifically because it's the version confirmed (locally,
+      # against this repo's actual vendored gf-complete sources and flags)
+      # not to hit the "call to undeclared library function '__cpuidex'"
+      # failure some other clang builds ran into here.
       - name: Set up Clang
         run: |
-          choco install llvm --version=18.1.8 --no-progress -y --allow-downgrade
+          choco install llvm --version=20.1.8 --no-progress -y --allow-downgrade
           echo "$env:ProgramFiles\LLVM\bin" >> $env:GITHUB_PATH
 
       - name: Set up MSVC dev environment
@@ -136,9 +135,18 @@ jobs:
           # down that needs this fallback (fmt, protobuf, sdl2, curl,
           # nanopb, chiaki-ng, pybind11, ...) then rejects with "Invalid
           # CMAKE_POLICY_VERSION_MINIMUM value \"3\"".
+          # CMAKE_C/CXX_COMPILER is the full path to the clang-cl we pinned
+          # above, not the bare "clang-cl" name: the runner image also ships
+          # its own separate clang-cl as a Visual Studio component (under
+          # .../VC/Tools/Llvm/x64/bin), and "Set up MSVC dev environment"
+          # below (vcvarsall.bat) prepends VS's own tool directories to
+          # PATH - the same thing that clobbers VCPKG_ROOT above. A bare
+          # "clang-cl" name resolved via PATH would silently pick up VS's
+          # bundled one instead of the version we just installed, making
+          # the pin above a no-op.
           cmake --fresh -S . -B build-release -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+            -DCMAKE_C_COMPILER="$env:ProgramFiles\LLVM\bin\clang-cl.exe" -DCMAKE_CXX_COMPILER="$env:ProgramFiles\LLVM\bin\clang-cl.exe" `
             -DCMAKE_BUILD_TYPE=Release `
             -DPYTHON_EXECUTABLE="$pythonExe"
 
