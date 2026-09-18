@@ -41,6 +41,20 @@ if(WIN32)
     list(APPEND CMAKE_REQUIRED_LIBRARIES "ws2_32" "crypt32")
 endif()
 
+if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+    # chiaki-ng's vendored gf-complete (libs/chiaki-ng/third-party/gf-complete,
+    # fetched below - not something we can patch directly) calls __cpuidex()
+    # under its own `#include <intrin.h>`, which normally declares it - but
+    # under clang-cl in CI that declaration isn't ending up visible there
+    # (observed with both clang 18 and 22 against VS 2026's MSVC 14.51
+    # toolset; not reproducible locally against MSVC 14.50, so this looks
+    # like a header search-order quirk specific to that toolset pairing
+    # rather than a clang or gf-complete bug per se). Force-including
+    # intrin.h into every translation unit sidesteps whatever's shadowing it
+    # there, and is a no-op everywhere it isn't needed.
+    add_compile_options("/FIintrin.h")
+endif()
+
 add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY_VERSION_MINOR=${CHIAKI_PY_VERSION_MINOR} -DCHIAKI_PY_VERSION_PATCH=${CHIAKI_PY_VERSION_PATCH} -DCHIAKI_PY_VERSION=\"${CHIAKI_PY_VERSION}\")
 
 # chiaki-ng (https://github.com/streetpea/chiaki-ng) is the underlying
