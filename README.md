@@ -25,20 +25,9 @@ scripts/            Native dependency / build setup scripts
 
 ## Building the native extension
 
-Requires a native toolchain (this repo currently uses Ninja + clang-cl on
-Windows), the Windows SDK, and [vcpkg](https://github.com/microsoft/vcpkg)
-for C dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus, ...).
-
-All commands below assume `cmake`, `clang-cl`, and `vcpkg` are already on
-`PATH`, and that the MSVC environment (`LIB`, `INCLUDE`, etc.) is already
-loaded - i.e. you're in a Visual Studio dev shell. Opening this repo's
-integrated terminal in VS Code gives you that automatically (see
-`.vscode/settings.json`, which launches PowerShell via
-`Launch-VsDevShell.ps1`); from any other terminal, run that script yourself
-first. `$env:VCPKG_ROOT` is expected to point at your vcpkg install.
-
 [chiaki-ng](https://github.com/streetpea/chiaki-ng) doesn't need to be
-cloned or built by hand. The top-level `CMakeLists.txt`:
+cloned or built by hand on either platform below. The top-level
+`CMakeLists.txt`:
 
 - fetches it into `libs/chiaki-ng` the first time it's configured, pinned to
   `CHIAKI_NG_VERSION` (a tag, branch, or commit; defaults to the version
@@ -55,7 +44,25 @@ cloned or built by hand. The top-level `CMakeLists.txt`:
 installed (`pip install protobuf`) - nanopb's code generator (used to build
 chiaki-ng's protocol buffers) imports `google.protobuf`, and if this is
 left unset, CMake may pick whichever Python happens to be first on `PATH`,
-which can silently lack it and fail the build partway through.
+which can silently lack it and fail the build partway through. It should
+also be a Python 3.11 interpreter to match the ABI the published wheel
+targets (see `requires-python` in `pyproject.toml`) - building against a
+different 3.x works fine for local development, it just tags the output
+`.so`/`.pyd` for that version instead (e.g. `cp313` rather than `cp311`).
+
+### Windows
+
+Requires a native toolchain (this repo currently uses Ninja + clang-cl),
+the Windows SDK, and [vcpkg](https://github.com/microsoft/vcpkg) for C
+dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus, ...).
+
+All commands below assume `cmake`, `clang-cl`, and `vcpkg` are already on
+`PATH`, and that the MSVC environment (`LIB`, `INCLUDE`, etc.) is already
+loaded - i.e. you're in a Visual Studio dev shell. Opening this repo's
+integrated terminal in VS Code gives you that automatically (see
+`.vscode/settings.json`, which launches PowerShell via
+`Launch-VsDevShell.ps1`); from any other terminal, run that script yourself
+first. `$env:VCPKG_ROOT` is expected to point at your vcpkg install.
 
 Configure once:
 
@@ -83,6 +90,56 @@ The build produces `chiaki_py/lib/chiaki_py.cp<version>-win_amd64.pyd`
 alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) -
 `chiaki_py.lib` imports it straight from there (see above).
 
+### Ubuntu / Debian
+
+Unlike Windows, native dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus,
+Vulkan, ...) are linked from the distro's package manager instead of
+vcpkg - `pybind/CMakeLists.txt` branches on `WIN32` for this throughout.
+
+`scripts/build_chiaki_ubuntu.sh` does the whole thing end to end - installs
+the apt packages (prompts for `sudo`), then configures and builds:
+
+```bash
+./scripts/build_chiaki_ubuntu.sh
+```
+
+It defaults `PYTHON_EXECUTABLE` to whatever `python3` resolves to on
+`PATH`; export `PYTHON_EXECUTABLE` yourself first to point at a different
+interpreter (e.g. a Python 3.11 venv/conda env - see the ABI note above).
+
+Or by hand, equivalently:
+
+```bash
+sudo apt-get install -y \
+    build-essential ninja-build cmake git pkg-config nasm \
+    python3-dev \
+    protobuf-compiler libprotobuf-dev \
+    libopus-dev libjson-c-dev libminiupnpc-dev libpsl-dev libevdev-dev \
+    libgf-complete-dev libspeexdsp-dev libidn2-dev libnghttp2-dev libssh2-1-dev \
+    libfmt-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavdevice-dev \
+    libsdl2-dev libhidapi-dev libssl-dev libfftw3-dev liblcms2-dev libvulkan-dev zlib1g-dev
+
+cmake -S . -B build -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+  -DPYTHON_EXECUTABLE="<python with protobuf installed>"
+
+cmake --build build --config Release --target chiaki-py -- -j$(nproc)
+```
+
+The build produces
+`chiaki_py/lib/chiaki_py.cpython-<abi>-<arch>-linux-gnu.so`; `chiaki_py.lib`
+imports it straight from there (see above).
+
+If you build inside an activated conda/mamba environment, watch out for
+`find_package(fmt)` resolving to that environment's own `fmt` package
+instead of the apt one just installed - the two commonly have different
+sonames (e.g. `libfmt.so.11` vs. this distro's `libfmt.so.10`), which links
+fine but fails at import time with `libfmt.so.<N>: cannot open shared
+object file`. `scripts/build_chiaki_ubuntu.sh` detects an active
+`$CONDA_PREFIX` and pins `-Dfmt_DIR` to the system package automatically;
+see the comment there if doing this by hand.
+
 ## Running without installing (development)
 
 `chiaki_py` (everything except `chiaki_py.lib`'s compiled part) is pure Python, so there's no install step needed for it - just get the repo root onto `PYTHONPATH`:
@@ -91,6 +148,11 @@ alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) -
 cd C:\Users\benir\Documents\Projects\chiaki-py
 $env:PYTHONPATH = "$PWD"
 python examples\discover_and_stream.py
+```
+
+```bash
+cd ~/Projects/chiaki-py
+PYTHONPATH="$PWD" python3 examples/discover_and_stream.py
 ```
 
 Edits to `chiaki_py/` or `examples/` take effect immediately; edits under `pybind/` need a rebuild (see above).
@@ -176,7 +238,8 @@ with Session.connect(settings, **connect_info_kwargs(result, host=host.host_addr
 
 ## Known limitations
 
-- Only verified building/running on Windows in this repo's current state; the vendored `pybind/CMakeLists.txt` paths (`vcpkg_installed`, `libs/chiaki-ng/build*`) are Windows-oriented.
+- Verified building/running on Windows and Ubuntu (see above); other Linux distros and macOS aren't set up yet (`pybind/CMakeLists.txt`'s non-Windows branches assume apt package names/layouts).
+- The published PyPI wheel is Windows/cp311-only right now (see "Installing as a package" below) - Linux builds are source-only for the moment, via the steps above.
 - PS4 pairing/registration is implemented but has seen far less real-world testing than PS5 in this codebase.
 
 ## License

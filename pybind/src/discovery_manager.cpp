@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "event_queue.h"
 
+#include <algorithm>
 #include <cstring>
 #include <set>
 
@@ -179,8 +180,8 @@ void DiscoveryManager::SetActive(bool active)
                 {
                 case AF_INET:
                     res4 = (struct sockaddr_in *)current_addr->ifa_broadaddr;
-                    if (!broadcast_addresses.contains(res4->sin_addr.s_addr))
-                        broadcast_addresses.append(res4->sin_addr.s_addr);
+                    if (std::find(broadcast_addresses.begin(), broadcast_addresses.end(), res4->sin_addr.s_addr) == broadcast_addresses.end())
+                        broadcast_addresses.push_back(res4->sin_addr.s_addr);
                     break;
                 default:
                     continue;
@@ -380,9 +381,19 @@ void DiscoveryManager::UpdateManualServices()
         options.cb = DiscoveryServiceHostsManualCallback;
         options.cb_user = s;
 
-        memcpy(options.send_host, host.c_str(), host.size());
-        char *ipv6 = strchr(options.send_host, ':');
-        struct sockaddr_storage addr;
+        // options.send_host just needs to point at a valid, null-terminated
+        // C string for the duration of this call:
+        // chiaki_discovery_service_init() strdup()s it into its own
+        // independently-owned copy (see discoveryservice.c) before
+        // returning, so host.c_str() staying alive that long is enough -
+        // this used to memcpy() into options.send_host instead, which is
+        // always null right after `ChiakiDiscoveryServiceOptions options =
+        // {}` above, so that unconditionally segfaulted the first time any
+        // paired console (the only thing that reaches this function - see
+        // UpdateManualServices() above) made it this far.
+        options.send_host = const_cast<char *>(host.c_str());
+        bool ipv6 = host.find(':') != std::string::npos;
+        struct sockaddr_storage addr = {};
         if (ipv6)
         {
             addr.ss_family = AF_INET6;

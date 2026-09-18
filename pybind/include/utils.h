@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cctype>
+#include <cstdint>
 #include <stdexcept>
 #include <iostream>
 #include <tuple>

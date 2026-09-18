@@ -111,7 +111,10 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
     this->host = std::move(host);
 
     std::memset(this->regist_key, '\0', CHIAKI_SESSION_AUTH_SIZE); // Zero out first
-    strncpy_s(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
+    // strncpy_s is MSVC/CRT-only; a plain strncpy is equivalent here since
+    // the buffer above is already fully zeroed, so truncation still leaves
+    // it null-terminated on every platform.
+    strncpy(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
     std::memset(this->morning, 0, 0x10);
     std::string morning_str = morning;
     std::vector<uint8_t> morning_converted(morning_str.begin(), morning_str.end());
