@@ -133,7 +133,10 @@ find_library(MINIUPNPC_LIB miniupnpc REQUIRED)
 find_library(OPUS_LIB opus REQUIRED)
 find_library(LCMS2_LIB lcms2 REQUIRED)
 find_library(VULKAN_LIB vulkan-1 REQUIRED)
-find_library(ZLIB_LIB zlib REQUIRED)
+# vcpkg's zlib port names the built library "z"/"zd" (Unix convention), not
+# "zlib" - "zlib" alone (matching a non-vcpkg Windows zlib build) is kept as
+# a fallback name.
+find_library(ZLIB_LIB NAMES z zlib REQUIRED)
 find_library(HIDAPI_LIB hidapi REQUIRED)
 
 target_link_libraries(chiaki-py PRIVATE CURL::libcurl_static)

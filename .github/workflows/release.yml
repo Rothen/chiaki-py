@@ -23,6 +23,13 @@ jobs:
       # bumping pyproject.toml's requires-python, and vice versa.
       PYTHON_VERSION: "3.11"
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      # Pinned (rather than always cloning master's tip) for reproducibility,
+      # and so the vcpkg binary cache key below is tied to it: bumping this
+      # invalidates old cached package binaries that were built by a
+      # different vcpkg/CMake pairing, instead of silently reusing binaries
+      # whose exported *-targets.cmake files may be incompatible with the
+      # image's current CMake (see "Cache vcpkg binary cache" below).
+      VCPKG_TAG: "2026.07.29"
 
     defaults:
       run:
@@ -67,19 +74,24 @@ jobs:
 
       # vcpkg builds its C dependencies (FFmpeg excluded - see below) from
       # source on a cache miss, which is slow (protobuf/openssl/opus etc.
-      # each take real time) - this cache is keyed on vcpkg.json so it
-      # invalidates automatically whenever a dependency is added/changed.
+      # each take real time) - this cache is keyed on vcpkg.json and
+      # VCPKG_TAG, so it invalidates both when a dependency is added/changed
+      # and when the pinned vcpkg tool moves, rather than silently reusing
+      # package binaries a different vcpkg/CMake pairing produced (their
+      # exported *-targets.cmake can end up incompatible with the image's
+      # current CMake - manifests as "Invalid CMAKE_POLICY_VERSION_MINIMUM
+      # value" errors during Configure).
       - name: Cache vcpkg binary cache
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\vcpkg\archives
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-${{ runner.os }}-
+            vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-
 
       - name: Set up vcpkg
         run: |
-          git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
+          git clone --branch "$env:VCPKG_TAG" --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
 
       # chiaki-lib links FFmpeg directly (not vcpkg-managed - see
