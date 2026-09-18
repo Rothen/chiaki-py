@@ -27,20 +27,8 @@ jobs:
       # and so the vcpkg binary cache key below is tied to it: bumping this
       # invalidates old cached package binaries that were built by a
       # different vcpkg/CMake pairing, instead of silently reusing binaries
-      # whose exported *-targets.cmake files may be incompatible with the
-      # image's current CMake (see "Cache vcpkg binary cache" below).
-      #
-      # Deliberately held before 2026.04.27, where vcpkg bumped the CMake it
-      # bundles for building ports (scripts/vcpkg-tools.json) from 3.31.10 to
-      # 4.2.3: under a 4.x "cmake" building a port, CMake's CMake-4
-      # compatibility fallback for pre-3.5 cmake_minimum_required() calls
-      # (triggered by CMAKE_POLICY_VERSION_MINIMUM, which vcpkg's own port
-      # build sets) writes a malformed `cmake_policy(VERSION 3)` into that
-      # port's exported *-targets.cmake - which then fails with "Invalid
-      # CMAKE_POLICY_VERSION_MINIMUM value \"3\"" the moment *we* (or
-      # anything else) find_package() it, regardless of our own
-      # -DCMAKE_POLICY_VERSION_MINIMUM. Bump this once that's fixed upstream.
-      VCPKG_TAG: "2026.03.18"
+      # built by some other pairing.
+      VCPKG_TAG: "2026.07.29"
 
     defaults:
       run:
@@ -88,10 +76,7 @@ jobs:
       # each take real time) - this cache is keyed on vcpkg.json and
       # VCPKG_TAG, so it invalidates both when a dependency is added/changed
       # and when the pinned vcpkg tool moves, rather than silently reusing
-      # package binaries a different vcpkg/CMake pairing produced (their
-      # exported *-targets.cmake can end up incompatible with the image's
-      # current CMake - manifests as "Invalid CMAKE_POLICY_VERSION_MINIMUM
-      # value" errors during Configure).
+      # package binaries a different vcpkg version produced.
       - name: Cache vcpkg binary cache
         uses: actions/cache@v4
         with:
@@ -123,7 +108,14 @@ jobs:
       - name: Configure
         run: |
           $pythonExe = python -c "import sys; print(sys.executable)"
-          cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
+          # CMAKE_POLICY_VERSION_MINIMUM must be quoted: Windows PowerShell
+          # mis-tokenizes an unquoted -DFOO=3.5-style argument into two argv
+          # entries ("-DFOO=3" and ".5") when building a native command line,
+          # silently truncating it to "3" - which every dependency further
+          # down that needs this fallback (fmt, protobuf, sdl2, curl,
+          # nanopb, chiaki-ng, pybind11, ...) then rejects with "Invalid
+          # CMAKE_POLICY_VERSION_MINIMUM value \"3\"".
+          cmake --fresh -S . -B build-release -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
             -DCMAKE_BUILD_TYPE=Release `

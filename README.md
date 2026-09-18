@@ -67,7 +67,7 @@ first. `$env:VCPKG_ROOT` is expected to point at your vcpkg install.
 Configure once:
 
 ```powershell
-cmake --fresh -S . -B build-debug -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
+cmake --fresh -S . -B build-debug -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
   -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
   -DPYTHON_EXECUTABLE="<python with protobuf installed>"
