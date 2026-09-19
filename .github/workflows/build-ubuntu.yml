@@ -45,14 +45,14 @@ jobs:
           # protocol buffers) imports google.protobuf - without it present
           # on whichever Python CMake picks up, the build fails partway
           # through with a nanopb traceback, not a clear "missing dep" error.
-          python -m pip install --upgrade protobuf build twine
+          python -m pip install --upgrade protobuf build twine pybind11_stubgen
 
       - name: Install native dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
               build-essential ninja-build cmake git pkg-config nasm \
-              python3-dev pybind11_stubgen \
+              python3-dev \
               protobuf-compiler libprotobuf-dev \
               libopus-dev libjson-c-dev libminiupnpc-dev libpsl-dev libevdev-dev \
               libgf-complete-dev libspeexdsp-dev libidn2-dev libnghttp2-dev libssh2-1-dev \
