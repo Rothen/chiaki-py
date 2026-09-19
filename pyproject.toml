@@ -1,6 +1,6 @@
 [project]
 name = "chiaki-py"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python bindings and a Pythonic client library for PS4/PS5 Remote Play (chiaki-ng)"
 readme = "README.md"
 license = "AGPL-3.0-only"
