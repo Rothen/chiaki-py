@@ -1,281 +1,51 @@
 # chiaki-py
 
-A single `chiaki_py` package for PS4/PS5 Remote Play from Python, built on
-[chiaki-ng](https://git.streetpea.com/StreetPea/chiaki-ng) (an open-source
-Remote Play client): discover consoles on the network, pair with them,
-stream video, and send controller input.
+PS4/PS5 Remote Play from Python, built on
+[chiaki-ng](https://github.com/streetpea/chiaki-ng): discover consoles on the
+network, pair with them, stream video, and send controller input.
 
-## Layout
+## Installation
 
-```bash
-pybind/           C++ pybind11 extension module (builds the native part of chiaki_py.lib)
-chiaki_py/          The chiaki_py package
-  lib/                `chiaki_py.lib` - the raw native extension, re-exported here (see below)
-  psn/                PSN OAuth login (`chiaki_py.psn`)
-  controller/          DualSense input via `dualsense-py` (`chiaki_py.controller`)
-  session.py, registration.py, discovery.py, config.py
-examples/           Runnable scripts built on chiaki_py
-libs/chiaki-ng/     chiaki-ng (the underlying Remote Play library), fetched by CMake
-scripts/            Native dependency / build setup scripts
-```
-
-`chiaki_py.lib` mirrors chiaki-ng's C++ API closely: `StreamSession`, `Settings`, `Backend`, `DiscoveryManager`, raw frame/controller plumbing. Everything else in `chiaki_py` is a Pythonic layer on top of it - `Session`, `register()`, `discover_hosts()` - and is what you want for actually writing an application; reach into `chiaki_py.lib` only for something that layer doesn't expose yet.
-
-`chiaki_py.lib` is implemented as a thin package (`chiaki_py/lib/__init__.py`) that re-exports the compiled extension, which CMake builds directly into that same directory (`chiaki_py/lib/`, alongside the `.pyi` stubs it also generates there - see `pybind/CMakeLists.txt`). This exists because the compiled module's own internal name is "chiaki_py" (set by `PYBIND11_MODULE(chiaki_py, m)` in `pybind/src/bindings.cpp`), and this whole package is now called that too; nesting it under `lib/` avoids the two colliding on import.
-
-## Development installation (Windows)
-
-**Install first:**
-
-- [Git](https://git-scm.com/) and [Python 3.11](https://www.python.org/downloads/) (64-bit)
-- [Visual Studio](https://visualstudio.microsoft.com/) (2022 or newer) or its Build Tools, with the *Desktop development with C++* workload (MSVC + Windows SDK)
-- [LLVM](https://github.com/llvm/llvm-project/releases) for `clang-cl` (CI uses 20.1.8), [CMake](https://cmake.org/download/) and [Ninja](https://github.com/ninja-build/ninja/releases) - e.g. `choco install llvm cmake ninja`
-- [vcpkg](https://github.com/microsoft/vcpkg), with `VCPKG_ROOT` set to its folder:
-
-  ```powershell
-  git clone https://github.com/microsoft/vcpkg C:\vcpkg
-  C:\vcpkg\bootstrap-vcpkg.bat
-  setx VCPKG_ROOT C:\vcpkg    # then restart your terminal
-  ```
-
-**Then, from a Visual Studio dev shell** (*Developer PowerShell for VS*, or this repo's VS Code terminal):
-
-```powershell
-git clone https://github.com/Rothen/chiaki-py; cd chiaki-py
-
-# Python environment (protobuf + grpcio-tools are needed by nanopb's code generator;
-# keep protobuf on 5.x - the bundled nanopb breaks on the newest releases)
-python -m venv .venv; .\.venv\Scripts\Activate.ps1
-pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
-
-# Configure + build (the first run is slow: it downloads FFmpeg into deps/
-# and chiaki-ng into libs/, and vcpkg compiles the C dependencies)
-cmake --fresh -S . -B build-debug -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
-  -DPYTHON_EXECUTABLE="$((Get-Command python).Source)"
-cmake --build build-debug --config Debug --target chiaki-py -- -j4
-
-# Install the Python package in editable mode
-pip install -e .[psn,cv,controller]
-```
-
-This builds `chiaki_py/lib/chiaki_py.cp311-win_amd64.pyd` in place. After C++ changes, re-run only the `cmake --build` line. See below for details.
-
-## Building the native extension
-
-[chiaki-ng](https://github.com/streetpea/chiaki-ng) doesn't need to be
-cloned or built by hand on either platform below. The top-level
-`CMakeLists.txt`:
-
-- fetches it into `libs/chiaki-ng` the first time it's configured, pinned to
-  `CHIAKI_NG_VERSION` (a tag, branch, or commit; defaults to the version
-  this repo currently targets - pass `-DCHIAKI_NG_VERSION=<tag>` to pin a
-  different one). Once `libs/chiaki-ng` exists, it's left alone on later
-  configures (never re-cloned or updated in place); delete the directory to
-  fetch a different version from scratch. On Windows it also applies
-  chiaki-ng's `gf-complete.patch` (adds a missing `#include <intrin.h>` that
-  clang-cl needs) to the fetched sources.
-- on Windows, downloads a prebuilt shared FFmpeg into `deps/` (unless
-  `deps/lib/avcodec.lib` already exists; override the archive with
-  `-DCHIAKI_PY_FFMPEG_URL=<zip url>`).
-- `add_subdirectory()`s it directly (with its GUI/CLI/tests/Android/Switch/
-  Steam Deck-native pieces all disabled - chiaki-py only needs the core
-  `chiaki-lib`), so it's built automatically as an ordinary dependency of
-  `chiaki-py` - no separate configure/build step.
-
-`-DPYTHON_EXECUTABLE` below must point at a Python that has `protobuf` and
-`grpcio-tools` installed (`pip install "protobuf==5.29.3" "grpcio-tools==1.71.0"`;
-newer protobuf releases removed an API the bundled nanopb uses) - nanopb's
-code generator (used to build chiaki-ng's protocol buffers) imports
-`google.protobuf` and needs the `protoc` bundled in `grpcio-tools`, and if this is
-left unset, CMake may pick whichever Python happens to be first on `PATH`,
-which can silently lack it and fail the build partway through. It should
-also be a Python 3.11 interpreter to match the ABI the published wheel
-targets (see `requires-python` in `pyproject.toml`) - building against a
-different 3.x works fine for local development, it just tags the output
-`.so`/`.pyd` for that version instead (e.g. `cp313` rather than `cp311`).
+Prebuilt wheels are published for **Windows (x86_64)** and **Linux (x86_64)**
+on **Python 3.11 only**.
 
 ### Windows
 
-Requires a native toolchain (this repo currently uses Ninja + clang-cl),
-the Windows SDK, and [vcpkg](https://github.com/microsoft/vcpkg) for C
-dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus, ...).
+1. Install [Python 3.11](https://www.python.org/downloads/) (64-bit).
+2. Create a virtual environment and install the package:
 
-All commands below assume `cmake`, `clang-cl`, and `vcpkg` are already on
-`PATH`, and that the MSVC environment (`LIB`, `INCLUDE`, etc.) is already
-loaded - i.e. you're in a Visual Studio dev shell. Opening this repo's
-integrated terminal in VS Code gives you that automatically (see
-`.vscode/settings.json`, which launches PowerShell via
-`Launch-VsDevShell.ps1`); from any other terminal, run that script yourself
-first. `$env:VCPKG_ROOT` is expected to point at your vcpkg install.
+   ```powershell
+   py -3.11 -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install chiaki-py
+   ```
 
-Configure once:
+### Ubuntu
 
-```powershell
-cmake --fresh -S . -B build-debug -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
-  -DPYTHON_EXECUTABLE="<python with protobuf installed>"
-```
+1. Install Python 3.11. Ubuntu 24.04 ships 3.12 and 22.04 ships 3.10, so add the
+   deadsnakes PPA if `python3.11` isn't available:
 
-(Re-run this whenever `pybind/CMakeLists.txt` itself changes, e.g.
-adding/removing a source file.)
+   ```bash
+   sudo add-apt-repository ppa:deadsnakes/ppa
+   sudo apt update
+   sudo apt install python3.11 python3.11-venv
+   ```
 
-Then, after any C++ change under `pybind/` or `libs/chiaki-ng/`:
+2. Create a virtual environment and install the package:
 
-```powershell
-cmake --build build-debug --config Debug --target chiaki-py -- -j4
-```
+   ```bash
+   python3.11 -m venv .venv
+   source .venv/bin/activate
+   pip install chiaki-py
+   ```
 
-(The CMake target is `chiaki-py`, with a hyphen - `set_target_properties(...
-OUTPUT_NAME "chiaki_py")` in `pybind/CMakeLists.txt` only renames the
-*output file*, so `--target chiaki_py` won't resolve.)
+The Linux wheel bundles its native libraries (FFmpeg, SDL2, ...), so no extra
+system packages are needed for the core library. The Qt-based parts (PSN login,
+`examples/gui_stream.py`) may additionally need `sudo apt install libxcb-cursor0`.
 
-The build produces `chiaki_py/lib/chiaki_py.cp<version>-win_amd64.pyd`
-alongside every DLL it depends on (FFmpeg, OpenSSL, SDL2, ...) -
-`chiaki_py.lib` imports it straight from there (see above).
+Other platforms and Python versions have to build from source (see below).
 
-### Ubuntu / Debian
-
-Unlike Windows, native dependencies (FFmpeg, SDL2, protobuf, OpenSSL, opus,
-Vulkan, ...) are linked from the distro's package manager instead of
-vcpkg - `pybind/CMakeLists.txt` branches on `WIN32` for this throughout.
-
-`scripts/build_chiaki_ubuntu.sh` does the whole thing end to end - installs
-the apt packages (prompts for `sudo`), then configures and builds:
-
-```bash
-./scripts/build_chiaki_ubuntu.sh
-```
-
-It defaults `PYTHON_EXECUTABLE` to whatever `python3` resolves to on
-`PATH`; export `PYTHON_EXECUTABLE` yourself first to point at a different
-interpreter (e.g. a Python 3.11 venv/conda env - see the ABI note above).
-
-Or by hand, equivalently:
-
-```bash
-sudo apt-get install -y \
-    build-essential ninja-build cmake git pkg-config nasm \
-    python3-dev \
-    protobuf-compiler libprotobuf-dev \
-    libopus-dev libjson-c-dev libminiupnpc-dev libpsl-dev libevdev-dev libevent-dev \
-    libgf-complete-dev libspeexdsp-dev libidn2-dev libnghttp2-dev libssh2-1-dev \
-    libfmt-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavdevice-dev \
-    libsdl2-dev libhidapi-dev libssl-dev libfftw3-dev liblcms2-dev libvulkan-dev zlib1g-dev
-
-cmake -S . -B build -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-  -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
-  -DPYTHON_EXECUTABLE="<python with protobuf installed>"
-
-cmake --build build --config Release --target chiaki-py -- -j$(nproc)
-```
-
-The build produces
-`chiaki_py/lib/chiaki_py.cpython-<abi>-<arch>-linux-gnu.so`; `chiaki_py.lib`
-imports it straight from there (see above).
-
-If you build inside an activated conda/mamba environment, watch out for
-`find_package(fmt)` resolving to that environment's own `fmt` package
-instead of the apt one just installed - the two commonly have different
-sonames (e.g. `libfmt.so.11` vs. this distro's `libfmt.so.10`), which links
-fine but fails at import time with `libfmt.so.<N>: cannot open shared
-object file`. `scripts/build_chiaki_ubuntu.sh` detects an active
-`$CONDA_PREFIX` and pins `-Dfmt_DIR` to the system package automatically;
-see the comment there if doing this by hand.
-
-## Running without installing (development)
-
-`chiaki_py` (everything except `chiaki_py.lib`'s compiled part) is pure Python, so there's no install step needed for it - just get the repo root onto `PYTHONPATH`:
-
-```powershell
-cd C:\Users\benir\Documents\Projects\chiaki-py
-$env:PYTHONPATH = "$PWD"
-python examples\discover_and_stream.py
-```
-
-```bash
-cd ~/Projects/chiaki-py
-PYTHONPATH="$PWD" python3 examples/discover_and_stream.py
-```
-
-Edits to `chiaki_py/` or `examples/` take effect immediately; edits under `pybind/` need a rebuild (see above).
-
-## Installing as a package
-
-```powershell
-pip install chiaki-py
-```
-
-Prebuilt for Windows (win_amd64) and Linux (x86_64, `manylinux`) on
-Python 3.11 only right now (see `requires-python` in `pyproject.toml`) - it
-bundles a compiled extension, not pure Python. The Linux wheel is built on
-Ubuntu and bundles its shared libraries (FFmpeg, SDL2, ...) via
-`auditwheel`, so it needs a distro with a glibc at least as new as the
-`manylinux_2_N` tag in its filename; older ones can build from source
-instead (see "Ubuntu / Debian" above).
-
-Optional dependency groups (`pyproject.toml`):
-
-| Extra        | Adds                                        | Needed for |
-|--------------|----------------------------------------------|------------|
-| `psn`        | requests, pycryptodomex, PyQt6(+WebEngine)  | PSN OAuth login, `chiaki_py.psn` |
-| `gui`        | `psn` + PyQt6                               | `examples/gui_stream.py` |
-| `cv`         | opencv-python                               | `examples/discover_and_stream.py`'s preview window |
-| `controller` | `dualsense-py`                              | DualSense input via `chiaki_py.controller` |
-
-```powershell
-pip install chiaki-py[psn,cv,controller]
-```
-
-For local development, install from the repo instead:
-
-```powershell
-pip install -e .[psn,cv,controller]
-```
-
-### Releasing
-
-`.github/workflows/build-windows.yml` and `build-ubuntu.yml` build the
-wheels (plus the sdist, from the Windows job) on every push/PR, so a broken
-build is caught immediately. `.github/workflows/publish.yml` re-runs both
-and publishes all of it to PyPI whenever a GitHub Release is published, via [PyPI Trusted
-Publishing](https://docs.pypi.org/trusted-publishers/) - no stored API
-token. One-time setup on pypi.org, before the first release: under the
-project's (or, pre-first-publish, your account's pending publishers)
-Publishing settings, add a trusted publisher for owner `Rothen`, repo
-`chiaki-py`, workflow `publish.yml`, environment `pypi`.
-
-To cut a release: bump `version` in `pyproject.toml` and
-`CHIAKI_PY_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt` (kept in sync -
-the latter only shows up in a log line, but they should still match),
-commit, tag (`vX.Y.Z`), and publish a GitHub Release from that tag - the
-workflow does the rest.
-
-To try the packaging without touching the real index, run `publish.yml`
-manually from the Actions tab (*Run workflow*): a manual run publishes to
-[TestPyPI](https://test.pypi.org/project/chiaki-py/) only - never PyPI. It
-needs its own one-time trusted publisher on test.pypi.org (a separate
-account/site from pypi.org): owner `Rothen`, repo `chiaki-py`, workflow
-`publish.yml`, environment `testpypi`. TestPyPI, like PyPI, rejects a
-filename it has already seen, so each test upload needs an unused version
-(e.g. `0.1.1.dev1`); install the result with
-`pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ chiaki-py`
-(the extra index is needed because the dependencies live on the real PyPI).
-
-To build a wheel locally without publishing, use
-`scripts/build_wheel.ps1` directly (see its header comment).
-
-## Examples
-
-- **`examples/discover_and_stream.py`** - the full path in one script: broadcast-discover a console, PSN login, pair, then stream with an optional DualSense attached. Start here. Pairing credentials are cached per-console under your user data dir, so re-running it against an already-paired console skips PSN login/pairing entirely; pass `--force-pair` to pair again from scratch.
-- **`examples/discover_hosts.py`** - just the network scan.
-- **`examples/register_console.py`** - just PSN login + pairing, writes a `chiaki_py_config.json` for later use.
-- **`examples/gui_stream.py`** - a PyQt6 viewer that reads a config file written by `register_console.py`.
-
-## Quickstart (library usage)
+## Quickstart
 
 ```python
 from chiaki_py import Session, discover_hosts, register, connect_info_kwargs
@@ -299,15 +69,109 @@ with Session.connect(settings, **connect_info_kwargs(result, host=host.host_addr
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
+`chiaki_py.lib` is the raw native extension and mirrors chiaki-ng's C++ API.
+Everything else in `chiaki_py` (`Session`, `register()`, `discover_hosts()`, ...)
+is a Pythonic layer on top of it - use that unless you need something it doesn't
+expose yet.
+
+## Examples
+
+Run these from a clone of the repo:
+
+- **`examples/discover_and_stream.py`** - the full path in one script: discover a console, PSN login, pair, then stream with an optional DualSense attached. Start here. Pairing credentials are cached per console, so later runs skip login/pairing; pass `--force-pair` to pair again.
+- **`examples/discover_hosts.py`** - just the network scan.
+- **`examples/register_console.py`** - just PSN login + pairing, writes a `chiaki_py_config.json`.
+- **`examples/gui_stream.py`** - a PyQt6 viewer that reads the config written by `register_console.py`.
+
+## Building from source
+
+Only needed for development, or for platforms/Python versions without a wheel.
+CMake fetches chiaki-ng into `libs/` automatically on first configure; on
+Windows it also downloads FFmpeg into `deps/`, and the first build is slow.
+
+### Windows (from source)
+
+Install [Git](https://git-scm.com/), [Python 3.11](https://www.python.org/downloads/),
+[Visual Studio](https://visualstudio.microsoft.com/) 2022 or newer (or Build Tools) with the
+*Desktop development with C++* workload, LLVM (for `clang-cl`), CMake and Ninja
+(e.g. `choco install llvm cmake ninja`), and [vcpkg](https://github.com/microsoft/vcpkg):
+
+```powershell
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+setx VCPKG_ROOT C:\vcpkg    # then restart your terminal
+```
+
+Then, from a Visual Studio dev shell (*Developer PowerShell for VS*, or this repo's VS Code terminal):
+
+```powershell
+git clone https://github.com/Rothen/chiaki-py; cd chiaki-py
+
+python -m venv .venv; .\.venv\Scripts\Activate.ps1
+pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
+
+cmake --fresh -S . -B build-debug -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
+  -DPYTHON_EXECUTABLE="$((Get-Command python).Source)"
+cmake --build build-debug --config Debug --target chiaki-py -- -j4
+
+pip install -e .
+```
+
+### Ubuntu (from source)
+
+```bash
+git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
+
+python3.11 -m venv .venv && source .venv/bin/activate
+./scripts/build_chiaki_ubuntu.sh    # installs apt packages (asks for sudo), then builds
+
+pip install -e .
+```
+
+The script uses whichever `python3` is on `PATH`; export `PYTHON_EXECUTABLE`
+first to build against a different interpreter. It links FFmpeg, SDL2, protobuf,
+OpenSSL, etc. from apt rather than vcpkg.
+
+### Notes
+
+- Both builds put the compiled module (and, on Windows, its DLLs) in `chiaki_py/lib/`. After C++ changes under `pybind/`, re-run only the `cmake --build` step (the CMake target is `chiaki-py`, with a hyphen). Re-run the configure step too if you add or remove a source file.
+- `-DPYTHON_EXECUTABLE` must point at a Python with `protobuf` and `grpcio-tools` installed (nanopb's code generator needs them), and keep protobuf on 5.x - the bundled nanopb breaks on newer releases.
+- Pin a different chiaki-ng with `-DCHIAKI_NG_VERSION=<tag|branch|commit>`; delete `libs/chiaki-ng` first if it's already been fetched.
+- Building against a Python other than 3.11 works, but tags the output for that version (e.g. `cp313`).
+- On Ubuntu inside a conda environment, `find_package(fmt)` can pick up conda's `fmt` instead of apt's, which fails at import time with `libfmt.so.<N>: cannot open shared object file`. `build_chiaki_ubuntu.sh` handles this by pinning `-Dfmt_DIR` when `$CONDA_PREFIX` is set.
+
+## Releasing
+
+`build-windows.yml` and `build-ubuntu.yml` build the wheels on every push/PR.
+`publish.yml` rebuilds them and publishes to PyPI when a GitHub Release is
+published, using [Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+(owner `Rothen`, repo `chiaki-py`, workflow `publish.yml`, environment `pypi`).
+
+To cut a release: bump the version in `pyproject.toml`, `CMakeLists.txt`
+(`CHIAKI_PY_VERSION_MAJOR/MINOR/PATCH`) and `chiaki_py/__init__.py`, commit, tag
+`vX.Y.Z`, and publish a GitHub Release from that tag.
+
+To test packaging without touching PyPI, run `publish.yml` manually from the
+Actions tab: manual runs publish only to [TestPyPI](https://test.pypi.org/project/chiaki-py/)
+(environment `testpypi`, which needs its own trusted publisher). Each upload needs
+an unused version (e.g. `0.1.2.dev1`); install it with:
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ chiaki-py
+```
+
+To build a wheel locally, see the header of `scripts/build_wheel.ps1`.
+
 ## Known limitations
 
-- Verified building/running on Windows and Ubuntu (see above); other Linux distros and macOS aren't set up yet (`pybind/CMakeLists.txt`'s non-Windows branches assume apt package names/layouts).
-- The published PyPI wheels are Windows/Linux x86_64, cp311-only right now (see "Installing as a package" below); other platforms and Python versions build from source.
-- PS4 pairing/registration is implemented but has seen far less real-world testing than PS5 in this codebase.
+- Only Windows and Ubuntu are tested; other Linux distros and macOS aren't supported yet.
+- Wheels are Windows/Linux x86_64 and cp311 only.
+- PS4 pairing is implemented but far less tested than PS5.
 
 ## License
 
 AGPL-3.0-only (see `LICENSE`) - the compiled extension statically links
-[chiaki-ng](https://github.com/streetpea/chiaki-ng)'s AGPL-3.0-licensed
-`chiaki-lib`, which requires the combined work to be distributed under the
-same terms.
+chiaki-ng's AGPL-3.0-licensed `chiaki-lib`, so the combined work must be
+distributed under the same terms.

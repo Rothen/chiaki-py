@@ -1,0 +1,152 @@
+name: Build (macOS)
+
+on:
+    push:
+        branches: [main]
+        tags-ignore:
+            - "**"
+    pull_request:
+    workflow_dispatch:
+    workflow_call:
+
+jobs:
+    build:
+        name: Build wheel (macosx_14_0_arm64, cp311)
+        # macos-14 is an Apple Silicon (arm64) runner. Homebrew bottles are
+        # built for the OS they're installed on, so the wheel's minimum macOS
+        # version follows this runner (14.0), not the older 12/13 that
+        # chiaki-ng's own CMakeLists picks for its GUI app.
+        runs-on: macos-14
+        env:
+            PYTHON_VERSION: "3.11"
+            MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+        defaults:
+            run:
+                shell: bash
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python ${{ env.PYTHON_VERSION }}
+              uses: actions/setup-python@v5
+              with:
+                  python-version: ${{ env.PYTHON_VERSION }}
+
+            # protobuf/grpcio-tools pinned like the Windows job: the nanopb
+            # generator needs the Python protobuf runtime to match the protoc
+            # that generates the code (protobuf@29 below == 5.29.x).
+            - name: Install Python build/CI tooling
+              run: |
+                  python -m pip install --upgrade pip
+                  python -m pip install --upgrade "protobuf==5.29.3" "grpcio-tools==1.71.0" build twine pybind11_stubgen "delocate>=0.11"
+
+            # protobuf@29 (not the current `protobuf`) matches what chiaki-ng's
+            # own macOS workflow builds against. It's keg-only, hence the
+            # explicit CMAKE_PREFIX_PATH entries in Configure. zlib comes from
+            # the macOS SDK.
+            - name: Install native dependencies
+              run: |
+                  brew update
+                  brew install \
+                      cmake ninja nasm pkgconf \
+                      protobuf@29 openssl@3 fmt \
+                      opus json-c miniupnpc libevent speexdsp \
+                      ffmpeg sdl2 hidapi fftw lcms2 \
+                      vulkan-headers vulkan-loader
+
+            # Apple Silicon Homebrew lives in /opt/homebrew, which clang and
+            # ld don't search by default - unlike /usr/local on Intel. Several
+            # dependencies are located with a bare find_library() (lcms2,
+            # hidapi, ...) and included without a pkg-config -I flag, so point
+            # the compiler and linker at the prefix explicitly.
+            - name: Point compiler/linker at Homebrew
+              run: |
+                  echo "CPATH=$(brew --prefix)/include" >> "$GITHUB_ENV"
+                  echo "LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
+                  echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf@29)/lib/pkgconfig" >> "$GITHUB_ENV"
+                  echo "$(brew --prefix protobuf@29)/bin" >> "$GITHUB_PATH"
+
+            # -rpath: pybind/CMakeLists.txt sets SKIP_BUILD_RPATH on non-Windows
+            # targets, so the extension carries no LC_RPATH. Most Homebrew
+            # dylibs have absolute install names and don't need one, but a few
+            # (e.g. libvulkan) use @rpath/..., which delocate can't resolve
+            # below without it.
+            - name: Configure
+              run: |
+                  cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+                    -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
+                    -DCMAKE_OSX_ARCHITECTURES=arm64 \
+                    -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+                    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+                    -DPython3_EXECUTABLE="$(which python)" -DPython_EXECUTABLE="$(which python)" -DPYTHON_EXECUTABLE="$(which python)" \
+                    -DCMAKE_PREFIX_PATH="$(brew --prefix);$(brew --prefix openssl@3);$(brew --prefix protobuf@29)" \
+                    -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib" \
+                    -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib"
+
+            - name: Build chiaki-py
+              run: cmake --build build-release --config Release --target chiaki-py -- -j"$(sysctl -n hw.ncpu)"
+
+            # Wheel only: the sdist is published from the Windows job (see
+            # publish.yml) - building one here too would upload a second,
+            # differently-populated file under the same name. The platform
+            # is pinned explicitly because setup-python's interpreter may
+            # report universal2, which this arm64-only extension isn't.
+            - name: Build wheel
+              env:
+                  _PYTHON_HOST_PLATFORM: macosx-14.0-arm64
+                  ARCHFLAGS: "-arch arm64"
+              run: python -m build --wheel --outdir wheelhouse-raw
+
+            # The extension dynamically links Homebrew's FFmpeg/SDL2/OpenSSL/
+            # etc. by absolute path (/opt/homebrew/...), which won't exist on
+            # a user's machine. delocate copies those dylibs into the wheel
+            # (chiaki_py/.dylibs/), rewrites the extension's load commands to
+            # point at them, and updates the platform tag to the highest
+            # macOS version the bundled libraries require.
+            - name: Repair wheel (bundle dylibs)
+              run: |
+                  delocate-listdeps wheelhouse-raw/*.whl
+                  delocate-wheel --require-archs arm64 -w dist -v wheelhouse-raw/*.whl
+
+            - name: Check distributions
+              run: python -m twine check dist/*
+
+            # Import the repaired wheel from outside the checkout (so the
+            # source tree's chiaki_py/ can't shadow it) in a fresh venv. The
+            # runner still has Homebrew's libraries installed, so a
+            # successful import can't by itself prove bundling worked -
+            # instead fail if the extension or any bundled dylib still refers
+            # to /opt/homebrew or /usr/local, and print the otool listing as
+            # evidence. numpy/pydantic are the only third-party imports
+            # chiaki_py.lib pulls in at import time; the other declared
+            # dependencies (PyQt6, opencv, ...) are only used by optional
+            # submodules.
+            - name: Smoke test wheel
+              working-directory: ${{ runner.temp }}
+              run: |
+                  python -m venv smoke-venv
+                  smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
+                  smoke-venv/bin/python -m pip install numpy pydantic
+                  smoke-venv/bin/python -c "import chiaki_py.lib as lib; print(lib.__file__); assert 'site-packages' in lib.__file__"
+
+                  site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+                  status=0
+                  for f in "$site"/chiaki_py/lib/chiaki_py.*.so "$site"/chiaki_py/.dylibs/*.dylib; do
+                      echo "== $f"
+                      otool -L "$f"
+                      if otool -L "$f" | tail -n +2 | grep -E '/opt/homebrew|/usr/local'; then
+                          echo "::error::$f still links against Homebrew"
+                          status=1
+                      fi
+                  done
+                  exit $status
+
+            # Published to PyPI by publish.yml alongside the Windows and Linux
+            # wheels once it calls this workflow.
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: dist-macos
+                  path: dist/
+                  if-no-files-found: error
