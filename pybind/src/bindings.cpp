@@ -56,7 +56,7 @@ py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t
         throw std::runtime_error("Session has no FFmpeg decoder");
 
     int32_t frames_lost;
-    AVFrame *frame = chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
+    AVFrame *frame = chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost).frame;
     if (!frame)
         return py::none();
 

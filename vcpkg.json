@@ -16,6 +16,7 @@
         "vulkan",
         "fmt",
         "zlib",
-        "libssh2"
+        "libssh2",
+        "libevent"
     ]
 }

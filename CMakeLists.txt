@@ -57,7 +57,7 @@ add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY
 # place, so an already-populated libs/chiaki-ng is left untouched. Delete
 # the directory (or bump CHIAKI_NG_VERSION and re-fetch into a clean spot)
 # to pick up a different version.
-set(CHIAKI_NG_VERSION "v1.9.6" CACHE STRING "chiaki-ng git tag/branch/commit to fetch")
+set(CHIAKI_NG_VERSION "v1.10.0" CACHE STRING "chiaki-ng git tag/branch/commit to fetch")
 set(CHIAKI_NG_REPOSITORY "https://github.com/streetpea/chiaki-ng" CACHE STRING "chiaki-ng git repository to fetch")
 mark_as_advanced(CHIAKI_NG_REPOSITORY)
 
