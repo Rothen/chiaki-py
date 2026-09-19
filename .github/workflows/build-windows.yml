@@ -51,10 +51,14 @@ jobs:
           # bundled one if importable, else a protoc on PATH (none on the
           # runner). Without them the build fails partway through with a
           # nanopb traceback ("Failed to build nanopb_pb2.py"), not a clear
-          # "missing dep" error. Installed in one command so pip picks a
-          # protobuf that matches grpcio-tools' protoc (a mismatched pair
-          # makes the generated nanopb_pb2.py fail to import).
-          python -m pip install --upgrade protobuf grpcio-tools build twine pybind11_stubgen
+          # "missing dep" error. Pinned (to the pair known to work locally)
+          # rather than latest: the nanopb version vendored by chiaki-ng
+          # calls google.protobuf.reflection.MakeClass, which newer protobuf
+          # releases removed ("module 'google.protobuf.reflection' has no
+          # attribute 'MakeClass'"), and grpcio-tools' bundled protoc has to
+          # match the protobuf runtime or the generated nanopb_pb2.py fails
+          # to import. grpcio-tools 1.71.0 requires protobuf>=5.26,<6.
+          python -m pip install --upgrade "protobuf==5.29.3" "grpcio-tools==1.71.0" build twine pybind11_stubgen
 
       - name: Set up Ninja
         run: choco install ninja --no-progress -y
