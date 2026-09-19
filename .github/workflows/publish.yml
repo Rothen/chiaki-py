@@ -2,17 +2,19 @@ name: Publish to PyPI
 
 # Publishes to PyPI when a GitHub Release is published, and to TestPyPI when
 # run manually (workflow_dispatch) - a manual run never touches the real
-# index. Runs the Windows and Ubuntu builds as reusable workflows (rather
-# than downloading artifacts from some earlier, possibly-stale push/PR run)
-# and only publishes once both report success - see the publish jobs'
-# `needs:` below.
+# index. Runs the Windows, Ubuntu and macOS builds as reusable workflows
+# (rather than downloading artifacts from some earlier, possibly-stale
+# push/PR run) and only publishes once all report success - see the publish
+# jobs' `needs:` below.
 #
 # Published files: the Windows wheel (win_amd64) + sdist from dist-windows,
-# and the Ubuntu wheel from dist-ubuntu. The Ubuntu wheel has been through
-# `auditwheel repair` (see build-ubuntu.yml), which bundles the FFmpeg/SDL2/
-# etc. shared libraries and retags it manylinux_2_N - a bare linux_x86_64
-# wheel would be rejected by PyPI. The sdist is deliberately built by only
-# one of the two jobs, so the merged dist/ below has no duplicate filenames.
+# the Ubuntu wheel from dist-ubuntu, and the macOS wheel from dist-macos. The
+# Ubuntu wheel has been through `auditwheel repair` (see build-ubuntu.yml),
+# which bundles the FFmpeg/SDL2/etc. shared libraries and retags it
+# manylinux_2_N - a bare linux_x86_64 wheel would be rejected by PyPI. The
+# macOS wheel has likewise been through `delocate-wheel` (see
+# build-macos.yml). The sdist is deliberately built by only one of the
+# jobs, so the merged dist/ below has no duplicate filenames.
 on:
   release:
     types: [published]
@@ -25,10 +27,13 @@ jobs:
   build-ubuntu:
     uses: ./.github/workflows/build-ubuntu.yml
 
+  build-macos:
+    uses: ./.github/workflows/build-macos.yml
+
   publish-testpypi:
     name: Publish to TestPyPI
     if: github.event_name == 'workflow_dispatch'
-    needs: [build-windows, build-ubuntu]
+    needs: [build-windows, build-ubuntu, build-macos]
     runs-on: ubuntu-latest
     # Same one-time setup as the PyPI job below, but done separately on
     # test.pypi.org (its own account and its own publisher list): owner
@@ -61,7 +66,7 @@ jobs:
   publish:
     name: Publish to PyPI
     if: github.event_name == 'release'
-    needs: [build-windows, build-ubuntu]
+    needs: [build-windows, build-ubuntu, build-macos]
     runs-on: ubuntu-latest
     # One-time setup on pypi.org (Your project > Publishing > Add a new
     # publisher, or pre-register the project name under "trusted
@@ -74,7 +79,8 @@ jobs:
     permissions:
       id-token: write
     steps:
-      # Both jobs' artifacts (dist-windows, dist-ubuntu) into one flat dist/.
+      # All three jobs' artifacts (dist-windows, dist-ubuntu, dist-macos)
+      # into one flat dist/.
       - uses: actions/download-artifact@v4
         with:
           pattern: dist-*
