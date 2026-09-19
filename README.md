@@ -254,6 +254,17 @@ the latter only shows up in a log line, but they should still match),
 commit, tag (`vX.Y.Z`), and publish a GitHub Release from that tag - the
 workflow does the rest.
 
+To try the packaging without touching the real index, run `publish.yml`
+manually from the Actions tab (*Run workflow*): a manual run publishes to
+[TestPyPI](https://test.pypi.org/project/chiaki-py/) only - never PyPI. It
+needs its own one-time trusted publisher on test.pypi.org (a separate
+account/site from pypi.org): owner `Rothen`, repo `chiaki-py`, workflow
+`publish.yml`, environment `testpypi`. TestPyPI, like PyPI, rejects a
+filename it has already seen, so each test upload needs an unused version
+(e.g. `0.1.1.dev1`); install the result with
+`pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ chiaki-py`
+(the extra index is needed because the dependencies live on the real PyPI).
+
 To build a wheel locally without publishing, use
 `scripts/build_wheel.ps1` directly (see its header comment).
 

@@ -1,9 +1,11 @@
 name: Publish to PyPI
 
-# Publishes to PyPI when a GitHub Release is published. Runs the Windows and
-# Ubuntu builds as reusable workflows (rather than downloading artifacts from
-# some earlier, possibly-stale push/PR run) and only publishes once both
-# report success - see "publish" job's `needs:` below.
+# Publishes to PyPI when a GitHub Release is published, and to TestPyPI when
+# run manually (workflow_dispatch) - a manual run never touches the real
+# index. Runs the Windows and Ubuntu builds as reusable workflows (rather
+# than downloading artifacts from some earlier, possibly-stale push/PR run)
+# and only publishes once both report success - see the publish jobs'
+# `needs:` below.
 #
 # Published files: the Windows wheel (win_amd64) + sdist from dist-windows,
 # and the Ubuntu wheel from dist-ubuntu. The Ubuntu wheel has been through
@@ -23,8 +25,42 @@ jobs:
   build-ubuntu:
     uses: ./.github/workflows/build-ubuntu.yml
 
+  publish-testpypi:
+    name: Publish to TestPyPI
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build-windows, build-ubuntu]
+    runs-on: ubuntu-latest
+    # Same one-time setup as the PyPI job below, but done separately on
+    # test.pypi.org (its own account and its own publisher list): owner
+    # Rothen, repo chiaki-py, workflow publish.yml, environment testpypi.
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/chiaki-py/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist/
+
+      - name: List distributions
+        run: ls -l dist/
+
+      # TestPyPI, like PyPI, never accepts the same filename twice - each
+      # test upload needs a version that hasn't been uploaded before (e.g.
+      # 0.1.1.dev1). skip-existing keeps a re-run of this job from failing
+      # outright on files already there, but it also means such a re-run
+      # uploads nothing new, silently.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
   publish:
     name: Publish to PyPI
+    if: github.event_name == 'release'
     needs: [build-windows, build-ubuntu]
     runs-on: ubuntu-latest
     # One-time setup on pypi.org (Your project > Publishing > Add a new
