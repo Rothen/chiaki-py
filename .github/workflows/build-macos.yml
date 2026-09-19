@@ -123,13 +123,19 @@ jobs:
             # chiaki_py.lib pulls in at import time; the other declared
             # dependencies (PyQt6, opencv, ...) are only used by optional
             # submodules.
+            #
+            # The linkage check runs before the import so its output is there
+            # even if the import misbehaves. The import itself runs under a
+            # watchdog (faulthandler dumps the Python stack and exits after
+            # 60s) with dyld logging every library it loads, so a hang shows
+            # which library was being loaded last instead of stalling the job.
             - name: Smoke test wheel
               working-directory: ${{ runner.temp }}
+              timeout-minutes: 5
               run: |
                   python -m venv smoke-venv
                   smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
                   smoke-venv/bin/python -m pip install numpy pydantic
-                  smoke-venv/bin/python -c "import chiaki_py.lib as lib; print(lib.__file__); assert 'site-packages' in lib.__file__"
 
                   site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
                   status=0
@@ -141,7 +147,16 @@ jobs:
                           status=1
                       fi
                   done
-                  exit $status
+
+                  DYLD_PRINT_LIBRARIES=1 smoke-venv/bin/python -X faulthandler -c "
+                  import faulthandler, sys
+                  faulthandler.dump_traceback_later(60, exit=True)
+                  print('importing chiaki_py.lib', flush=True)
+                  import chiaki_py.lib as lib
+                  print(lib.__file__, flush=True)
+                  assert 'site-packages' in lib.__file__
+                  " 2>&1 | tail -n 60
+                  exit $(( status || ${PIPESTATUS[0]} ))
 
             # Published to PyPI by publish.yml alongside the Windows and Linux
             # wheels once it calls this workflow.
