@@ -27,7 +27,7 @@ jobs:
       # invalidates old cached package binaries that were built by a
       # different vcpkg/CMake pairing, instead of silently reusing binaries
       # built by some other pairing.
-      VCPKG_TAG: "2026.07.29"
+      VCPKG_TAG: "2026.04.08"
 
     defaults:
       run:
@@ -144,11 +144,10 @@ jobs:
           # "clang-cl" name resolved via PATH would silently pick up VS's
           # bundled one instead of the version we just installed, making
           # the pin above a no-op.
-          cmake --fresh -S . -B build-release -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+          cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM="3.5" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DCMAKE_C_COMPILER="$env:ProgramFiles\LLVM\bin\clang-cl.exe" -DCMAKE_CXX_COMPILER="$env:ProgramFiles\LLVM\bin\clang-cl.exe" `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DPYTHON_EXECUTABLE="$pythonExe"
+            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build chiaki-py
         run: cmake --build build-release --config Release --target chiaki-py -- -j4
