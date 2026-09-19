@@ -263,6 +263,21 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_RUNTIME_DLLS} "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
         COMMENT " Copying FFmpeg runtime DLLs into chiaki_py/lib/ "
     )
+
+    # libevent (linked by chiaki-lib through pkg-config, which resolves to
+    # vcpkg's *release* libs even in a Debug build) makes the extension
+    # import event_core.dll. vcpkg's own POST_BUILD DLL copy only looks in
+    # debug/bin for a Debug build, where the file is named event_cored.dll,
+    # so the release DLL never lands next to the .pyd and importing fails
+    # with "DLL load failed". Release builds already get it from vcpkg's
+    # copy; this makes Debug work too (harmless no-op there).
+    set(LIBEVENT_RUNTIME_DLL "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/event_core.dll")
+    if(EXISTS "${LIBEVENT_RUNTIME_DLL}")
+        add_custom_command(TARGET chiaki-py POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBEVENT_RUNTIME_DLL}" "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+            COMMENT " Copying libevent runtime DLL into chiaki_py/lib/ "
+        )
+    endif()
 endif()
 
 # Regenerate the .pyi stubs into chiaki_py/lib/ (the source-tree package

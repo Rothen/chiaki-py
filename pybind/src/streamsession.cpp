@@ -188,6 +188,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
     err = chiaki_ffmpeg_decoder_init(ffmpeg_decoder,
                                         chiaki_log_sniffer_get_log(&sniffer),
                                         chiaki_target_is_ps5(connect_info.target) ? connect_info.video_profile.codec : CHIAKI_CODEC_H264,
+                                        connect_info.video_profile.max_fps,
                                         connect_info.hw_decoder.empty() ? NULL : connect_info.hw_decoder.c_str(),
                                         connect_info.hw_device_ctx, FfmpegFrameCb, this);
     if (err != CHIAKI_ERR_SUCCESS)

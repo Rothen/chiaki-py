@@ -175,5 +175,5 @@ void init_backend(py::module &m)
              py::arg("pin"),
              py::arg("cpin"),
              py::arg("broadcast"),
-             py::arg("target"), py::return_value_policy::reference);
+             py::arg("target"), py::return_value_policy::copy);
 }
