@@ -45,11 +45,16 @@ jobs:
       - name: Install Python build/CI tooling
         run: |
           python -m pip install --upgrade pip
-          # protobuf: nanopb's code generator (used building chiaki-ng's
-          # protocol buffers) imports google.protobuf - without it present
-          # on whichever Python CMake picks up, the build fails partway
-          # through with a nanopb traceback, not a clear "missing dep" error.
-          python -m pip install --upgrade protobuf build twine pybind11_stubgen
+          # protobuf + grpcio-tools: nanopb's code generator (used building
+          # chiaki-ng's protocol buffers) imports google.protobuf and needs
+          # a protoc to compile its own nanopb.proto - it uses grpc_tools'
+          # bundled one if importable, else a protoc on PATH (none on the
+          # runner). Without them the build fails partway through with a
+          # nanopb traceback ("Failed to build nanopb_pb2.py"), not a clear
+          # "missing dep" error. Installed in one command so pip picks a
+          # protobuf that matches grpcio-tools' protoc (a mismatched pair
+          # makes the generated nanopb_pb2.py fail to import).
+          python -m pip install --upgrade protobuf grpcio-tools build twine pybind11_stubgen
 
       - name: Set up Ninja
         run: choco install ninja --no-progress -y
