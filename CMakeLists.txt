@@ -41,22 +41,6 @@ if(WIN32)
     list(APPEND CMAKE_REQUIRED_LIBRARIES "ws2_32" "crypt32")
 endif()
 
-if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang")
-    # chiaki-ng's vendored gf-complete (libs/chiaki-ng/third-party/gf-complete,
-    # fetched below - not something we can patch directly) uses __cpuidex()
-    # in src/gf_cpu.c without ever including <intrin.h> (its _MSC_VER branch
-    # just assumes the declaration arrives transitively). clang-cl treats
-    # the resulting implicit declaration as an error, regardless of clang
-    # version. Force-including intrin.h into every translation unit supplies
-    # the declaration, and is a no-op everywhere it isn't needed.
-    #
-    # A local libs/chiaki-ng checkout can mask this: it only builds if
-    # gf_cpu.c there has been hand-edited to add `#include <intrin.h>`
-    # (check `git -C libs/chiaki-ng/third-party/gf-complete diff`). CI
-    # fetches a pristine copy, so it hits the error the local build doesn't.
-    add_compile_options("/FIintrin.h")
-endif()
-
 add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY_VERSION_MINOR=${CHIAKI_PY_VERSION_MINOR} -DCHIAKI_PY_VERSION_PATCH=${CHIAKI_PY_VERSION_PATCH} -DCHIAKI_PY_VERSION=\"${CHIAKI_PY_VERSION}\")
 
 # chiaki-ng (https://github.com/streetpea/chiaki-ng) is the underlying
@@ -88,6 +72,36 @@ if(NOT EXISTS "${CHIAKI_NG_SOURCE_DIR}/CMakeLists.txt")
         GIT_PROGRESS TRUE
         SOURCE_DIR "${CHIAKI_NG_SOURCE_DIR}"
     )
+endif()
+
+# chiaki-ng ships a patch for its vendored gf-complete
+# (scripts/windows-vc/gf-complete.patch) that its own Windows CI applies
+# right after cloning: upstream gf_cpu.c uses __cpuidex() in its _MSC_VER
+# branch without including <intrin.h>, which clang-cl rejects as an implicit
+# function declaration ("call to undeclared library function
+# '__cpuidex'"). FetchContent above doesn't apply it, so do it here.
+# Skipped when gf_cpu.c already mentions intrin.h (already patched, e.g. by
+# an earlier configure or a hand-edited checkout) so this stays idempotent.
+# chiaki-ng's other Windows patch, libplacebo-pc.patch, is not applied: it
+# edits deps/lib/pkgconfig/libplacebo.pc, which only exists where libplacebo
+# is built (chiaki-ng's GUI, disabled here).
+if(WIN32)
+    set(GF_COMPLETE_DIR "${CHIAKI_NG_SOURCE_DIR}/third-party/gf-complete")
+    set(GF_COMPLETE_PATCH "${CHIAKI_NG_SOURCE_DIR}/scripts/windows-vc/gf-complete.patch")
+    if(EXISTS "${GF_COMPLETE_DIR}/src/gf_cpu.c" AND EXISTS "${GF_COMPLETE_PATCH}")
+        file(READ "${GF_COMPLETE_DIR}/src/gf_cpu.c" _gf_cpu_c)
+        if(NOT _gf_cpu_c MATCHES "intrin\\.h")
+            find_package(Git REQUIRED)
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} apply --ignore-whitespace --verbose "${GF_COMPLETE_PATCH}"
+                WORKING_DIRECTORY "${GF_COMPLETE_DIR}"
+                RESULT_VARIABLE _gf_patch_result
+            )
+            if(NOT _gf_patch_result EQUAL 0)
+                message(FATAL_ERROR "Failed to apply ${GF_COMPLETE_PATCH} to ${GF_COMPLETE_DIR}")
+            endif()
+        endif()
+    endif()
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/cmake;${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/setsu/cmake")

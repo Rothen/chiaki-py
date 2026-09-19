@@ -23,6 +23,48 @@ scripts/            Native dependency / build setup scripts
 
 `chiaki_py.lib` is implemented as a thin package (`chiaki_py/lib/__init__.py`) that re-exports the compiled extension, which CMake builds directly into that same directory (`chiaki_py/lib/`, alongside the `.pyi` stubs it also generates there - see `pybind/CMakeLists.txt`). This exists because the compiled module's own internal name is "chiaki_py" (set by `PYBIND11_MODULE(chiaki_py, m)` in `pybind/src/bindings.cpp`), and this whole package is now called that too; nesting it under `lib/` avoids the two colliding on import.
 
+## Development installation (Windows)
+
+**Install first:**
+
+- [Git](https://git-scm.com/) and [Python 3.11](https://www.python.org/downloads/) (64-bit)
+- [Visual Studio](https://visualstudio.microsoft.com/) (2022 or newer) or its Build Tools, with the *Desktop development with C++* workload (MSVC + Windows SDK)
+- [LLVM](https://github.com/llvm/llvm-project/releases) for `clang-cl` (CI uses 20.1.8), [CMake](https://cmake.org/download/) and [Ninja](https://github.com/ninja-build/ninja/releases) - e.g. `choco install llvm cmake ninja`
+- [vcpkg](https://github.com/microsoft/vcpkg), with `VCPKG_ROOT` set to its folder:
+
+  ```powershell
+  git clone https://github.com/microsoft/vcpkg C:\vcpkg
+  C:\vcpkg\bootstrap-vcpkg.bat
+  setx VCPKG_ROOT C:\vcpkg    # then restart your terminal
+  ```
+
+**Then, from a Visual Studio dev shell** (*Developer PowerShell for VS*, or this repo's VS Code terminal):
+
+```powershell
+git clone https://github.com/Rothen/chiaki-py; cd chiaki-py
+
+# Python environment (protobuf + grpcio-tools are needed by nanopb's code generator;
+# keep protobuf on 5.x - the bundled nanopb breaks on the newest releases)
+python -m venv .venv; .\.venv\Scripts\Activate.ps1
+pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
+
+# FFmpeg (shared build) into deps/ - not managed by vcpkg
+Invoke-WebRequest "https://github.com/r52/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -OutFile ffmpeg.zip
+Expand-Archive ffmpeg.zip .; Rename-Item ffmpeg-n7.1-latest-win64-gpl-shared-7.1 deps; Remove-Item ffmpeg.zip
+
+# Configure + build (the first run is slow: vcpkg compiles the C dependencies)
+cmake --fresh -S . -B build-debug -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
+  -DPYTHON_EXECUTABLE="$((Get-Command python).Source)"
+cmake --build build-debug --config Debug --target chiaki-py -- -j4
+
+# Install the Python package in editable mode
+pip install -e .[psn,cv,controller]
+```
+
+This builds `chiaki_py/lib/chiaki_py.cp311-win_amd64.pyd` in place. After C++ changes, re-run only the `cmake --build` line. See below for details.
+
 ## Building the native extension
 
 [chiaki-ng](https://github.com/streetpea/chiaki-ng) doesn't need to be
@@ -34,15 +76,19 @@ cloned or built by hand on either platform below. The top-level
   this repo currently targets - pass `-DCHIAKI_NG_VERSION=<tag>` to pin a
   different one). Once `libs/chiaki-ng` exists, it's left alone on later
   configures (never re-cloned or updated in place); delete the directory to
-  fetch a different version from scratch.
+  fetch a different version from scratch. On Windows it also applies
+  chiaki-ng's `gf-complete.patch` (adds a missing `#include <intrin.h>` that
+  clang-cl needs) to the fetched sources.
 - `add_subdirectory()`s it directly (with its GUI/CLI/tests/Android/Switch/
   Steam Deck-native pieces all disabled - chiaki-py only needs the core
   `chiaki-lib`), so it's built automatically as an ordinary dependency of
   `chiaki-py` - no separate configure/build step.
 
-`-DPYTHON_EXECUTABLE` below must point at a Python that has `protobuf`
-installed (`pip install protobuf`) - nanopb's code generator (used to build
-chiaki-ng's protocol buffers) imports `google.protobuf`, and if this is
+`-DPYTHON_EXECUTABLE` below must point at a Python that has `protobuf` and
+`grpcio-tools` installed (`pip install "protobuf==5.29.3" "grpcio-tools==1.71.0"`;
+newer protobuf releases removed an API the bundled nanopb uses) - nanopb's
+code generator (used to build chiaki-ng's protocol buffers) imports
+`google.protobuf` and needs the `protoc` bundled in `grpcio-tools`, and if this is
 left unset, CMake may pick whichever Python happens to be first on `PATH`,
 which can silently lack it and fail the build partway through. It should
 also be a Python 3.11 interpreter to match the ABI the published wheel
