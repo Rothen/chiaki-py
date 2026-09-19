@@ -10,7 +10,7 @@
 #include <string>
 #include <locale>
 #include <codecvt>
-#include <fmt/core.h>
+#include <fmt/format.h>
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
@@ -62,7 +62,7 @@
             return true;
         for (int j = 16; j < 32; j++)
         {
-            if (host.rfind(std::string("172.") + fmt::format("{:x}", j) + std::string(".")))
+            if (host.rfind(fmt::format("172.{}.", j), 0) == 0)
                 return true;
         }
     }
