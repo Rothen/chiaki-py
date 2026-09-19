@@ -1,12 +1,9 @@
 name: Build (Windows)
-
-# Builds the native extension + wheel/sdist on every push/PR (so a broken
-# build is caught immediately). Also callable from other workflows
-# (workflow_call) - see publish.yml, which calls this and build-ubuntu.yml
-# and only publishes once both report success.
 on:
   push:
     branches: [main]
+    tags-ignore:
+      - "**"
   pull_request:
   workflow_dispatch:
   workflow_call:
@@ -16,17 +13,8 @@ jobs:
     name: Build wheel (win_amd64, cp311)
     runs-on: windows-latest
     env:
-      # requires-python in pyproject.toml is pinned to this same version -
-      # the wheel this produces only works with the exact CPython ABI it
-      # was built against (cp311-win_amd64). Bumping this requires also
-      # bumping pyproject.toml's requires-python, and vice versa.
       PYTHON_VERSION: "3.11"
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
-      # Pinned (rather than always cloning master's tip) for reproducibility,
-      # and so the vcpkg binary cache key below is tied to it: bumping this
-      # invalidates old cached package binaries that were built by a
-      # different vcpkg/CMake pairing, instead of silently reusing binaries
-      # built by some other pairing.
       VCPKG_TAG: "2026.07.29"
 
     defaults:
@@ -45,44 +33,16 @@ jobs:
       - name: Install Python build/CI tooling
         run: |
           python -m pip install --upgrade pip
-          # protobuf + grpcio-tools: nanopb's code generator (used building
-          # chiaki-ng's protocol buffers) imports google.protobuf and needs
-          # a protoc to compile its own nanopb.proto - it uses grpc_tools'
-          # bundled one if importable, else a protoc on PATH (none on the
-          # runner). Without them the build fails partway through with a
-          # nanopb traceback ("Failed to build nanopb_pb2.py"), not a clear
-          # "missing dep" error. Pinned (to the pair known to work locally)
-          # rather than latest: the nanopb version vendored by chiaki-ng
-          # calls google.protobuf.reflection.MakeClass, which newer protobuf
-          # releases removed ("module 'google.protobuf.reflection' has no
-          # attribute 'MakeClass'"), and grpcio-tools' bundled protoc has to
-          # match the protobuf runtime or the generated nanopb_pb2.py fails
-          # to import. grpcio-tools 1.71.0 requires protobuf>=5.26,<6.
           python -m pip install --upgrade "protobuf==5.29.3" "grpcio-tools==1.71.0" build twine pybind11_stubgen
 
       - name: Set up Ninja
         run: choco install ninja --no-progress -y
 
-      # Pinned rather than relying on whatever standalone CMake the runner
-      # image happens to preinstall (windows-latest currently ships 4.4.3,
-      # but that's an implicit dependency on the image, not something this
-      # workflow controls - the same category of surprise-version drift as
-      # clang below). choco's cmake.install package already adds itself to
-      # the machine PATH, but that PATH update doesn't reach this already-
-      # running job process, so add it to GITHUB_PATH explicitly too.
       - name: Set up CMake
         run: |
           choco install cmake --version=4.4.3 --installargs "ADD_CMAKE_TO_PATH=System" --no-progress -y --allow-downgrade --force
           echo "$env:ProgramFiles\CMake\bin" >> $env:GITHUB_PATH
 
-      # egor-tensin/setup-clang@v1's Windows path (Install-Package llvm via
-      # choco) ignores the requested "version" input entirely - it always
-      # installs/upgrades to chocolatey's latest llvm package, so this used
-      # to silently drift to whatever's newest (e.g. 22.1.8) regardless of
-      # what's asked for here. Install a pinned version directly instead.
-      # 20.1.8 is just a known-good version to stay on; it is not what
-      # avoids the "call to undeclared library function '__cpuidex'" error
-      # (that's the gf-complete patch CMake applies at configure time).
       - name: Set up Clang
         run: |
           choco install llvm --version=20.1.8 --no-progress -y --allow-downgrade
@@ -91,20 +51,9 @@ jobs:
       - name: Set up MSVC dev environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      # vcvarsall.bat (run above) sets VCPKG_ROOT to the vcpkg bundled with
-      # Visual Studio's own install on newer runner images, clobbering the
-      # job-level env.VCPKG_ROOT - reassert ours so "Set up vcpkg" below
-      # clones into a workspace-local, empty directory instead of VS's
-      # (non-empty) one.
       - name: Reset VCPKG_ROOT
         run: echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
 
-      # vcpkg builds its C dependencies (FFmpeg excluded - see below) from
-      # source on a cache miss, which is slow (protobuf/openssl/opus etc.
-      # each take real time) - this cache is keyed on vcpkg.json and
-      # VCPKG_TAG, so it invalidates both when a dependency is added/changed
-      # and when the pinned vcpkg tool moves, rather than silently reusing
-      # package binaries a different vcpkg version produced.
       - name: Cache vcpkg binary cache
         uses: actions/cache@v4
         with:
@@ -118,29 +67,8 @@ jobs:
           git clone --branch "$env:VCPKG_TAG" --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
 
-      # Configure also fetches chiaki-ng into libs/ (pinned to
-      # CHIAKI_NG_VERSION in CMakeLists.txt), applies its gf-complete patch,
-      # and downloads the prebuilt shared FFmpeg into deps/ (chiaki-lib
-      # links it directly, not via vcpkg) - see the comments there.
       - name: Configure
         run: |
-          $pythonExe = python -c "import sys; print(sys.executable)"
-          # CMAKE_POLICY_VERSION_MINIMUM must be quoted: Windows PowerShell
-          # mis-tokenizes an unquoted -DFOO=3.5-style argument into two argv
-          # entries ("-DFOO=3" and ".5") when building a native command line,
-          # silently truncating it to "3" - which every dependency further
-          # down that needs this fallback (fmt, protobuf, sdl2, curl,
-          # nanopb, chiaki-ng, pybind11, ...) then rejects with "Invalid
-          # CMAKE_POLICY_VERSION_MINIMUM value \"3\"".
-          # CMAKE_C/CXX_COMPILER is the full path to the clang-cl we pinned
-          # above, not the bare "clang-cl" name: the runner image also ships
-          # its own separate clang-cl as a Visual Studio component (under
-          # .../VC/Tools/Llvm/x64/bin), and "Set up MSVC dev environment"
-          # below (vcvarsall.bat) prepends VS's own tool directories to
-          # PATH - the same thing that clobbers VCPKG_ROOT above. A bare
-          # "clang-cl" name resolved via PATH would silently pick up VS's
-          # bundled one instead of the version we just installed, making
-          # the pin above a no-op.
           cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM="3.5" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `

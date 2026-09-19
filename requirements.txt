@@ -6,4 +6,4 @@ pycryptodomex==3.23.0
 PyQt6==6.11.0
 PyQt6-WebEngine==6.11.0
 opencv-python==5.0.0.93
-dualsense-py==0.3.2
+dualsense-py==0.3.3

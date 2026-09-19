@@ -67,9 +67,6 @@ def pick_host(hosts: list[DiscoveryHost]) -> DiscoveryHost:
 def pairing_cache_path(app_dir: str, host: DiscoveryHost) -> str:
     hosts_dir = os.path.join(app_dir, "hosts")
     os.makedirs(hosts_dir, exist_ok=True)
-    # host_id is the console's MAC - stable across reboots/DHCP renewals,
-    # unlike host_addr (its current IP), which we still re-read fresh from
-    # discovery below rather than trusting a possibly stale cached value.
     return os.path.join(hosts_dir, f"{host.host_id}.json")
 
 
@@ -80,18 +77,14 @@ def get_connect_kwargs(settings: Settings, host: DiscoveryHost, app_dir: str, fo
         print(f"Reusing saved pairing for '{host.host_name}'.")
         cached = ChiakiPySettings.from_file(cache_path)
         return {
-            "host": host.host_addr,  # always use the address we just discovered, not a possibly-stale cached one
+            "host": host.host_addr,
             "nickname": cached.nickname,
-            # Stored exactly as register() returned it (the key's own text),
-            # not hex-encoded bytes - Session.connect() takes it as a str.
             "regist_key": cached.regist_key,
             "morning": bytes.fromhex(cached.morning),
             "target": host.target,
         }
 
     psn_account = PSNLoginQt.load_or_get(os.path.join(app_dir, "psn_account.json"))
-    # The registration handshake wants the PS5 base64 account id or the PS4
-    # online id, depending on which console we're pairing with.
     psn_id = psn_account.user_rpid if host.ps5 else psn_account.online_id
 
     pin = input("Enter the registration PIN shown on the console's Link Device screen: ").strip()
@@ -139,13 +132,8 @@ def main() -> None:
 
     try:
         with session:
-            controller_attached = False # setup_controller(session.stream_session)
-
-            # Ctrl+C only reaches this process if your *terminal* has
-            # keyboard focus - clicking the video window and pressing
-            # Ctrl+C there does nothing, since that keystroke goes to the
-            # OpenCV window instead. Press 'q' with the video window
-            # focused, or Ctrl+C with the terminal focused; both work.
+            controller_attached = setup_controller(session.stream_session)
+            
             print("Streaming - press 'q' in the video window, or Ctrl+C in the terminal, to quit.")
             try:
                 for frame in session.frames(max_fps=60):
