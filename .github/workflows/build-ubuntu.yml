@@ -55,14 +55,48 @@ jobs:
             - name: Build chiaki-py
               run: cmake --build build-release --config Release --target chiaki-py -- -j"$(nproc)"
 
-            - name: Build wheel + sdist
-              run: python -m build
+            # Wheel only: the sdist is published from the Windows job (see
+            # publish.yml) - building one here too would upload a second,
+            # differently-populated file under the same name.
+            - name: Build wheel
+              run: python -m build --wheel --outdir wheelhouse-raw
+
+            # The wheel above is tagged linux_x86_64, which PyPI rejects, and
+            # its extension dynamically links the system FFmpeg/SDL2/OpenSSL/
+            # etc. that this runner has installed. auditwheel copies those
+            # shared libraries into the wheel (chiaki_py.libs/), points the
+            # extension's RPATH at them, and retags the result manylinux_2_N -
+            # N being the glibc version the build actually needs (this
+            # runner's, so users need a distro at least that new).
+            - name: Repair wheel (bundle shared libraries, manylinux tag)
+              run: |
+                  python -m pip install auditwheel patchelf
+                  auditwheel show wheelhouse-raw/*.whl
+                  auditwheel repair wheelhouse-raw/*.whl --wheel-dir dist
 
             - name: Check distributions
               run: python -m twine check dist/*
 
-            # CI artifact only - not published to PyPI (linux_x86_64 wheels are
-            # rejected there; see publish.yml).
+            # Import the repaired wheel from outside the checkout (so the
+            # source tree's chiaki_py/ can't shadow it) in a fresh venv, and
+            # show where the extension's shared libraries resolve from. This
+            # runner still has the system libraries installed, so a
+            # successful import can't by itself prove bundling worked - the
+            # ldd listing (libs under chiaki_py.libs/ vs. /lib/x86_64-...)
+            # is the evidence. numpy/pydantic are the only third-party
+            # imports chiaki_py.lib pulls in at import time; the other
+            # declared dependencies (PyQt6, opencv, ...) are only used by
+            # optional submodules.
+            - name: Smoke test wheel
+              working-directory: ${{ runner.temp }}
+              run: |
+                  python -m venv smoke-venv
+                  smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
+                  smoke-venv/bin/python -m pip install numpy pydantic
+                  smoke-venv/bin/python -c "import chiaki_py.lib as lib; print(lib.__file__); assert 'site-packages' in lib.__file__"
+                  ldd smoke-venv/lib/python3.11/site-packages/chiaki_py/lib/chiaki_py.*.so
+
+            # Published to PyPI by publish.yml alongside the Windows wheel.
             - uses: actions/upload-artifact@v4
               with:
                   name: dist-ubuntu

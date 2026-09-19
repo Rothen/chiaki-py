@@ -6,8 +6,9 @@ readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Benjamin Ricchiuto", email = "beni.heu@gmail.com" }]
-# The published wheel bundles a compiled extension built against a specific
-# CPython ABI (currently cp311) - see scripts/build_wheel.ps1. Widening this
+# The published wheels bundle a compiled extension built against a specific
+# CPython ABI (currently cp311) - see scripts/build_wheel.ps1 (Windows) and
+# .github/workflows/build-ubuntu.yml (Linux). Widening this
 # without also building/publishing wheels for the added versions would let
 # pip "successfully" install a package with no usable native module on them.
 requires-python = ">=3.11,<3.12"
@@ -15,6 +16,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",

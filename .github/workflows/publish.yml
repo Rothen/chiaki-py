@@ -5,10 +5,12 @@ name: Publish to PyPI
 # some earlier, possibly-stale push/PR run) and only publishes once both
 # report success - see "publish" job's `needs:` below.
 #
-# Only the Windows wheel + sdist are published. The Ubuntu build acts as a
-# release gate only: its wheel is tagged linux_x86_64, which PyPI rejects
-# (only manylinux/musllinux tags are accepted), and it doesn't bundle FFmpeg,
-# SDL2, etc., so it isn't portable anyway. Linux users build from source.
+# Published files: the Windows wheel (win_amd64) + sdist from dist-windows,
+# and the Ubuntu wheel from dist-ubuntu. The Ubuntu wheel has been through
+# `auditwheel repair` (see build-ubuntu.yml), which bundles the FFmpeg/SDL2/
+# etc. shared libraries and retags it manylinux_2_N - a bare linux_x86_64
+# wheel would be rejected by PyPI. The sdist is deliberately built by only
+# one of the two jobs, so the merged dist/ below has no duplicate filenames.
 on:
   release:
     types: [published]
@@ -36,9 +38,14 @@ jobs:
     permissions:
       id-token: write
     steps:
+      # Both jobs' artifacts (dist-windows, dist-ubuntu) into one flat dist/.
       - uses: actions/download-artifact@v4
         with:
-          name: dist-windows
+          pattern: dist-*
+          merge-multiple: true
           path: dist/
+
+      - name: List distributions
+        run: ls -l dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1

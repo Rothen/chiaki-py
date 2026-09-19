@@ -209,8 +209,13 @@ Edits to `chiaki_py/` or `examples/` take effect immediately; edits under `pybin
 pip install chiaki-py
 ```
 
-Only prebuilt for Windows/cp311 right now (see `requires-python` in
-`pyproject.toml`) - it bundles a compiled extension, not pure Python.
+Prebuilt for Windows (win_amd64) and Linux (x86_64, `manylinux`) on
+Python 3.11 only right now (see `requires-python` in `pyproject.toml`) - it
+bundles a compiled extension, not pure Python. The Linux wheel is built on
+Ubuntu and bundles its shared libraries (FFmpeg, SDL2, ...) via
+`auditwheel`, so it needs a distro with a glibc at least as new as the
+`manylinux_2_N` tag in its filename; older ones can build from source
+instead (see "Ubuntu / Debian" above).
 
 Optional dependency groups (`pyproject.toml`):
 
@@ -233,14 +238,15 @@ pip install -e .[psn,cv,controller]
 
 ### Releasing
 
-`.github/workflows/release.yml` builds the wheel + sdist on every push/PR
-(so a broken build is caught immediately) and publishes to PyPI whenever a
-GitHub Release is published, via [PyPI Trusted
+`.github/workflows/build-windows.yml` and `build-ubuntu.yml` build the
+wheels (plus the sdist, from the Windows job) on every push/PR, so a broken
+build is caught immediately. `.github/workflows/publish.yml` re-runs both
+and publishes all of it to PyPI whenever a GitHub Release is published, via [PyPI Trusted
 Publishing](https://docs.pypi.org/trusted-publishers/) - no stored API
 token. One-time setup on pypi.org, before the first release: under the
 project's (or, pre-first-publish, your account's pending publishers)
 Publishing settings, add a trusted publisher for owner `Rothen`, repo
-`chiaki-py`, workflow `release.yml`, environment `pypi`.
+`chiaki-py`, workflow `publish.yml`, environment `pypi`.
 
 To cut a release: bump `version` in `pyproject.toml` and
 `CHIAKI_PY_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt` (kept in sync -
@@ -285,7 +291,7 @@ with Session.connect(settings, **connect_info_kwargs(result, host=host.host_addr
 ## Known limitations
 
 - Verified building/running on Windows and Ubuntu (see above); other Linux distros and macOS aren't set up yet (`pybind/CMakeLists.txt`'s non-Windows branches assume apt package names/layouts).
-- The published PyPI wheel is Windows/cp311-only right now (see "Installing as a package" below) - Linux builds are source-only for the moment, via the steps above.
+- The published PyPI wheels are Windows/Linux x86_64, cp311-only right now (see "Installing as a package" below); other platforms and Python versions build from source.
 - PS4 pairing/registration is implemented but has seen far less real-world testing than PS5 in this codebase.
 
 ## License
