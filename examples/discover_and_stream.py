@@ -82,7 +82,9 @@ def get_connect_kwargs(settings: Settings, host: DiscoveryHost, app_dir: str, fo
         return {
             "host": host.host_addr,  # always use the address we just discovered, not a possibly-stale cached one
             "nickname": cached.nickname,
-            "regist_key": bytes.fromhex(cached.regist_key),
+            # Stored exactly as register() returned it (the key's own text),
+            # not hex-encoded bytes - Session.connect() takes it as a str.
+            "regist_key": cached.regist_key,
             "morning": bytes.fromhex(cached.morning),
             "target": host.target,
         }

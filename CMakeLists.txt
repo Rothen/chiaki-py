@@ -106,6 +106,57 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/cmake;${CMAKE_CURRENT_SOURCE_DIR}/libs/chiaki-ng/setsu/cmake")
 
+# FFmpeg on Windows: not managed by vcpkg - chiaki-ng's find_package(FFMPEG)
+# and pybind/CMakeLists.txt both use a prebuilt shared FFmpeg release
+# unpacked into deps/ (headers in deps/include, import libs in deps/lib,
+# DLLs in deps/bin). Download it there at configure time when it isn't
+# already present (checked via deps/lib/avcodec.lib); a populated deps/ is
+# left alone. Override the archive with -DCHIAKI_PY_FFMPEG_URL=<url>. On
+# Linux/macOS FFmpeg comes from the system package manager instead.
+# This has to happen before chiaki-ng is add_subdirectory'd below, since
+# that already looks for FFmpeg.
+if(WIN32)
+    set(CHIAKI_PY_FFMPEG_URL "https://github.com/r52/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
+        CACHE STRING "Prebuilt shared Windows FFmpeg release (zip) to unpack into deps/")
+    set(CHIAKI_PY_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+    if(NOT EXISTS "${CHIAKI_PY_DEPS_DIR}/lib/avcodec.lib")
+        set(_ffmpeg_zip "${CMAKE_BINARY_DIR}/ffmpeg.zip")
+        set(_ffmpeg_extract "${CMAKE_BINARY_DIR}/ffmpeg-extract")
+
+        message(STATUS "Downloading FFmpeg into ${CHIAKI_PY_DEPS_DIR}: ${CHIAKI_PY_FFMPEG_URL}")
+        file(DOWNLOAD "${CHIAKI_PY_FFMPEG_URL}" "${_ffmpeg_zip}" SHOW_PROGRESS STATUS _ffmpeg_status)
+        list(GET _ffmpeg_status 0 _ffmpeg_status_code)
+        if(NOT _ffmpeg_status_code EQUAL 0)
+            file(REMOVE "${_ffmpeg_zip}")
+            message(FATAL_ERROR "Failed to download FFmpeg from ${CHIAKI_PY_FFMPEG_URL}: ${_ffmpeg_status}")
+        endif()
+
+        file(REMOVE_RECURSE "${_ffmpeg_extract}")
+        file(MAKE_DIRECTORY "${_ffmpeg_extract}")
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xf "${_ffmpeg_zip}"
+            WORKING_DIRECTORY "${_ffmpeg_extract}"
+            RESULT_VARIABLE _ffmpeg_extract_result
+        )
+        if(NOT _ffmpeg_extract_result EQUAL 0)
+            message(FATAL_ERROR "Failed to extract ${_ffmpeg_zip}")
+        endif()
+
+        # The archive holds a single top-level folder (bin/, include/, lib/
+        # inside); copy its contents into deps/, merging with whatever is
+        # already there (e.g. a fetched deps/pybind11).
+        file(GLOB _ffmpeg_roots LIST_DIRECTORIES true "${_ffmpeg_extract}/*")
+        list(GET _ffmpeg_roots 0 _ffmpeg_root)
+        file(COPY "${_ffmpeg_root}/" DESTINATION "${CHIAKI_PY_DEPS_DIR}")
+        file(REMOVE_RECURSE "${_ffmpeg_extract}")
+        file(REMOVE "${_ffmpeg_zip}")
+
+        if(NOT EXISTS "${CHIAKI_PY_DEPS_DIR}/lib/avcodec.lib")
+            message(FATAL_ERROR "FFmpeg archive ${CHIAKI_PY_FFMPEG_URL} did not contain lib/avcodec.lib")
+        endif()
+    endif()
+endif()
+
 # chiaki-ng's own find_package(FFMPEG ...) (pkg-config based) needs to see
 # this repo's vendored FFmpeg dev files.
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps")

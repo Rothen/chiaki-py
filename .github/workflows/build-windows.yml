@@ -118,24 +118,10 @@ jobs:
           git clone --branch "$env:VCPKG_TAG" --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
 
-      # chiaki-lib links FFmpeg directly (not vcpkg-managed - see
-      # pybind/CMakeLists.txt) via deps/, which is gitignored/vendored
-      # locally. Reproduce it here the same way scripts/setup.ps1 does for
-      # local dev: a prebuilt shared Windows FFmpeg release. Only the
-      # FFmpeg piece is needed - libplacebo/shaderc/SPIRV-Cross (also built
-      # into deps/ locally) are chiaki-ng GUI-only, and the GUI is disabled
-      # for chiaki-py's build (see CMakeLists.txt's CHIAKI_ENABLE_* set()s).
-      - name: Fetch FFmpeg into deps/
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri "https://github.com/r52/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -OutFile ffmpeg.zip
-          Expand-Archive -LiteralPath ffmpeg.zip -DestinationPath .
-          Rename-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1" "deps"
-          Remove-Item ffmpeg.zip
-
       # Configure also fetches chiaki-ng into libs/ (pinned to
-      # CHIAKI_NG_VERSION in CMakeLists.txt) and applies its gf-complete
-      # patch - see the comments there.
+      # CHIAKI_NG_VERSION in CMakeLists.txt), applies its gf-complete patch,
+      # and downloads the prebuilt shared FFmpeg into deps/ (chiaki-lib
+      # links it directly, not via vcpkg) - see the comments there.
       - name: Configure
         run: |
           $pythonExe = python -c "import sys; print(sys.executable)"

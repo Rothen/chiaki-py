@@ -134,9 +134,9 @@ if(NOT WIN32)
     set_target_properties(chiaki-py PROPERTIES SKIP_BUILD_RPATH TRUE)
 endif()
 
-# FFmpeg: on Windows this repo vendors prebuilt import libs/headers under
-# deps/ (see scripts/setup.ps1 and the CI workflow, which fetch a prebuilt
-# shared FFmpeg release there - vcpkg doesn't manage FFmpeg here). On
+# FFmpeg: on Windows this repo uses prebuilt import libs/headers under
+# deps/ (downloaded there at configure time by the top-level CMakeLists.txt
+# when missing - vcpkg doesn't manage FFmpeg here). On
 # Linux/macOS, link against the system/distro FFmpeg dev packages instead
 # (e.g. libavcodec-dev, libavformat-dev, libavutil-dev, libswscale-dev on
 # Ubuntu/Debian) via pkg-config, which is how chiaki-ng itself finds FFmpeg.

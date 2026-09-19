@@ -48,11 +48,8 @@ git clone https://github.com/Rothen/chiaki-py; cd chiaki-py
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
 
-# FFmpeg (shared build) into deps/ - not managed by vcpkg
-Invoke-WebRequest "https://github.com/r52/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -OutFile ffmpeg.zip
-Expand-Archive ffmpeg.zip .; Rename-Item ffmpeg-n7.1-latest-win64-gpl-shared-7.1 deps; Remove-Item ffmpeg.zip
-
-# Configure + build (the first run is slow: vcpkg compiles the C dependencies)
+# Configure + build (the first run is slow: it downloads FFmpeg into deps/
+# and chiaki-ng into libs/, and vcpkg compiles the C dependencies)
 cmake --fresh -S . -B build-debug -G Ninja "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
   -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Debug `
@@ -79,6 +76,9 @@ cloned or built by hand on either platform below. The top-level
   fetch a different version from scratch. On Windows it also applies
   chiaki-ng's `gf-complete.patch` (adds a missing `#include <intrin.h>` that
   clang-cl needs) to the fetched sources.
+- on Windows, downloads a prebuilt shared FFmpeg into `deps/` (unless
+  `deps/lib/avcodec.lib` already exists; override the archive with
+  `-DCHIAKI_PY_FFMPEG_URL=<zip url>`).
 - `add_subdirectory()`s it directly (with its GUI/CLI/tests/Android/Switch/
   Steam Deck-native pieces all disabled - chiaki-py only needs the core
   `chiaki-lib`), so it's built automatically as an ordinary dependency of
