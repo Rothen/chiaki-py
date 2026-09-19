@@ -27,7 +27,7 @@ jobs:
       # invalidates old cached package binaries that were built by a
       # different vcpkg/CMake pairing, instead of silently reusing binaries
       # built by some other pairing.
-      VCPKG_TAG: "2026.04.08"
+      VCPKG_TAG: "2026.07.29"
 
     defaults:
       run:
