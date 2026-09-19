@@ -18,9 +18,7 @@ else()
     add_compile_options(
         -std=c++17
         $<$<CONFIG:RELEASE>:-Ofast>
-        $<$<CONFIG:RELEASE>:-march=native>
         $<$<CONFIG:RELWITHDEBINFO>:-Ofast>
-        $<$<CONFIG:RELWITHDEBINFO>:-march=native>
         $<$<CONFIG:DEBUG>:-O0>
         $<$<CONFIG:DEBUG>:-ggdb3>
     )

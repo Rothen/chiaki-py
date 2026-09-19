@@ -31,7 +31,7 @@ sudo apt-get install -y \
     build-essential ninja-build cmake git pkg-config nasm \
     python3-dev \
     protobuf-compiler libprotobuf-dev \
-    libopus-dev libjson-c-dev libminiupnpc-dev libpsl-dev libevdev-dev \
+    libopus-dev libjson-c-dev libminiupnpc-dev libpsl-dev libevdev-dev libevent-dev \
     libgf-complete-dev libspeexdsp-dev libidn2-dev libnghttp2-dev libssh2-1-dev \
     libfmt-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavdevice-dev \
     libsdl2-dev libhidapi-dev libssl-dev libfftw3-dev liblcms2-dev libvulkan-dev zlib1g-dev

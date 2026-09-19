@@ -4,6 +4,11 @@ name: Publish to PyPI
 # Ubuntu builds as reusable workflows (rather than downloading artifacts from
 # some earlier, possibly-stale push/PR run) and only publishes once both
 # report success - see "publish" job's `needs:` below.
+#
+# Only the Windows wheel + sdist are published. The Ubuntu build acts as a
+# release gate only: its wheel is tagged linux_x86_64, which PyPI rejects
+# (only manylinux/musllinux tags are accepted), and it doesn't bundle FFmpeg,
+# SDL2, etc., so it isn't portable anyway. Linux users build from source.
 on:
   release:
     types: [published]
@@ -34,11 +39,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist-windows
-          path: dist/
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist-ubuntu
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
