@@ -71,10 +71,9 @@ jobs:
       # installs/upgrades to chocolatey's latest llvm package, so this used
       # to silently drift to whatever's newest (e.g. 22.1.8) regardless of
       # what's asked for here. Install a pinned version directly instead.
-      # 20.1.8 specifically because it's the version confirmed (locally,
-      # against this repo's actual vendored gf-complete sources and flags)
-      # not to hit the "call to undeclared library function '__cpuidex'"
-      # failure some other clang builds ran into here.
+      # 20.1.8 is just a known-good version to stay on; it is not what
+      # avoids the "call to undeclared library function '__cpuidex'" error
+      # (that's the gf-complete patch applied below).
       - name: Set up Clang
         run: |
           choco install llvm --version=20.1.8 --no-progress -y --allow-downgrade
@@ -124,6 +123,36 @@ jobs:
           Expand-Archive -LiteralPath ffmpeg.zip -DestinationPath .
           Rename-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1" "deps"
           Remove-Item ffmpeg.zip
+
+      # Cloned here rather than left to CMakeLists.txt's FetchContent so the
+      # patches below can be applied before Configure: CMake only fetches
+      # when libs/chiaki-ng/CMakeLists.txt is missing, so pre-populating it
+      # makes it skip its own fetch. Same repo and submodule list as
+      # CMakeLists.txt; CHIAKI_NG_VERSION must be a tag or branch (not a
+      # bare commit) and should match CMakeLists.txt's default.
+      - name: Fetch chiaki-ng into libs/
+        env:
+          CHIAKI_NG_VERSION: "v1.9.6"
+        run: |
+          git clone --branch "$env:CHIAKI_NG_VERSION" --depth 1 https://github.com/streetpea/chiaki-ng libs/chiaki-ng
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C libs/chiaki-ng submodule update --init --depth 1 -- third-party/nanopb third-party/jerasure third-party/gf-complete third-party/curl third-party/cpp-steam-tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # chiaki-ng applies this patch itself in its own Windows workflows
+      # right after cloning (scripts/windows-vc/gf-complete.patch): upstream
+      # gf-complete's gf_cpu.c calls __cpuidex() in its _MSC_VER branch
+      # without including <intrin.h>, which clang-cl rejects as an implicit
+      # function declaration ("call to undeclared library function
+      # '__cpuidex'"). Not applied: its other patch, libplacebo-pc.patch -
+      # that edits deps/lib/pkgconfig/libplacebo.pc, which only exists where
+      # libplacebo is built (chiaki-ng's GUI, disabled here); deps/ in this
+      # workflow only holds FFmpeg, so it would fail with "No such file".
+      - name: Apply chiaki-ng patches
+        working-directory: libs/chiaki-ng
+        run: |
+          git apply --ignore-whitespace --verbose --directory=third-party/gf-complete/ scripts/windows-vc/gf-complete.patch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Configure
         run: |
