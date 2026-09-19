@@ -41,6 +41,22 @@ if(WIN32)
     list(APPEND CMAKE_REQUIRED_LIBRARIES "ws2_32" "crypt32")
 endif()
 
+if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+    # chiaki-ng's vendored gf-complete (libs/chiaki-ng/third-party/gf-complete,
+    # fetched below - not something we can patch directly) uses __cpuidex()
+    # in src/gf_cpu.c without ever including <intrin.h> (its _MSC_VER branch
+    # just assumes the declaration arrives transitively). clang-cl treats
+    # the resulting implicit declaration as an error, regardless of clang
+    # version. Force-including intrin.h into every translation unit supplies
+    # the declaration, and is a no-op everywhere it isn't needed.
+    #
+    # A local libs/chiaki-ng checkout can mask this: it only builds if
+    # gf_cpu.c there has been hand-edited to add `#include <intrin.h>`
+    # (check `git -C libs/chiaki-ng/third-party/gf-complete diff`). CI
+    # fetches a pristine copy, so it hits the error the local build doesn't.
+    add_compile_options("/FIintrin.h")
+endif()
+
 add_definitions(-DCHIAKI_PY_VERSION_MAJOR=${CHIAKI_PY_VERSION_MAJOR} -DCHIAKI_PY_VERSION_MINOR=${CHIAKI_PY_VERSION_MINOR} -DCHIAKI_PY_VERSION_PATCH=${CHIAKI_PY_VERSION_PATCH} -DCHIAKI_PY_VERSION=\"${CHIAKI_PY_VERSION}\")
 
 # chiaki-ng (https://github.com/streetpea/chiaki-ng) is the underlying
