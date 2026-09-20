@@ -148,7 +148,7 @@ jobs:
                       fi
                   done
 
-                  DYLD_PRINT_LIBRARIES=1 smoke-venv/bin/python -X faulthandler -c "
+                  DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_INITIALIZERS=1 smoke-venv/bin/python -X faulthandler -c "
                   import faulthandler, sys
                   faulthandler.dump_traceback_later(90, exit=True)
                   print('importing chiaki_py.lib', flush=True)
@@ -169,7 +169,7 @@ jobs:
                       echo "::error::import of chiaki_py.lib hung"
                       sample $pid 5 -file sample.txt || true
                       echo "== native stack sample"
-                      head -n 150 sample.txt || true
+                      cat sample.txt || true
                       kill -9 $pid
                   fi
 
@@ -178,6 +178,28 @@ jobs:
                   echo "== import log ($(wc -l < import.log) lines; last 40)"
                   tail -n 40 import.log
                   exit $(( status || import_status ))
+
+            # Only runs when the smoke test fails. Loads every bundled dylib
+            # (and the extension) on its own, in a separate process with a
+            # 15s watchdog, so a hang or load error is attributed to one
+            # specific file instead of "the import".
+            - name: Diagnose (dlopen each bundled library)
+              if: failure()
+              working-directory: ${{ runner.temp }}
+              run: |
+                  site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+                  for f in "$site"/chiaki_py/.dylibs/*.dylib "$site"/chiaki_py/lib/chiaki_py.*.so; do
+                      if smoke-venv/bin/python -c "
+                  import ctypes, faulthandler, sys
+                  faulthandler.dump_traceback_later(15, exit=True)
+                  ctypes.CDLL(sys.argv[1])
+                  " "$f" > dlopen.log 2>&1; then
+                          echo "ok    $(basename "$f")"
+                      else
+                          echo "FAIL  $(basename "$f")"
+                          head -n 3 dlopen.log | sed 's/^/        /'
+                      fi
+                  done
 
             # Published to PyPI by publish.yml alongside the Windows and Linux
             # wheels once it calls this workflow.
