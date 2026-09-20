@@ -11,17 +11,17 @@ on:
 
 jobs:
     build:
-        name: Build wheel (macosx_15_0_arm64, cp311)
-        # macos-15 is an Apple Silicon (arm64) runner. Homebrew bottles are
+        name: Build wheel (macosx_14_0_arm64, cp311)
+        # macos-14 is an Apple Silicon (arm64) runner. Homebrew bottles are
         # built for the OS they're installed on, so the wheel's minimum macOS
-        # version follows this runner (15.0), not the older 12/13 that
+        # version follows this runner (14.0), not the older 12/13 that
         # chiaki-ng's own CMakeLists picks for its GUI app. (macos-14 was
         # dropped: Homebrew no longer builds bottles for it, so every
-        # dependency was compiled from source - a 15 minute install.)
-        runs-on: macos-15
+        # dependency was compiled from source - a 14 minute install.)
+        runs-on: macos-14
         env:
             PYTHON_VERSION: "3.11"
-            MACOSX_DEPLOYMENT_TARGET: "15.0"
+            MACOSX_DEPLOYMENT_TARGET: "14.0"
 
         defaults:
             run:
@@ -46,7 +46,8 @@ jobs:
             # protobuf@29 (not the current `protobuf`) matches what chiaki-ng's
             # own macOS workflow builds against. It's keg-only, hence the
             # explicit CMAKE_PREFIX_PATH entries in Configure. zlib comes from
-            # the macOS SDK.
+            # the macOS SDK. SDL2 is deliberately not in this list - see the
+            # next step.
             - name: Install native dependencies
               run: |
                   brew update
@@ -54,8 +55,37 @@ jobs:
                       cmake ninja nasm pkgconf \
                       protobuf@29 openssl@3 fmt \
                       opus json-c miniupnpc libevent speexdsp \
-                      ffmpeg sdl2 hidapi fftw lcms2 \
+                      ffmpeg hidapi fftw lcms2 \
                       vulkan-headers vulkan-loader
+
+            # Homebrew's `sdl2` is now an alias for sdl2-compat, a shim that
+            # loads SDL3 with dlopen() when it is itself loaded. delocate
+            # only bundles libraries a binary is *linked* against, so the
+            # wheel got the shim but not libSDL3, and merely dlopen()ing the
+            # bundled libSDL2-2.0.0.dylib hung forever (no error, no exit).
+            # Build real SDL2 from source instead: it has no dependencies
+            # beyond system frameworks, so delocate bundles it whole. ffmpeg
+            # pulls sdl2-compat in as a dependency, so unlink it - otherwise
+            # chiaki-ng's FindSDL2 (which tries the sdl2-compat pkg-config
+            # module before sdl2) would pick the shim again.
+            - name: Build SDL2 (real SDL2, not sdl2-compat)
+              run: |
+                  brew unlink sdl2-compat || true
+                  if pkg-config --exists sdl2-compat; then
+                      echo "::error::sdl2-compat is still visible to pkg-config"
+                      exit 1
+                  fi
+                  prefix="$RUNNER_TEMP/sdl2"
+                  echo "SDL2_PREFIX=$prefix" >> "$GITHUB_ENV"
+                  git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL2-src"
+                  cmake -S "$RUNNER_TEMP/SDL2-src" -B "$RUNNER_TEMP/SDL2-build" -G Ninja \
+                    -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_OSX_ARCHITECTURES=arm64 \
+                    -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+                    -DCMAKE_INSTALL_PREFIX="$prefix" \
+                    -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF
+                  cmake --build "$RUNNER_TEMP/SDL2-build"
+                  cmake --install "$RUNNER_TEMP/SDL2-build"
 
             # Apple Silicon Homebrew lives in /opt/homebrew, which clang and
             # ld don't search by default - unlike /usr/local on Intel. Several
@@ -66,16 +96,24 @@ jobs:
               run: |
                   echo "CPATH=$(brew --prefix)/include" >> "$GITHUB_ENV"
                   echo "LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
-                  echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf@29)/lib/pkgconfig" >> "$GITHUB_ENV"
+                  echo "PKG_CONFIG_PATH=$SDL2_PREFIX/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf@29)/lib/pkgconfig" >> "$GITHUB_ENV"
                   echo "$(brew --prefix protobuf@29)/bin" >> "$GITHUB_PATH"
 
             # -rpath: pybind/CMakeLists.txt sets SKIP_BUILD_RPATH on non-Windows
             # targets, so the extension carries no LC_RPATH. Most Homebrew
             # dylibs have absolute install names and don't need one, but a few
             # (e.g. libvulkan) use @rpath/..., which delocate can't resolve
-            # below without it.
+            # below without it. The same goes for the SDL2 built above, whose
+            # install name is @rpath/libSDL2-2.0.0.dylib.
             - name: Configure
               run: |
+                  # Fail here, not at runtime, if the build would pick up the
+                  # sdl2-compat shim instead of the real SDL2 built above.
+                  pkg-config --modversion sdl2
+                  if pkg-config --exists sdl2-compat; then
+                      echo "::error::sdl2-compat is visible to pkg-config; the wheel would bundle the shim"
+                      exit 1
+                  fi
                   cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
                     -DCMAKE_BUILD_TYPE=Release \
                     -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
@@ -83,9 +121,9 @@ jobs:
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
                     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
                     -DPython3_EXECUTABLE="$(which python)" -DPython_EXECUTABLE="$(which python)" -DPYTHON_EXECUTABLE="$(which python)" \
-                    -DCMAKE_PREFIX_PATH="$(brew --prefix);$(brew --prefix openssl@3);$(brew --prefix protobuf@29)" \
-                    -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib" \
-                    -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib"
+                    -DCMAKE_PREFIX_PATH="$SDL2_PREFIX;$(brew --prefix);$(brew --prefix openssl@3);$(brew --prefix protobuf@29)" \
+                    -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib -Wl,-rpath,$SDL2_PREFIX/lib" \
+                    -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib -Wl,-rpath,$SDL2_PREFIX/lib"
 
             - name: Build chiaki-py
               run: cmake --build build-release --config Release --target chiaki-py -- -j"$(sysctl -n hw.ncpu)"
@@ -97,7 +135,7 @@ jobs:
             # report universal2, which this arm64-only extension isn't.
             - name: Build wheel
               env:
-                  _PYTHON_HOST_PLATFORM: macosx-15.0-arm64
+                  _PYTHON_HOST_PLATFORM: macosx-14.0-arm64
                   ARCHFLAGS: "-arch arm64"
               run: python -m build --wheel --outdir wheelhouse-raw
 
