@@ -125,7 +125,7 @@ def main() -> None:
     settings = Settings()
     settings.set_log_verbose(False)
 
-    target = Target.PS5_1 if config.ps5 else Target.PS4_1
+    target = Target.PS5_1
     session = Session.connect(
         settings,
         host=config.host,
