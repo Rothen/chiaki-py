@@ -1,20 +1,5 @@
 name: Publish to PyPI
 
-# Publishes to PyPI when a GitHub Release is published, and to TestPyPI when
-# run manually (workflow_dispatch) - a manual run never touches the real
-# index. Runs the Windows, Ubuntu and macOS builds as reusable workflows
-# (rather than downloading artifacts from some earlier, possibly-stale
-# push/PR run) and only publishes once all report success - see the publish
-# jobs' `needs:` below.
-#
-# Published files: the Windows wheel (win_amd64) + sdist from dist-windows,
-# the Ubuntu wheel from dist-ubuntu, and the macOS wheel from dist-macos. The
-# Ubuntu wheel has been through `auditwheel repair` (see build-ubuntu.yml),
-# which bundles the FFmpeg/SDL2/etc. shared libraries and retags it
-# manylinux_2_N - a bare linux_x86_64 wheel would be rejected by PyPI. The
-# macOS wheel has likewise been through `delocate-wheel` (see
-# build-macos.yml). The sdist is deliberately built by only one of the
-# jobs, so the merged dist/ below has no duplicate filenames.
 on:
   release:
     types: [published]
@@ -35,9 +20,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: [build-windows, build-ubuntu, build-macos]
     runs-on: ubuntu-latest
-    # Same one-time setup as the PyPI job below, but done separately on
-    # test.pypi.org (its own account and its own publisher list): owner
-    # Rothen, repo chiaki-py, workflow publish.yml, environment testpypi.
     environment:
       name: testpypi
       url: https://test.pypi.org/project/chiaki-py/
@@ -53,13 +35,6 @@ jobs:
       - name: List distributions
         run: ls -l dist/
 
-      # TestPyPI, like PyPI, never accepts the same filename twice - each
-      # test upload needs a version that hasn't been uploaded before. The
-      # version is derived from the git tag (setuptools-scm), so a manual run
-      # from a commit past the latest tag is a dev version (e.g. 0.1.2.dev3)
-      # that changes with every new commit. skip-existing keeps a re-run of
-      # this job on the same commit from failing outright on files already
-      # there, but it also means such a re-run uploads nothing new, silently.
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
@@ -70,19 +45,12 @@ jobs:
     if: github.event_name == 'release'
     needs: [build-windows, build-ubuntu, build-macos]
     runs-on: ubuntu-latest
-    # One-time setup on pypi.org (Your project > Publishing > Add a new
-    # publisher, or pre-register the project name under "trusted
-    # publishers" before the first release): owner Rothen, repo chiaki-py,
-    # workflow publish.yml, environment pypi. No API token/secret needed -
-    # id-token below is what PyPI's OIDC trust exchange uses instead.
     environment:
       name: pypi
       url: https://pypi.org/project/chiaki-py/
     permissions:
       id-token: write
     steps:
-      # All three jobs' artifacts (dist-windows, dist-ubuntu, dist-macos)
-      # into one flat dist/.
       - uses: actions/download-artifact@v4
         with:
           pattern: dist-*
