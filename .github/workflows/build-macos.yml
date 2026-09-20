@@ -158,17 +158,16 @@ jobs:
             # runner still has Homebrew's libraries installed, so a
             # successful import can't by itself prove bundling worked -
             # instead fail if the extension or any bundled dylib still refers
-            # to /opt/homebrew or /usr/local, and print the otool listing as
-            # evidence. numpy/pydantic are the only third-party imports
-            # chiaki_py.lib pulls in at import time; the other declared
-            # dependencies (PyQt6, opencv, ...) are only used by optional
-            # submodules.
+            # to /opt/homebrew or /usr/local. That check can't see libraries
+            # loaded with dlopen() rather than linked, which is why the import
+            # itself matters (see the SDL2 build step). numpy/pydantic are the
+            # only third-party imports chiaki_py.lib pulls in at import time;
+            # the other declared dependencies (PyQt6, opencv, ...) are only
+            # used by optional submodules.
             #
-            # The linkage check runs before the import so its output is there
-            # even if the import misbehaves. The import itself runs under a
-            # watchdog (faulthandler dumps the Python stack and exits after
-            # 60s) with dyld logging every library it loads, so a hang shows
-            # which library was being loaded last instead of stalling the job.
+            # The import runs under a watchdog (faulthandler dumps the Python
+            # stack and exits after 60s) plus the step timeout, so a hang
+            # fails the job in minutes instead of running for hours.
             - name: Smoke test wheel
               working-directory: ${{ runner.temp }}
               timeout-minutes: 5
@@ -180,66 +179,20 @@ jobs:
                   site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
                   status=0
                   for f in "$site"/chiaki_py/lib/chiaki_py.*.so "$site"/chiaki_py/.dylibs/*.dylib; do
-                      echo "== $f"
-                      otool -L "$f"
                       if otool -L "$f" | tail -n +2 | grep -E '/opt/homebrew|/usr/local'; then
                           echo "::error::$f still links against Homebrew"
                           status=1
                       fi
                   done
+                  [ "$status" -eq 0 ] || exit 1
 
-                  DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_INITIALIZERS=1 smoke-venv/bin/python -X faulthandler -c "
-                  import faulthandler, sys
-                  faulthandler.dump_traceback_later(90, exit=True)
-                  print('importing chiaki_py.lib', flush=True)
+                  smoke-venv/bin/python -X faulthandler -c "
+                  import faulthandler
+                  faulthandler.dump_traceback_later(60, exit=True)
                   import chiaki_py.lib as lib
-                  print(lib.__file__, flush=True)
+                  print(lib.__file__)
                   assert 'site-packages' in lib.__file__
-                  " > import.log 2>&1 &
-                  pid=$!
-
-                  # Give the import 30s; if it is still running it is hung, so
-                  # take a native stack sample (Python's own traceback stops
-                  # at the dlopen call) before killing it.
-                  for _ in $(seq 1 30); do
-                      kill -0 $pid 2>/dev/null || break
-                      sleep 1
-                  done
-                  if kill -0 $pid 2>/dev/null; then
-                      echo "::error::import of chiaki_py.lib hung"
-                      sample $pid 5 -file sample.txt || true
-                      echo "== native stack sample"
-                      cat sample.txt || true
-                      kill -9 $pid
-                  fi
-
-                  import_status=0
-                  wait $pid || import_status=$?
-                  echo "== import log ($(wc -l < import.log) lines; last 40)"
-                  tail -n 40 import.log
-                  exit $(( status || import_status ))
-
-            # Only runs when the smoke test fails. Loads every bundled dylib
-            # (and the extension) on its own, in a separate process with a
-            # 15s watchdog, so a hang or load error is attributed to one
-            # specific file instead of "the import".
-            - name: Diagnose (dlopen each bundled library)
-              if: failure()
-              working-directory: ${{ runner.temp }}
-              run: |
-                  site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-                  for f in "$site"/chiaki_py/.dylibs/*.dylib "$site"/chiaki_py/lib/chiaki_py.*.so; do
-                      if smoke-venv/bin/python -c "
-                  import ctypes, faulthandler, sys
-                  faulthandler.dump_traceback_later(15, exit=True)
-                  ctypes.CDLL(sys.argv[1])
-                  " "$f" > dlopen.log 2>&1; then
-                          echo "ok    $(basename "$f")"
-                      else
-                          echo "FAIL  $(basename "$f")"
-                          head -n 3 dlopen.log | sed 's/^/        /'
-                      fi
-                  done
+                  "
 
             # Published to PyPI by publish.yml alongside the Windows and Linux
             # wheels once it calls this workflow.

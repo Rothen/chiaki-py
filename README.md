@@ -134,9 +134,68 @@ The script uses whichever `python3` is on `PATH`; export `PYTHON_EXECUTABLE`
 first to build against a different interpreter. It links FFmpeg, SDL2, protobuf,
 OpenSSL, etc. from apt rather than vcpkg.
 
+### macOS (from source)
+
+Apple Silicon (arm64) only - that's what CI builds. Install the Xcode command line
+tools, [Homebrew](https://brew.sh/) and Python 3.11, then the native dependencies:
+
+```bash
+xcode-select --install
+brew install python@3.11 cmake ninja nasm pkgconf protobuf@29 openssl@3 fmt \
+  opus json-c miniupnpc libevent speexdsp ffmpeg hidapi fftw lcms2 \
+  vulkan-headers vulkan-loader
+```
+
+Build SDL2 from source instead of using `brew install sdl2`: Homebrew's `sdl2` is now
+[sdl2-compat](https://github.com/libsdl-org/sdl2-compat), a shim that loads SDL3 with
+`dlopen()`, which can't be bundled into a wheel and hangs on import when SDL3 isn't
+found. `ffmpeg` installs it as a dependency anyway, so unlink it to keep CMake from
+finding it first:
+
+```bash
+brew unlink sdl2-compat 2>/dev/null || true
+export SDL2_PREFIX="$HOME/.local/sdl2"
+git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git /tmp/SDL2-src
+cmake -S /tmp/SDL2-src -B /tmp/SDL2-build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_INSTALL_PREFIX="$SDL2_PREFIX" \
+  -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF
+cmake --build /tmp/SDL2-build && cmake --install /tmp/SDL2-build
+```
+
+Then build the extension:
+
+```bash
+git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
+
+/opt/homebrew/bin/python3.11 -m venv .venv && source .venv/bin/activate
+pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
+
+# /opt/homebrew isn't on clang's default search path, and protobuf@29 is keg-only
+export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib"
+export PKG_CONFIG_PATH="$SDL2_PREFIX/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf@29)/lib/pkgconfig"
+export PATH="$(brew --prefix protobuf@29)/bin:$PATH"
+
+# The -rpath flags let the extension find the Homebrew and SDL2 libraries at
+# runtime: pybind/CMakeLists.txt skips CMake's own RPATH on non-Windows builds.
+cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DPython3_EXECUTABLE="$(which python)" -DPython_EXECUTABLE="$(which python)" -DPYTHON_EXECUTABLE="$(which python)" \
+  -DCMAKE_PREFIX_PATH="$SDL2_PREFIX;$(brew --prefix);$(brew --prefix openssl@3);$(brew --prefix protobuf@29)" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib -Wl,-rpath,$SDL2_PREFIX/lib" \
+  -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib -Wl,-rpath,$SDL2_PREFIX/lib"
+cmake --build build-release --config Release --target chiaki-py -- -j"$(sysctl -n hw.ncpu)"
+
+pip install -e .
+```
+
+The exports only last for the current shell; set them again before re-running CMake in a
+new terminal. `.github/workflows/build-macos.yml` is the reference for this recipe.
+
 ### Notes
 
-- Both builds put the compiled module (and, on Windows, its DLLs) in `chiaki_py/lib/`. After C++ changes under `pybind/`, re-run only the `cmake --build` step (the CMake target is `chiaki-py`, with a hyphen). Re-run the configure step too if you add or remove a source file.
+- All builds put the compiled module (and, on Windows, its DLLs) in `chiaki_py/lib/`. After C++ changes under `pybind/`, re-run only the `cmake --build` step (the CMake target is `chiaki-py`, with a hyphen). Re-run the configure step too if you add or remove a source file.
 - `-DPYTHON_EXECUTABLE` must point at a Python with `protobuf` and `grpcio-tools` installed (nanopb's code generator needs them), and keep protobuf on 5.x - the bundled nanopb breaks on newer releases.
 - Pin a different chiaki-ng with `-DCHIAKI_NG_VERSION=<tag|branch|commit>`; delete `libs/chiaki-ng` first if it's already been fetched.
 - Building against a Python other than 3.11 works, but tags the output for that version (e.g. `cp313`).
@@ -144,7 +203,7 @@ OpenSSL, etc. from apt rather than vcpkg.
 
 ## Releasing
 
-`build-windows.yml` and `build-ubuntu.yml` build the wheels on every push/PR.
+`build-windows.yml`, `build-ubuntu.yml` and `build-macos.yml` build the wheels on every push/PR.
 `publish.yml` rebuilds them and publishes to PyPI when a GitHub Release is
 published, using [Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
 (owner `Rothen`, repo `chiaki-py`, workflow `publish.yml`, environment `pypi`).
@@ -166,7 +225,7 @@ To build a wheel locally, see the header of `scripts/build_wheel.ps1`.
 
 ## Known limitations
 
-- Only Windows and Ubuntu are tested; other Linux distros and macOS aren't supported yet.
+- Only Windows, Ubuntu and macOS (Apple Silicon) are tested; other Linux distros and Intel Macs aren't supported yet.
 - Wheels are Windows/Linux x86_64 and cp311 only.
 - PS4 pairing is implemented but far less tested than PS5.
 
