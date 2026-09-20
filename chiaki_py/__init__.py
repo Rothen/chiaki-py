@@ -13,10 +13,15 @@ imported lazily - use `from chiaki_py.psn import login` /
 `from chiaki_py.controller import dualsense` when you actually need them.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from .discovery import discover_hosts
 from .registration import connect_info_kwargs, register
 from .session import Session
 
-__version__ = "0.1.1"
+try:
+    __version__ = version("chiaki-py")
+except PackageNotFoundError:  # running from a source tree that was never pip-installed
+    __version__ = "0.0.0"
 
 __all__ = ["Session", "register", "connect_info_kwargs", "discover_hosts", "lib", "__version__"]

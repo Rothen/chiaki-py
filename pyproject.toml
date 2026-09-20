@@ -1,16 +1,13 @@
 [project]
 name = "chiaki-py"
-version = "0.1.1"
+# Derived from the git tag (vX.Y.Z) by setuptools-scm - see [tool.setuptools_scm].
+dynamic = ["version"]
 description = "Python bindings and a Pythonic client library for PS4/PS5 Remote Play (chiaki-ng)"
 readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
-authors = [{ name = "Benjamin Ricchiuto", email = "beni.heu@gmail.com" }]
-# The published wheels bundle a compiled extension built against a specific
-# CPython ABI (currently cp311) - see scripts/build_wheel.ps1 (Windows) and
-# .github/workflows/build-ubuntu.yml (Linux). Widening this
-# without also building/publishing wheels for the added versions would let
-# pip "successfully" install a package with no usable native module on them.
+authors = [{ name = "Benjamin Heuberger", email = "beni.heu@gmail.com" }]
+
 requires-python = ">=3.11,<3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -43,8 +40,12 @@ Repository = "https://github.com/Rothen/chiaki-py"
 Issues = "https://github.com/Rothen/chiaki-py/issues"
 
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=69", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+fallback_version = "0.0.0"
 
 [tool.setuptools]
 packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.lib.core", "chiaki_py.psn", "chiaki_py.controller"]

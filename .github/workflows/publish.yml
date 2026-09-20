@@ -54,10 +54,12 @@ jobs:
         run: ls -l dist/
 
       # TestPyPI, like PyPI, never accepts the same filename twice - each
-      # test upload needs a version that hasn't been uploaded before (e.g.
-      # 0.1.1.dev1). skip-existing keeps a re-run of this job from failing
-      # outright on files already there, but it also means such a re-run
-      # uploads nothing new, silently.
+      # test upload needs a version that hasn't been uploaded before. The
+      # version is derived from the git tag (setuptools-scm), so a manual run
+      # from a commit past the latest tag is a dev version (e.g. 0.1.2.dev3)
+      # that changes with every new commit. skip-existing keeps a re-run of
+      # this job on the same commit from failing outright on files already
+      # there, but it also means such a re-run uploads nothing new, silently.
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/

@@ -8,9 +8,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PythonInterp 3 REQUIRED) # Make sure nanopb doesn't find Python 2.7 because Python 2 should just die.set(CHIAKI_PY_VERSION_MAJOR 1)
 
+# The version comes from the latest vX.Y.Z git tag (the same one setuptools-scm
+# uses for the Python package); 0.0.0 if there's no git or no such tag.
 set(CHIAKI_PY_VERSION_MAJOR 0)
-set(CHIAKI_PY_VERSION_MINOR 1)
-set(CHIAKI_PY_VERSION_PATCH 1)
+set(CHIAKI_PY_VERSION_MINOR 0)
+set(CHIAKI_PY_VERSION_PATCH 0)
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --match "v[0-9]*" --abbrev=0
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE CHIAKI_PY_GIT_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE CHIAKI_PY_GIT_RESULT
+        ERROR_QUIET)
+    if(CHIAKI_PY_GIT_RESULT EQUAL 0 AND CHIAKI_PY_GIT_TAG MATCHES "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+        set(CHIAKI_PY_VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(CHIAKI_PY_VERSION_MINOR ${CMAKE_MATCH_2})
+        set(CHIAKI_PY_VERSION_PATCH ${CMAKE_MATCH_3})
+    endif()
+endif()
 set(CHIAKI_PY_VERSION ${CHIAKI_PY_VERSION_MAJOR}.${CHIAKI_PY_VERSION_MINOR}.${CHIAKI_PY_VERSION_PATCH})
 
 # chiaki-ng build options, read by libs/chiaki-ng/CMakeLists.txt when it's

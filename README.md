@@ -208,14 +208,18 @@ new terminal. `.github/workflows/build-macos.yml` is the reference for this reci
 published, using [Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
 (owner `Rothen`, repo `chiaki-py`, workflow `publish.yml`, environment `pypi`).
 
-To cut a release: bump the version in `pyproject.toml`, `CMakeLists.txt`
-(`CHIAKI_PY_VERSION_MAJOR/MINOR/PATCH`) and `chiaki_py/__init__.py`, commit, tag
-`vX.Y.Z`, and publish a GitHub Release from that tag.
+The package version comes from the git tag (via
+[setuptools-scm](https://github.com/pypa/setuptools-scm)); there is no version
+number to bump in the source. To cut a release: tag `vX.Y.Z` on `main`, push the
+tag, and publish a GitHub Release from it. A build exactly at that tag is
+`X.Y.Z`; any other commit builds as a dev version (`X.Y.(Z+1).devN`, N = commits
+since the tag). Tags must look like `v1.2.3` (the C++ log line reads the same tag
+in `CMakeLists.txt`).
 
 To test packaging without touching PyPI, run `publish.yml` manually from the
 Actions tab: manual runs publish only to [TestPyPI](https://test.pypi.org/project/chiaki-py/)
-(environment `testpypi`, which needs its own trusted publisher). Each upload needs
-an unused version (e.g. `0.1.2.dev1`); install it with:
+(environment `testpypi`, which needs its own trusted publisher). The version is the
+dev version described above, so each new commit gives an unused one; install it with:
 
 ```bash
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ chiaki-py
