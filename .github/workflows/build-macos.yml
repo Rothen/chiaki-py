@@ -11,15 +11,17 @@ on:
 
 jobs:
     build:
-        name: Build wheel (macosx_14_0_arm64, cp311)
-        # macos-14 is an Apple Silicon (arm64) runner. Homebrew bottles are
+        name: Build wheel (macosx_15_0_arm64, cp311)
+        # macos-15 is an Apple Silicon (arm64) runner. Homebrew bottles are
         # built for the OS they're installed on, so the wheel's minimum macOS
-        # version follows this runner (14.0), not the older 12/13 that
-        # chiaki-ng's own CMakeLists picks for its GUI app.
-        runs-on: macos-14
+        # version follows this runner (15.0), not the older 12/13 that
+        # chiaki-ng's own CMakeLists picks for its GUI app. (macos-14 was
+        # dropped: Homebrew no longer builds bottles for it, so every
+        # dependency was compiled from source - a 15 minute install.)
+        runs-on: macos-15
         env:
             PYTHON_VERSION: "3.11"
-            MACOSX_DEPLOYMENT_TARGET: "14.0"
+            MACOSX_DEPLOYMENT_TARGET: "15.0"
 
         defaults:
             run:
@@ -95,7 +97,7 @@ jobs:
             # report universal2, which this arm64-only extension isn't.
             - name: Build wheel
               env:
-                  _PYTHON_HOST_PLATFORM: macosx-14.0-arm64
+                  _PYTHON_HOST_PLATFORM: macosx-15.0-arm64
                   ARCHFLAGS: "-arch arm64"
               run: python -m build --wheel --outdir wheelhouse-raw
 
