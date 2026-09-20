@@ -380,17 +380,6 @@ void DiscoveryManager::UpdateManualServices()
         options.host_drop_pings = DROP_PINGS;
         options.cb = DiscoveryServiceHostsManualCallback;
         options.cb_user = s;
-
-        // options.send_host just needs to point at a valid, null-terminated
-        // C string for the duration of this call:
-        // chiaki_discovery_service_init() strdup()s it into its own
-        // independently-owned copy (see discoveryservice.c) before
-        // returning, so host.c_str() staying alive that long is enough -
-        // this used to memcpy() into options.send_host instead, which is
-        // always null right after `ChiakiDiscoveryServiceOptions options =
-        // {}` above, so that unconditionally segfaulted the first time any
-        // paired console (the only thing that reaches this function - see
-        // UpdateManualServices() above) made it this far.
         options.send_host = const_cast<char *>(host.c_str());
         bool ipv6 = host.find(':') != std::string::npos;
         struct sockaddr_storage addr = {};

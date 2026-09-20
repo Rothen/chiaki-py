@@ -12,6 +12,5 @@ chiaki_py/lib/chiaki_py/
 scripts/
 .vscode/
 
-# Python packaging artifacts (python -m build / setuptools)
 dist/
 *.egg-info/

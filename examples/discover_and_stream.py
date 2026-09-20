@@ -38,11 +38,6 @@ from dualsense_py.utils import get_available_controllers
 
 
 def setup_controller(stream_session: StreamSession) -> bool:
-    """Wire up the first available DualSense controller, if any.
-
-    dualsensepy dispatches input events on its own thread once attached, so there's
-    nothing to poll here - this just needs to be called once.
-    """
     SDL3Backend.init()
     controllers = get_available_controllers()
     if not controllers:

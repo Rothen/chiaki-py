@@ -25,12 +25,6 @@ void init_core_feedback(py::module &m)
     m.attr("FEEDBACK_STATE_BUF_SIZE_MAX") = CHIAKI_FEEDBACK_STATE_BUF_SIZE_MAX;
     m.attr("FEEDBACK_STATE_BUF_SIZE_V9") = CHIAKI_FEEDBACK_STATE_BUF_SIZE_V9;
 
-    // `state` used to be typed as the raw ChiakiFeedbackState struct, which
-    // is never registered with pybind11 (only FeedbackStateWrapper, under
-    // the name "FeedbackState", is) - passing a FeedbackState from Python
-    // would fail to convert at call time. Taking the wrapper directly and
-    // reaching into it with .ptr() matches how FeedbackHistoryBufferWrapper
-    // ::push() above takes FeedbackHistoryEventWrapper.
     m.def("format_v9", [](std::vector<uint8_t> &buf, FeedbackStateWrapper &state) {
         chiaki_feedback_state_format_v9(buf.data(), state.ptr());
     }, py::arg("buf"), py::arg("state"), "Format the feedback state to the buffer.");

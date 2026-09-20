@@ -11,22 +11,12 @@ import numpy.typing as npt
 from .lib import Settings, StreamSession, StreamSessionConnectInfo, get_frame
 from .lib.core.common import Target
 
-# chiaki-ng negotiates up to 1080p; a buffer this size fits any stream
-# resolution it can produce, regardless of what the console actually sends.
 _MAX_FRAME_SHAPE = (1080, 1920, 3)
 
 _logger = logging.getLogger(__name__)
 
 
 class Session:
-    """A Pythonic wrapper around the raw `chiaki_py.lib.StreamSession`.
-
-    Handles the connect/disconnect lifecycle as a context manager and
-    exposes decoded video frames as NumPy arrays through `frames()`,
-    instead of requiring callers to drive `StreamSession`/`get_frame`
-    and a frame-available subscription themselves.
-    """
-
     def __init__(self, connect_info: StreamSessionConnectInfo):
         self.connect_info = connect_info
         self.stream_session = StreamSession(connect_info)
@@ -48,10 +38,6 @@ class Session:
         zoom: bool = False,
         stretch: bool = False,
     ) -> "Session":
-        """Build a Session from already-known console pairing credentials.
-
-        `regist_key`/`morning` normally come from `chiaki_py.registration.register()`.
-        """
         connect_info = StreamSessionConnectInfo(
             settings=settings,
             target=target,
@@ -80,14 +66,6 @@ class Session:
             self.stream_session.stop()
 
     def frames(self, max_fps: float = 60.0, copy: bool = True) -> Iterator[npt.NDArray[np.uint8]]:
-        """Yield decoded video frames as they become available.
-
-        Waits on the native frame-available event instead of polling, and
-        drops (rather than queues) frames arriving faster than `max_fps`.
-        Each yielded array is cropped to the frame's actual (height, width);
-        set `copy=False` to get a view into a buffer reused across calls
-        (cheaper, but the data is only valid until the next frame arrives).
-        """
         min_interval = (1.0 / max_fps) if max_fps > 0 else 0.0
         buffer = np.zeros(_MAX_FRAME_SHAPE, dtype=np.uint8)
         ready = threading.Event()
@@ -95,27 +73,12 @@ class Session:
         try:
             last_yield = 0.0
             while True:
-                # A timeout instead of an unbounded wait means we return to
-                # Python bytecode regularly even if no frame ever arrives -
-                # without it, a stalled stream leaves this blocked in a C
-                # call indefinitely, which also blocks KeyboardInterrupt
-                # (Ctrl+C) from ever being delivered.
                 if not ready.wait(timeout=0.5):
                     continue
                 ready.clear()
                 try:
                     dims = get_frame(self.stream_session, False, buffer)
                 except RuntimeError:
-                    # A single bad/transient frame (e.g. an odd pixel format
-                    # or hardware-transfer hiccup right at stream start,
-                    # before the first real keyframe) shouldn't kill the
-                    # whole viewing session - log it and wait for the next
-                    # frame instead. Without this, a failure on the very
-                    # first frame after connecting means this generator
-                    # never yields anything at all: callers who only start
-                    # doing work (e.g. opening a preview window) once they
-                    # receive the first frame would never see anything
-                    # happen, even though the connection itself succeeded.
                     _logger.warning("Dropping unreadable frame", exc_info=True)
                     continue
                 if dims is None:

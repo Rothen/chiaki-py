@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
-
 #ifndef CHIAKI_PY_DISCOVERYMANAGER_H
 #define CHIAKI_PY_DISCOVERYMANAGER_H
 
@@ -97,9 +95,6 @@ class DiscoveryManager
 		ChiakiDiscoveryService service_ipv6;
 		bool service_active;
 		bool service_active_ipv6;
-		// `hosts` is written from chiaki-ng's background discovery thread
-		// (via DiscoveryServiceHostsCallback) and read from GetHosts(), so it
-		// needs its own lock rather than relying on the GIL.
 		mutable std::mutex hosts_mutex;
 		std::vector<DiscoveryHostWrapper> hosts;
 		Settings *settings = {};
@@ -122,7 +117,6 @@ class DiscoveryManager
 		void DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> hosts);
 		void UpdateManualServices();
 
-	// signals
 		void HostsUpdated();
 };
 
