@@ -5,15 +5,15 @@ PS4/PS5 Remote Play from Python, built on [chiaki-ng](https://github.com/streetp
 ## Quickstart
 
 ```python
-from chiaki_py import Session, discover_hosts, register, connect_info_kwargs
+from chiaki_py import Session, discover_hosts, register, Serializer
 from chiaki_py.lib import Settings
 from chiaki_py.psn.login import PSNLoginQt
+from chiaki_py import Serializer
 
 settings = Settings()
 host = discover_hosts(settings, timeout=3.0)[0]
-
-psn_account = PSNLoginQt.load_or_get("psn_account.json")
-result = register(
+psn_account = PSNLoginQt.login()
+registration = register(
     settings,
     host=host.host_addr,
     psn_id=psn_account.user_rpid,  # or .online_id for a PS4
@@ -21,7 +21,7 @@ result = register(
     target=host.target,
 )
 
-with Session.connect(settings, **connect_info_kwargs(result, host=host.host_addr)) as session:
+with Session.connect(settings, registration) as session:
     for frame in session.frames(max_fps=60):
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```

@@ -11,15 +11,13 @@ Connection Settings > Add Device screen.
 """
 
 import argparse
-import json
-import os
+from pathlib import Path
 
-from platformdirs import user_data_dir
-
+from chiaki_py import Serializer
 from chiaki_py.lib import Settings
 from chiaki_py.lib.core.common import Target
-from chiaki_py.psn.login import PSNLoginQt
-from chiaki_py.registration import connect_info_kwargs, register
+from chiaki_py.psn import PSNLoginQt, PSNAccount
+from chiaki_py.registration import register
 
 
 def main() -> None:
@@ -31,16 +29,15 @@ def main() -> None:
     parser.add_argument("--out", default="chiaki_py_config.json", help="Where to write the resulting config")
     args = parser.parse_args()
 
-    app_dir = user_data_dir("ChiakiPyClient", "chiaki-py")
-    os.makedirs(app_dir, exist_ok=True)
-    psn_account_path = os.path.join(app_dir, "psn_account.json")
-    psn_account = PSNLoginQt.load_or_get(psn_account_path)
+    cache_dir = Path("./cache")
+    cache_dir.touch(exist_ok=True)
+    psn_account = Serializer.load_or(PSNAccount, Path(cache_dir, "psn_account.json"), PSNLoginQt.login)
 
     target = Target.PS4_8 if args.ps4 else Target.PS5_1
     settings = Settings()
     settings.set_log_verbose(False)
 
-    result = register(
+    registration = register(
         settings,
         host=args.host,
         psn_id=psn_account.user_rpid,
@@ -48,20 +45,9 @@ def main() -> None:
         console_pin=args.console_pin,
         target=target,
     )
-    kwargs = connect_info_kwargs(result, host=args.host)
+    Serializer.save(registration, args.out)
 
-    config = {
-        "host": kwargs["host"],
-        "nickname": kwargs["nickname"],
-        "regist_key": kwargs["regist_key"],
-        "morning": result.rp_key,
-        "duid": "",
-        "ps5": not args.ps4,
-    }
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-
-    print(f"Registered '{config['nickname']}'. Wrote {args.out}")
+    print(f"Registered '{registration.nickname}'. Wrote {args.out}")
 
 
 if __name__ == "__main__":

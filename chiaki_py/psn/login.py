@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import base64
 import sys
-from typing import Any, cast
+from pathlib import Path
+from typing import Any
+from abc import ABC, abstractmethod
 from urllib.parse import parse_qs, urlparse
 
 import requests
 from Cryptodome.Hash import SHA256
-from PyQt6.QtCore import QUrl
-from PyQt6.QtWidgets import QApplication, QMainWindow
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import QObject, QUrl
+from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtQml import QQmlApplicationEngine
+from PyQt6.QtWebEngineQuick import QtWebEngineQuick
 
 from .account import PSNAccount
 
@@ -33,6 +36,7 @@ LOGIN_URL = (
 TOKEN_URL = "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/token"
 TOKEN_BODY = "grant_type=authorization_code" "&code={}" f"&redirect_uri={REDIRECT_URL}&"
 HEADERS = {"Content-Type": "application/x-www-form-urlencoded"}
+QML_PATH = Path(__file__).with_name("login.qml")
 
 
 class PSNLoginParser:
@@ -120,36 +124,68 @@ class PSNLoginParser:
         raise TypeError(f"{encoding} encoding is not valid")
 
 
-class PSNLoginQt(QMainWindow):
-    """Opens a PSN login page in an embedded browser and captures the resulting account."""
+class LoginError(Exception):
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
 
-    def __init__(self):
-        super().__init__()
-        self.web_view = QWebEngineView()
-        self.setCentralWidget(self.web_view)
-        self.web_view.load(QUrl(LOGIN_URL))
-        self.web_view.urlChanged.connect(self._on_url_changed)
+
+class PSNLogin(ABC):
+    @classmethod
+    @abstractmethod
+    def login(cls) -> PSNAccount:
+        ...
+        
+
+class PSNLoginQt(PSNLogin):
+    """Opens a PSN login page in an embedded QML WebEngineView and captures the resulting account."""
+
+    def __init__(self) -> None:
         self.psn_account: PSNAccount | None = None
 
-    def _on_url_changed(self, url: QUrl) -> None:
-        current_url = url.toString()
-        if current_url.startswith(REDIRECT_URL):
-            self.psn_account = PSNLoginParser.parse_psn_account(current_url)
-            self.close()
+    def _on_redirect_captured(self, url: str) -> None:
+        self.psn_account = PSNLoginParser.parse_psn_account(url)
 
     @classmethod
-    def get_psn_account(cls) -> PSNAccount:
-        app = QApplication.instance() or QApplication(sys.argv)
-        window = cls()
-        window.show()
+    def login(cls) -> PSNAccount:
+        if QGuiApplication.instance() is None:
+            QtWebEngineQuick.initialize()  # pyright: ignore[reportCallIssue]
+
+        app = QGuiApplication.instance() or QGuiApplication(sys.argv)
+
+        login = PSNLoginQt()
+        engine = QQmlApplicationEngine()
+        engine.load(QUrl.fromLocalFile(str(QML_PATH)))
+        if not engine.rootObjects():
+            raise RuntimeError(f"Failed to load {QML_PATH}")
+
+        root: QObject = engine.rootObjects()[0]
+        root.redirectCaptured.connect(login._on_redirect_captured)  # type: ignore[attr-defined]
+
         app.exec()
-        return cast(PSNAccount, window.psn_account)
+        if login.psn_account is None:
+            raise LoginError("Unable to retrieve login information")
+
+        return login.psn_account
+
+
+class PSNLoginTerminal(PSNLogin):
+    """Prints the PSN login URL and reads the resulting redirect URL back from the terminal."""
 
     @classmethod
-    def load_or_get(cls, json_path: str) -> PSNAccount:
+    def login(cls) -> PSNAccount:
+        print("Open this URL in a browser and sign in to your PlayStation account:\n")
+        print(LOGIN_URL)
+        print(
+            "\nAfter signing in you land on a page that starts with "
+            f"{REDIRECT_URL}\nCopy the full URL from the browser's address bar and paste it here."
+        )
         try:
-            return PSNAccount.load(json_path)
-        except FileNotFoundError:
-            psn_account = cls.get_psn_account()
-            psn_account.save(json_path)
-            return psn_account
+            redirect_url = input("\nRedirect URL: ").strip()
+        except EOFError as e:
+            raise LoginError("No redirect URL provided") from e
+
+        try:
+            return PSNLoginParser.parse_psn_account(redirect_url)
+        except ValueError as e:
+            raise LoginError(f"Unable to retrieve login information: {e}") from e

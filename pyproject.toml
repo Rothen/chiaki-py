@@ -51,4 +51,4 @@ fallback_version = "0.0.0"
 packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.lib.core", "chiaki_py.psn", "chiaki_py.controller"]
 
 [tool.setuptools.package-data]
-"*" = ["*.pyi", "*.pyd", "*.so", "*.dll"]
+"*" = ["*.pyi", "*.pyd", "*.so", "*.dll", "*.qml"]

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class PSNAccount:
+class PSNAccount(BaseModel):
     scopes: str
     expiration: str
     client_id: str
@@ -20,13 +18,3 @@ class PSNAccount:
     is_sub_account: bool
     user_rpid: str
     credentials: str
-
-    def save(self, json_path: str) -> None:
-        with open(json_path, "w") as f:
-            json.dump(self.__dict__, f)
-
-    @classmethod
-    def load(cls, json_path: str) -> "PSNAccount":
-        with open(json_path, "r") as f:
-            data = json.load(f)
-        return cls(**data)

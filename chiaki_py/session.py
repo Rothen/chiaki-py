@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .lib import Settings, StreamSession, StreamSessionConnectInfo, get_frame
-from .lib.core.common import Target
+from .registration import Registration
 
 _MAX_FRAME_SHAPE = (1080, 1920, 3)
 
@@ -25,32 +25,21 @@ class Session:
     def connect(
         cls,
         settings: Settings,
-        *,
-        host: str,
-        nickname: str,
-        regist_key: str,
-        morning: bytes,
-        target: Target,
-        initial_login_pin: str = "",
-        duid: str = "",
-        auto_regist: bool = False,
-        fullscreen: bool = False,
-        zoom: bool = False,
-        stretch: bool = False,
+        registration: Registration
     ) -> "Session":
         connect_info = StreamSessionConnectInfo(
             settings=settings,
-            target=target,
-            host=host,
-            nickname=nickname,
-            regist_key=regist_key,
-            morning=morning,
-            initial_login_pin=initial_login_pin,
-            duid=duid,
-            auto_regist=auto_regist,
-            fullscreen=fullscreen,
-            zoom=zoom,
-            stretch=stretch,
+            target=registration.target,
+            host=registration.host,
+            nickname=registration.nickname,
+            regist_key=registration.regist_key,
+            morning=registration.morning,
+            initial_login_pin=registration.initial_login_pin,
+            duid=registration.duid,
+            auto_regist=registration.auto_regist,
+            fullscreen=registration.fullscreen,
+            zoom=registration.zoom,
+            stretch=registration.stretch,
         )
         return cls(connect_info)
 

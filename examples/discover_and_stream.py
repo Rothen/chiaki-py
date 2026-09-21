@@ -20,21 +20,42 @@ pair again (e.g. after un-registering the app on the console).
 Needs: pip install -e .[psn,cv,controller]
 """
 
-import os
 import sys
+from pathlib import Path
 
 import cv2
+import typer
 
-from platformdirs import user_data_dir
-
-from chiaki_py import Session, discover_hosts
-from chiaki_py.config import ChiakiPySettings
+from chiaki_py import Session, discover_hosts, Serializer
 from chiaki_py.controller import attach_controller
 from chiaki_py.lib import Settings, DiscoveryHost, StreamSession
-from chiaki_py.psn.login import PSNLoginQt
-from chiaki_py.registration import ConnectKwargs, connect_info_kwargs, register
+from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
+from chiaki_py.registration import register, Registration
 from dualsense_py.backends import SDL3Backend
 from dualsense_py.utils import get_available_controllers
+
+
+def _login(headless: bool):
+    LoginClass: type[PSNLogin] = PSNLoginQt
+    if headless:
+        LoginClass = PSNLoginTerminal
+    try:
+        return LoginClass.login()
+    except LoginError as e:
+        print(e.message)
+        sys.exit()
+
+
+def _register(settings: Settings, host: DiscoveryHost, dir: Path, headless: bool):
+    psn_account = Serializer.load_or(PSNAccount, Path(
+        dir, "psn_account.json"), lambda: _login(headless))
+    psn_id = psn_account.user_rpid if host.ps5 else psn_account.online_id
+    pin = input(
+        "Enter the registration PIN shown on the console's Link Device screen: ").strip()
+    print("Registering...")
+    registration = register(
+        settings, host=host.host_addr, psn_id=psn_id, pin=pin, target=host.target)
+    return registration
 
 
 def setup_controller(stream_session: StreamSession) -> bool:
@@ -59,50 +80,27 @@ def pick_host(hosts: list[DiscoveryHost]) -> DiscoveryHost:
     return hosts[index]
 
 
-def pairing_cache_path(app_dir: str, host: DiscoveryHost) -> str:
-    hosts_dir = os.path.join(app_dir, "hosts")
-    os.makedirs(hosts_dir, exist_ok=True)
-    return os.path.join(hosts_dir, f"{host.host_id}.json")
+def pairing_cache_path(dir: Path, host: DiscoveryHost) -> Path:
+    hosts_dir = Path(dir, "hosts")
+    hosts_dir.touch(exist_ok=True)
+    return Path(dir, f"{host.host_name}.json")
 
 
-def get_connect_kwargs(settings: Settings, host: DiscoveryHost, app_dir: str, force_pair: bool) -> ConnectKwargs:
-    cache_path = pairing_cache_path(app_dir, host)
+def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_pair: bool, headless: bool) -> Registration:
+    cache_path = pairing_cache_path(dir, host)
 
-    if not force_pair and os.path.exists(cache_path):
+    if force_pair:
+        registration = _register(settings, host, dir, headless)
+        Serializer.save(registration, cache_path)
+        print(f"Saved pairing for next time at {cache_path}")
+    else:
         print(f"Reusing saved pairing for '{host.host_name}'.")
-        cached = ChiakiPySettings.from_file(cache_path)
-        return {
-            "host": host.host_addr,
-            "nickname": cached.nickname,
-            "regist_key": cached.regist_key,
-            "morning": bytes.fromhex(cached.morning),
-            "target": host.target,
-        }
+        registration = Serializer.load_or(Registration, cache_path, lambda: _register(settings, host, dir, headless))
 
-    psn_account = PSNLoginQt.load_or_get(os.path.join(app_dir, "psn_account.json"))
-    psn_id = psn_account.user_rpid if host.ps5 else psn_account.online_id
-
-    pin = input("Enter the registration PIN shown on the console's Link Device screen: ").strip()
-
-    print("Registering...")
-    result = register(settings, host=host.host_addr, psn_id=psn_id, pin=pin, target=host.target)
-    kwargs = connect_info_kwargs(result, host=host.host_addr)
-
-    ChiakiPySettings(
-        host=kwargs["host"],
-        nickname=kwargs["nickname"],
-        regist_key=result.rp_regist_key,
-        morning=result.rp_key,
-        ps5=host.ps5,
-    ).to_file(cache_path)
-    print(f"Saved pairing for next time at {cache_path}")
-
-    return kwargs
+    return registration
 
 
-def main() -> None:
-    force_pair = "--force-pair" in sys.argv
-
+def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./cache')) -> None:
     settings = Settings()
     settings.set_log_verbose(False)
 
@@ -115,13 +113,12 @@ def main() -> None:
     host = pick_host(hosts)
     print(f"Using {host.host_name} ({host.host_addr})")
 
-    app_dir = user_data_dir("ChiakiPyClient", "chiaki-py")
-    os.makedirs(app_dir, exist_ok=True)
+    dir.touch(exist_ok=True)
 
-    kwargs = get_connect_kwargs(settings, host, app_dir, force_pair)
-    print(f"Connecting to '{kwargs['nickname']}'.")
+    registration = get_registration(settings, host, dir, force_pair, headless)
+    print(f"Connecting to '{registration.nickname}'.")
 
-    session = Session.connect(settings, **kwargs)
+    session = Session.connect(settings, registration)
     session.stream_session.on_session_quit().subscribe(lambda reason: print("Session quit:", reason))
     session.stream_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login PIN requested, incorrect:", incorrect))
 
@@ -147,4 +144,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

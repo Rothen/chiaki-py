@@ -115,13 +115,7 @@ void init_backend(py::module &m)
         .def_readonly("rp_regist_key", &RegistResult::rp_regist_key)
         .def_readonly("rp_key_type", &RegistResult::rp_key_type)
         .def_property_readonly("rp_key", [](const RegistResult &r) {
-            std::ostringstream oss;
-            for (size_t i = 0; i < sizeof(r.rp_key); ++i)
-            {
-                oss << std::hex << std::setw(2) << std::setfill('0')
-                    << static_cast<int>(r.rp_key[i]);
-            }
-            return oss.str();
+            return py::bytes(reinterpret_cast<const char *>(r.rp_key), sizeof(r.rp_key));
         })
         .def_readonly("console_pin", &RegistResult::console_pin)
         .def("__repr__", [](const RegistResult &r)
