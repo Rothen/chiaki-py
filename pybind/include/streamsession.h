@@ -154,6 +154,7 @@ class StreamSession
         std::atomic<bool> dpad_touch_running{true};
         std::atomic<bool> dpad_touch_stop_running{true};
         Timer double_tap_timer;
+        Timer packet_loss_timer; // its thread reads members of this object: stopped first in the destructor
         RumbleHapticsIntensity rumble_haptics_intensity;
 		bool start_mic_unmuted;
 		bool session_started;

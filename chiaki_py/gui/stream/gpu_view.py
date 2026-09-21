@@ -8,12 +8,13 @@ renders the window, and the optional dependencies
 """
 
 import logging
+import time
 import warnings
 
 from cuda.bindings import runtime as cudart   # older versions: from cuda import cudart
 from OpenGL import GL
 from OpenGL.GL.shaders import compileProgram, compileShader
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QSurfaceFormat
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtWidgets import QLabel, QMainWindow
@@ -24,7 +25,8 @@ with warnings.catch_warnings():
     import cupy as cp
 
 from chiaki_py import Session
-from chiaki_py.gui.stream.frame_stats import FpsCounter
+from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
+from chiaki_py.gui.stream.frame_stats import FrameStats
 from chiaki_py.lib import StreamSession
 
 _logger = logging.getLogger(__name__)
@@ -140,6 +142,7 @@ class GpuVideoWidget(QOpenGLWidget):
     """
 
     _frame_available = pyqtSignal()   # emitted from the decoder's thread, delivered on the GUI thread
+    stream_size_changed = pyqtSignal(int, int)   # the frames turned out to be another size than expected
 
     def __init__(self, stream_session: StreamSession, handler, width: int, height: int,
                  show_stats: bool = False, parent=None):
@@ -159,7 +162,10 @@ class GpuVideoWidget(QOpenGLWidget):
         self._warned = False
         self._released = False
 
-        self._stats = FpsCounter()
+        self._stats = FrameStats()
+        self._stats_visible = False
+        self._pending_get = 0.0            # how long getting the frame that is waiting to be painted took
+        self._shown_summary: str | None = None
         self._stats_label = QLabel(self)
         self._stats_label.setStyleSheet("background-color: rgba(0, 0, 0, 150); color: white; "
                                         "font-size: 16px; font-weight: bold; padding: 6px 8px;")
@@ -177,6 +183,11 @@ class GpuVideoWidget(QOpenGLWidget):
         return self._stats_visible
 
     def set_stats_visible(self, visible: bool) -> None:
+        if visible and not self._stats_visible:
+            # While they are shown a paint is timed until the GPU has finished it (see paintGL); start
+            # over so that the first measurement does not mix in paints that were only timed until submitted.
+            self._stats.clear_work()
+            self._shown_summary = None
         self._stats_visible = visible
         self._refresh_stats()
 
@@ -201,7 +212,9 @@ class GpuVideoWidget(QOpenGLWidget):
         if self._released:
             return                     # a signal that was still queued when the widget was released
         try:
+            started = time.perf_counter()
             got_frame = self._handler.get_frame(self._frame) is not None
+            get_seconds = time.perf_counter() - started
         except ValueError:
             self._adopt_stream_size()
             return
@@ -210,9 +223,8 @@ class GpuVideoWidget(QOpenGLWidget):
             self._warn("Dropping unusable frames")
             return
         if got_frame:
+            self._pending_get = get_seconds
             self._new_frame = self._has_frame = True
-            self._stats.tick()
-            self._refresh_stats()
             self.update()
 
     def _adopt_stream_size(self) -> None:
@@ -233,6 +245,7 @@ class GpuVideoWidget(QOpenGLWidget):
         self._size = size
         self._frame = cp.empty((size[1], size[0], 3), dtype=cp.uint8)
         self._has_frame = False
+        self.stream_size_changed.emit(*size)
 
     def _warn(self, message: str) -> None:
         if not self._warned:
@@ -245,6 +258,7 @@ class GpuVideoWidget(QOpenGLWidget):
         self._texture = CudaGLTexture(*self._size)
 
     def paintGL(self) -> None:
+        started = time.perf_counter()
         GL.glClearColor(0.0, 0.0, 0.0, 1.0)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
         if self._texture is None or not self._has_frame:
@@ -252,11 +266,23 @@ class GpuVideoWidget(QOpenGLWidget):
         if (self._texture.width, self._texture.height) != self._size:
             self._texture.close()                       # the stream changed size
             self._texture = CudaGLTexture(*self._size)
-        if self._new_frame:
+        new_frame = self._new_frame
+        if new_frame:
             self._texture.upload(self._frame.data.ptr)
             self._new_frame = False
         ratio = self.devicePixelRatioF()
         self._texture.render(round(self.width() * ratio), round(self.height() * ratio))
+
+        if new_frame:                                   # a repaint without a new frame (a resize) is not a frame
+            if self._stats_visible:
+                GL.glFinish()                           # so the time covers the GPU doing the work, not just being told to
+            self._stats.add_get(self._pending_get)
+            self._stats.add_paint(time.perf_counter() - started)
+            self._stats.tick()
+            summary = self._stats.summary()
+            if summary != self._shown_summary:
+                self._shown_summary = summary
+                QTimer.singleShot(0, self._refresh_stats)   # not from inside paintGL: it changes a child widget
 
     def release(self) -> None:
         """Stop listening for frames and free the GPU resources; the widget must not be used afterwards."""
@@ -273,26 +299,51 @@ class GpuVideoWidget(QOpenGLWidget):
 
 
 class GpuStreamWindow(QMainWindow):
-    """A window around a GpuVideoWidget. F shows or hides the frame rate and time per frame."""
+    """A window around a GpuVideoWidget. F shows or hides the frame rate and the time needed per frame
+    (getting the frame from the decoder and converting it, plus painting it). With `keep_aspect_ratio`
+    the window keeps the video's aspect ratio while it is resized, so there are no bars."""
 
     closeRequested = pyqtSignal()
 
-    def __init__(self, session: Session, show_stats: bool = False):
+    def __init__(self, session: Session, show_stats: bool = False, keep_aspect_ratio: bool = False):
         super().__init__()
         self.setWindowTitle("Live Image Stream")
         profile = session.stream_session.get_video_profile()
         self.video = GpuVideoWidget(session.stream_session, session.frame_handler,
                                     profile.width, profile.height, show_stats)
+        self.video.stream_size_changed.connect(self._set_video_size)
         self.setCentralWidget(self.video)
+        self._aspect = profile.width / profile.height
+        self._aspect_lock = AspectRatioLock(lambda: self._aspect) if keep_aspect_ratio else None
         self.resize(profile.width, profile.height)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._aspect_lock is not None:
+            self._aspect_lock.attach(int(self.winId()))   # the native window exists once shown
+
+    def _set_video_size(self, width: int, height: int) -> None:
+        self._aspect = width / height
+        if self._aspect_lock is not None and not (self.isMaximized() or self.isFullScreen()):
+            self.resize(self.width(), round(self.width() / self._aspect))
 
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_F:
             self.video.set_stats_visible(not self.video.stats_visible)
+        elif event.key() == Qt.Key.Key_A:
+            if self._aspect_lock is None:
+                self._aspect_lock = AspectRatioLock(lambda: self._aspect)
+                self._aspect_lock.attach(int(self.winId()))
+                self.resize(self.width(), round(self.width() / self._aspect))
+            else:
+                self._aspect_lock.remove()
+                self._aspect_lock = None
         else:
             super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:
+        if self._aspect_lock is not None:
+            self._aspect_lock.remove()
         self.video.release()
         self.closeRequested.emit()
         super().closeEvent(event)

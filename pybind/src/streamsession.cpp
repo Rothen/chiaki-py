@@ -339,9 +339,8 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
         rumble_haptics_intensity = connect_info.rumble_haptics_intensity;
     }
 
-    Timer *packet_loss_timer = new Timer();
-    packet_loss_timer->setInterval(200);
-    packet_loss_timer->start([this]() {
+    packet_loss_timer.setInterval(200);
+    packet_loss_timer.start([this]() {
         if (packet_loss_history.size() > 10)
             packet_loss_history.erase(packet_loss_history.begin());
 
@@ -360,6 +359,9 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
 
 StreamSession::~StreamSession()
 {
+    // The timer's thread reads packet_loss_history and the session below; it used to be a leaked
+    // `new Timer()` that was never stopped, so it kept running (and writing) after this object was gone.
+    packet_loss_timer.stop();
     /*if (audio_out)
         SDL_CloseAudioDevice(audio_out);
     if (audio_in)

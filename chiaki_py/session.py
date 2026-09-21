@@ -21,10 +21,16 @@ class Session:
     def __init__(self, connect_info: StreamSessionConnectInfo, frame_handler_cls: type[FrameHandler] = CPUFrameHandler):
         self.__stream_session = StreamSession(connect_info)
         self.__frame_handler: FrameHandler = frame_handler_cls(self.__stream_session)
-    
+        self.__last_get_time = 0.0
+
     @property
     def stream_session(self) -> StreamSession:
         return self.__stream_session
+
+    @property
+    def last_get_time(self) -> float:
+        """Seconds the frame handler took for the latest frame delivered by frames() (0.0 before the first)."""
+        return self.__last_get_time
 
     @property
     def frame_handler(self) -> FrameHandler:
@@ -104,12 +110,15 @@ class Session:
                     continue
                 ready.clear()
                 try:
+                    started = time.perf_counter()
                     frame = pull()
+                    get_time = time.perf_counter() - started
                 except RuntimeError:
                     _logger.warning("Dropping unreadable frame", exc_info=True)
                     continue
                 if frame is None:
                     continue
+                self.__last_get_time = get_time
                 now = time.perf_counter()
                 if now - last_yield < min_interval:
                     continue
