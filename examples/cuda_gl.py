@@ -1,7 +1,7 @@
-"""CUDA -> OpenGL interop shared by stream_from_gpu.py (GLFW window) and
-stream_from_gpu_qt.py (Qt window): shows RGB frames that live in CUDA device
-memory as an OpenGL texture, without them ever touching the CPU, with an
-optional text overlay (used for the frame rate) in the top-right corner.
+"""CUDA -> OpenGL interop used by glfw_video.py (and so by 1.4.3_stream_cuda_glfw.py and
+1.4.4_stream_tensor.py): shows RGB frames that live in CUDA device memory as an OpenGL
+texture, without them ever touching the CPU, with an optional text overlay (used for the
+frame rate) in the top-right corner.
 
 Needs: pip install cuda-python PyOpenGL opencv-python
 """

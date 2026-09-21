@@ -16,7 +16,6 @@ The registration is the one written by examples/1.3_register_console.py. Press
 Needs: an NVIDIA GPU that also renders the window, a CUDA build of PyTorch
 (https://pytorch.org), and
     pip install cuda-python glfw PyOpenGL
-    pip install -e .[cv,controller]
 """
 
 import sys
@@ -40,7 +39,7 @@ def main() -> None:
     registration_file = Path(cache_dir, "registration.json")
 
     if not cache_dir.exists() or not registration_file.exists():
-        print(f"Registration not found under {registration_file}. Run examples/1.3_login.py first")
+        print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
     registration = Serializer.load(Registration, Path("./cache", "registration.json"))

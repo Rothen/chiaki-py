@@ -32,14 +32,32 @@ On an NVIDIA GPU, `session.cuda_frames()` (with `settings.set_hardware_decoder("
 
 ## Examples
 
-Run these from a clone of the repo:
+Run these from the root of a clone of the repo, e.g. `python examples/1.2_discover_hosts.py`. The scripts share a `./cache` directory (relative to where you run them) for the PSN account and the console registration, so run them from the same place every time.
 
-- **`examples/discover_and_stream.py`**: the full path in one script: discover a console, PSN login, pair, then  tream with an optional DualSense attached. Start here. Pairing credentials are cached per console, so later runs skip login/pairing; pass `--force-pair` to pair again.
-- **`examples/discover_hosts.py`**: just the network scan.
-- **`examples/register_console.py`**: just PSN login + pairing, writes a `chiaki_py_config.json`.
-- **`examples/gui_stream.py`**: a PyQt6 viewer that reads the config written by `register_console.py`.
-- **`examples/stream_from_gpu.py`** / **`examples/stream_from_gpu_qt.py`**: show the stream in an OpenGL window (GLFW) or a Qt widget (`QOpenGLWidget`) straight from GPU memory via CUDA-OpenGL interop, so frames are never downloaded to the CPU. The frame rate is drawn in the top-right corner (NVIDIA only; the shared interop code is in `examples/cuda_gl.py`).
-- **`examples/tensor_stream.py`**: streams straight into a PyTorch tensor on the GPU (NVIDIA + CUDA torch), so frames can be fed to a model without leaving the GPU. `discover_and_stream.py --cuda` does the same with a CuPy array.
+The `1.x` scripts are the step-by-step path; `2_...` does the same in one script.
+
+### Step by step
+
+1. **`examples/1.1_login.py`**: PSN login. Opens a Qt web view for you to sign in (`--headless` logs in from the terminal instead) and saves the account to `cache/psn_account.json`.
+2. **`examples/1.2_discover_hosts.py [--timeout 3.0]`**: scans the network and prints the consoles that answer. No login or pairing needed.
+3. **`examples/1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]`**: pairs with the console at `<host>` using the PIN from its Link Device screen (PS5: Settings > System > Remote Play > Link Device; PS4: Settings > Remote Play Connection Settings > Add Device) and saves `cache/registration.json`. It needs the account from step 1 and exits if `cache/psn_account.json` isn't there. Defaults to a PS5; pass `--ps4` for a PS4.
+4. **Stream.** Each of these loads `cache/registration.json` from step 3, attaches a DualSense if one is connected, and differs in how the frames get on screen:
+   - **`examples/1.4.1_stream_qt.py`**: the built-in PyQt6 `StreamDisplay`, with frames decoded to system memory. Works everywhere, no GPU needed.
+   - **`examples/1.4.2_stream_gpu_qt.py`**: the same `StreamDisplay`, but with the `CUDAFrameHandler`: frames are converted to RGB on the GPU and drawn by an OpenGL widget straight from GPU memory, never downloaded to the CPU. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
+   - **`examples/1.4.3_stream_cuda_glfw.py`**: the same idea without Qt, in a plain GLFW window. Each frame lands in a CuPy array and CUDA-OpenGL interop hands it to OpenGL. NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
+   - **`examples/1.4.4_stream_tensor.py`**: like 1.4.3 but the frame is a PyTorch tensor on the GPU, so it can be fed to a model without leaving the GPU. The example computes the per-channel mean colour on the GPU and shows it in the window title. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
+
+   The GLFW examples draw the frame rate in the top-right corner (`q` or Esc quits). In the Qt viewers it starts hidden: press `F` to show it, together with the time spent per frame.
+
+### All in one
+
+- **`examples/2_discover_and_stream_opencv.py [--force-pair] [--headless] [--dir ./cache]`**: discover a console (you pick one if several answer), log in to PSN, pair, and stream into an OpenCV window (`q` quits) with the frame rate in the top-right corner, all without the other scripts. The pairing is cached per console as `<console name>.json` in `--dir`, so later runs skip login and pairing; pass `--force-pair` to pair again (e.g. after removing the device on the console). Frames come to the CPU as a numpy array, which makes it the easiest one to adapt if you want to process frames with OpenCV.
+
+### Shared code
+
+- **`examples/helpers.py`**: `setup_controller()`, which attaches the first DualSense it finds to the stream.
+- **`examples/glfw_video.py`**, **`examples/cuda_gl.py`**: the GLFW window and the CUDA-OpenGL interop used by 1.4.3 and 1.4.4.
+- **`examples/fps_overlay.py`**: the frame-rate counter and its top-right text overlay, used by the GLFW and OpenCV examples.
 
 ## Building from source
 

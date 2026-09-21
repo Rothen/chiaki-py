@@ -1,7 +1,17 @@
-"""PyQt6 remote-play viewer built on chiaki_py's high-level API.
+"""PyQt6 remote-play viewer that renders on the GPU - the pixels never touch the CPU.
+
+With the CUDAFrameHandler every frame is converted to RGB on the GPU and drawn
+straight from GPU memory by an OpenGL widget (see chiaki_py/gui/stream/gpu_view.py).
+Compare 1.4.1_stream_qt.py, which decodes to system memory.
 
 Usage:
-    python examples/gui_stream.py
+    python examples/1.4.2_stream_gpu_qt.py
+
+The registration is the one written by 1.3_register_console.py. Press F in the
+window to show the frame rate.
+
+Needs: an NVIDIA GPU that also renders the window, and
+    pip install cupy-cuda12x cuda-python PyOpenGL
 """
 
 import sys
@@ -22,7 +32,7 @@ def main() -> None:
     registration_file = Path(cache_dir, "registration.json")
     
     if not cache_dir.exists() or not registration_file.exists():
-        print(f"Registration not found under {registration_file}. Run examples/1.3_login.py first")
+        print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
     registration = Serializer.load(Registration, Path("./cache", "registration.json"))

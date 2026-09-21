@@ -1,5 +1,5 @@
 """A GLFW window that shows RGB frames straight from CUDA device memory, shared by
-1.4.2_stream_cuda_gl.py (frames in a CuPy array) and 1.4.4_stream_tensor.py (frames in a
+1.4.3_stream_cuda_glfw.py (frames in a CuPy array) and 1.4.4_stream_tensor.py (frames in a
 PyTorch tensor). The interop itself is in cuda_gl.py.
 
 Needs: pip install glfw cuda-python PyOpenGL opencv-python

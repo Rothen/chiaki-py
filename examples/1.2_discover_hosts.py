@@ -1,7 +1,7 @@
 """Broadcast-scan the local network for PS4/PS5 consoles.
 
 Usage:
-    python examples/discover_hosts.py [timeout_seconds]
+    python examples/1.2_discover_hosts.py [--timeout SECONDS]
 
 No pairing/PSN login required - this just listens for consoles announcing
 themselves, the same way the PS Remote Play app's "device list" does.

@@ -1,13 +1,13 @@
-"""Pairs with a PS4/PS5 over the local network and writes a config.json
-that examples/gui_stream.py (or any chiaki_py.Session.connect call) can use
-directly - the end-to-end path from "I have a PSN account" to "I have
-connect credentials" that nothing in the raw bindings wires up.
+"""Pairs with a PS4/PS5 over the local network and writes
+cache/registration.json, which the 1.4.x streaming examples (or any
+chiaki_py.Session.connect call) can use directly.
 
 Usage:
-    python examples/register_console.py <host> <pin> [--ps4] [--console-pin PIN]
+    python examples/1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]
 
-`pin` is the 8-digit code shown on the console's Settings > Remote Play
-Connection Settings > Add Device screen.
+Needs the PSN account saved by 1.1_login.py. `pin` is the 8-digit code shown on
+the console's Link Device screen (PS5: Settings > System > Remote Play > Link
+Device; PS4: Settings > Remote Play Connection Settings > Add Device).
 """
 
 import sys

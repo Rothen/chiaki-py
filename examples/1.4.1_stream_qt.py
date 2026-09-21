@@ -1,7 +1,11 @@
-"""PyQt6 remote-play viewer built on chiaki_py's high-level API.
+"""PyQt6 remote-play viewer built on chiaki_py's high-level API. Frames are
+decoded to system memory; see 1.4.2_stream_gpu_qt.py for the GPU version.
 
 Usage:
-    python examples/gui_stream.py
+    python examples/1.4.1_stream_qt.py
+
+The registration is the one written by 1.3_register_console.py. Press F in the
+window to show the frame rate.
 """
 
 import sys
@@ -21,7 +25,7 @@ def main() -> None:
     registration_file = Path(cache_dir, "registration.json")
     
     if not cache_dir.exists() or not registration_file.exists():
-        print(f"Registration not found under {registration_file}. Run examples/1.3_login.py first")
+        print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
     registration = Serializer.load(Registration, Path("./cache", "registration.json"))

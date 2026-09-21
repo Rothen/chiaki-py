@@ -1,9 +1,10 @@
 """End-to-end: discover a console on the network, pair with it, and start
-streaming - the whole path from nothing to video in one script, instead of
-the discover_hosts.py / register_console.py / gui_stream.py split.
+streaming into an OpenCV window - the whole path from nothing to video in one
+script, instead of the 1.1_login.py / 1.2_discover_hosts.py /
+1.3_register_console.py / 1.4.x split.
 
 Usage:
-    python examples/discover_and_stream.py
+    python examples/2_discover_and_stream_opencv.py [--force-pair] [--headless] [--dir ./cache]
 
 You'll be asked to pick a console (if more than one answers) and to type in
 the registration PIN shown on its screen (PS5: Settings > System > Remote
@@ -12,12 +13,11 @@ Device). That PIN is fresh each time you open that screen, so pairing can't
 be fully scripted - everything else here is automatic.
 
 The regist_key/morning pairing credentials from a successful registration
-are cached per-console (keyed by its MAC/host_id, not its IP, since that can
-change), so re-running this against an already-paired console skips PSN
-login and registration entirely. Pass --force-pair to ignore the cache and
-pair again (e.g. after un-registering the app on the console).
-
-Needs: pip install -e .[psn,cv,controller]
+are cached per-console as <console name>.json in --dir, so re-running this
+against an already-paired console skips PSN login and registration entirely.
+Pass --force-pair to ignore the cache and pair again (e.g. after un-registering
+the app on the console). --headless logs in to PSN from the terminal instead of
+a Qt window. Press 'q' in the video window, or Ctrl+C in the terminal, to quit.
 """
 
 import sys
@@ -94,7 +94,6 @@ def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_p
 
 
 def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./cache')) -> None:
-    """--cuda: convert frames to RGB on the GPU (needs an NVIDIA GPU and cupy) instead of on the CPU."""
     settings = Settings()
     settings.set_log_verbose(False)
     settings.set_hardware_decoder('cuda')
