@@ -1,6 +1,7 @@
 #include "../../lib/src/utils.h"
 #include "utils.h"
 #include "streamsession.h"
+#include "cuda_driver.h"
 #include "settings.h"
 #include "controllermanager.h"
 
@@ -17,6 +18,11 @@
 #include <chiaki/remote/holepunch.h>
 #include <chiaki/session.h>
 // #include <chiaki/chiaki_time.h>
+
+extern "C"
+{
+#include <libavutil/hwcontext.h>
+}
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -182,12 +188,31 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
     ffmpeg_decoder = new ChiakiFfmpegDecoder;
     ChiakiLogSniffer sniffer;
     chiaki_log_sniffer_init(&sniffer, CHIAKI_LOG_ALL, GetChiakiLog());
+
+    AVBufferRef *device_ctx = connect_info.hw_device_ctx;
+    AVBufferRef *owned_device_ctx = nullptr;
+    if (!device_ctx && connect_info.hw_decoder == "cuda")
+    {
+        constexpr int kCudaUseCurrentContext = 1 << 1; // AV_CUDA_USE_CURRENT_CONTEXT (its header needs cuda.h)
+        try
+        {
+            const CudaDriver &cuda = CudaDriver::get();
+            const CudaDriver::ScopedContext scope(cuda, cuda.primary_context());
+            if (av_hwdevice_ctx_create(&owned_device_ctx, AV_HWDEVICE_TYPE_CUDA, nullptr, nullptr, kCudaUseCurrentContext) == 0)
+                device_ctx = owned_device_ctx;
+        }
+        catch (const std::exception &)
+        {
+        }
+    }
+
     err = chiaki_ffmpeg_decoder_init(ffmpeg_decoder,
                                         chiaki_log_sniffer_get_log(&sniffer),
                                         chiaki_target_is_ps5(connect_info.target) ? connect_info.video_profile.codec : CHIAKI_CODEC_H264,
                                         connect_info.video_profile.max_fps,
                                         connect_info.hw_decoder.empty() ? NULL : connect_info.hw_decoder.c_str(),
-                                        connect_info.hw_device_ctx, FfmpegFrameCb, this);
+                                        device_ctx, FfmpegFrameCb, this);
+    av_buffer_unref(&owned_device_ctx); // the decoder holds its own reference
     if (err != CHIAKI_ERR_SUCCESS)
     {
         std::string log = std::string(chiaki_log_sniffer_get_buffer(&sniffer));

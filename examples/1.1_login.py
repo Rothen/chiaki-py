@@ -11,29 +11,31 @@ Connection Settings > Add Device screen.
 """
 
 import sys
-import argparse
 from pathlib import Path
+
+import typer
 
 from chiaki_py import Serializer
 from chiaki_py.psn import PSNLoginQt, PSNLoginTerminal, PSNLogin, LoginError
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--headless", action="store_true", help="Register a PS4 instead of a PS5")
-    args = parser.parse_args()
-
+def main(headless: bool = False) -> None:
     cache_dir = Path("./cache")
-    cache_dir.touch(exist_ok=True)
+    cache_dir.mkdir(exist_ok=True)
+    psn_account_file = Path(cache_dir, "psn_account.json")
+
     LoginClass: type[PSNLogin] = PSNLoginQt
-    if args.headless:
+    if headless:
         LoginClass = PSNLoginTerminal
     try:
-        Serializer.save(LoginClass.login(), Path(cache_dir, "psn_account.json"))
+        psn_account = LoginClass.login()
     except LoginError as e:
         print(e.message)
         sys.exit()
 
+    Serializer.save(psn_account, Path(cache_dir, "psn_account.json"))
+    print(f"PSN Account '{psn_account.online_id}'. Wrote {psn_account_file}")
+
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

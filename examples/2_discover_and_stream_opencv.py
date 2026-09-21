@@ -22,17 +22,21 @@ Needs: pip install -e .[psn,cv,controller]
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import cv2
 import typer
 
 from chiaki_py import Session, discover_hosts, Serializer
 from chiaki_py.controller import attach_controller
-from chiaki_py.lib import Settings, DiscoveryHost, StreamSession
+from chiaki_py.lib import Settings, DiscoveryHost, StreamSession, CPUFrameHandler, CUDAFrameHandler
 from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
 from chiaki_py.registration import register, Registration
 from dualsense_py.backends import SDL3Backend
 from dualsense_py.utils import get_available_controllers
+import numpy as np
+from fps_overlay import FpsCounter, draw_text_top_right
+from helpers import setup_controller
 
 
 def _login(headless: bool):
@@ -58,17 +62,6 @@ def _register(settings: Settings, host: DiscoveryHost, dir: Path, headless: bool
     return registration
 
 
-def setup_controller(stream_session: StreamSession) -> bool:
-    SDL3Backend.init()
-    controllers = get_available_controllers()
-    if not controllers:
-        print("No DualSense controllers found - streaming without input.")
-        return False
-    attach_controller(controllers[0], stream_session)
-    print("Controller attached.")
-    return True
-
-
 def pick_host(hosts: list[DiscoveryHost]) -> DiscoveryHost:
     if len(hosts) == 1:
         return hosts[0]
@@ -82,7 +75,7 @@ def pick_host(hosts: list[DiscoveryHost]) -> DiscoveryHost:
 
 def pairing_cache_path(dir: Path, host: DiscoveryHost) -> Path:
     hosts_dir = Path(dir, "hosts")
-    hosts_dir.touch(exist_ok=True)
+    hosts_dir.mkdir(exist_ok=True)
     return Path(dir, f"{host.host_name}.json")
 
 
@@ -101,8 +94,10 @@ def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_p
 
 
 def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./cache')) -> None:
+    """--cuda: convert frames to RGB on the GPU (needs an NVIDIA GPU and cupy) instead of on the CPU."""
     settings = Settings()
     settings.set_log_verbose(False)
+    settings.set_hardware_decoder('cuda')
 
     print("Scanning network for consoles (3s)...")
     hosts = discover_hosts(settings, timeout=3.0)
@@ -113,12 +108,12 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
     host = pick_host(hosts)
     print(f"Using {host.host_name} ({host.host_addr})")
 
-    dir.touch(exist_ok=True)
+    dir.mkdir(exist_ok=True)
 
     registration = get_registration(settings, host, dir, force_pair, headless)
     print(f"Connecting to '{registration.nickname}'.")
 
-    session = Session.connect(settings, registration)
+    session = Session.connect(settings, registration, CPUFrameHandler)
     session.stream_session.on_session_quit().subscribe(lambda reason: print("Session quit:", reason))
     session.stream_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login PIN requested, incorrect:", incorrect))
 
@@ -128,8 +123,17 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
             
             print("Streaming - press 'q' in the video window, or Ctrl+C in the terminal, to quit.")
             try:
-                for frame in session.frames(max_fps=60):
-                    cv2.imshow("chiaki-py", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+                profile = session.stream_session.get_video_profile()
+                shape = (profile.height, profile.width, 3)
+                frame_np: np.ndarray = np.empty(shape, dtype=np.uint8)
+                frame_out: Any = frame_np
+                fps = FpsCounter()
+                for _ in session.frames(max_fps=60, out=frame_out):
+                    image = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
+                    measured = fps.tick()
+                    if measured is not None:
+                        draw_text_top_right(image, f"{measured:.1f} FPS")
+                    cv2.imshow("chiaki-py", image)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
             finally:

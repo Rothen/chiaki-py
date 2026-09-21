@@ -26,6 +26,10 @@ with Session.connect(settings, registration) as session:
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
+To keep frames in GPU memory instead of downloading them, use `session.gpu_frames()`. It yields `GpuFrame` handles (raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp) and needs a hardware decoder, e.g. `settings.set_hardware_decoder("cuda")`. Frames are NV12/P010, not RGB, and each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
+
+On an NVIDIA GPU, `session.cuda_frames()` (with `settings.set_hardware_decoder("cuda")`) yields `CudaFrame`s whose planes torch and cupy can wrap without a copy: `torch.as_tensor(frame.y, device="cuda")` or `cupy.asarray(frame.uv)`. `frame.y` is the (H, W) luma plane and `frame.uv` the (H/2, W/2, 2) interleaved chroma plane, so colour conversion to RGB is up to you. To get RGB instead, pass a uint8 CUDA tensor or array of shape (H, W, 3) as `out`, e.g. `session.cuda_frames(out=torch.empty((1080, 1920, 3), dtype=torch.uint8, device="cuda"))`: each frame is converted to RGB on the GPU into it and released right away.
+
 ## Examples
 
 Run these from a clone of the repo:
@@ -34,6 +38,8 @@ Run these from a clone of the repo:
 - **`examples/discover_hosts.py`**: just the network scan.
 - **`examples/register_console.py`**: just PSN login + pairing, writes a `chiaki_py_config.json`.
 - **`examples/gui_stream.py`**: a PyQt6 viewer that reads the config written by `register_console.py`.
+- **`examples/stream_from_gpu.py`** / **`examples/stream_from_gpu_qt.py`**: show the stream in an OpenGL window (GLFW) or a Qt widget (`QOpenGLWidget`) straight from GPU memory via CUDA-OpenGL interop, so frames are never downloaded to the CPU. The frame rate is drawn in the top-right corner (NVIDIA only; the shared interop code is in `examples/cuda_gl.py`).
+- **`examples/tensor_stream.py`**: streams straight into a PyTorch tensor on the GPU (NVIDIA + CUDA torch), so frames can be fed to a model without leaving the GPU. `discover_and_stream.py --cuda` does the same with a CuPy array.
 
 ## Building from source
 

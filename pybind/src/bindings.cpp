@@ -14,6 +14,8 @@
 #include "streamsession.h"
 #include "discovery_manager.h"
 #include "backend.h"
+#include "cuda_driver.h"
+#include "frame_handler.h"
 // #include "core/session.h"
 // #include "core/takion.h"
 // #include "core/remote/holepunch.h"
@@ -43,147 +45,13 @@ extern "C"
 
 namespace py = pybind11;
 
-// Pulls the next decoded video frame (if any) into `target`, a caller-owned
-// NumPy array. Returns (height, width) of the frame actually written if one
-// was available, or None if no new frame was available yet (not an error).
-// Raises RuntimeError on genuine failure. The (height, width) result lets
-// callers size/slice their buffer correctly without having to separately
-// track the negotiated stream resolution.
-py::object get_frame(StreamSession &session, bool disable_zero_copy, py::array_t<uint8_t> target)
-{
-    ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
-    if (!decoder)
-        throw std::runtime_error("Session has no FFmpeg decoder");
 
-    int32_t frames_lost;
-    AVFrame *frame = chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost).frame;
-    if (!frame)
-        return py::none();
-
-    // Owns whatever `frame` currently points to. Holding it by reference
-    // means reassigning `frame` (hardware transfer, below) keeps the guard
-    // in sync automatically instead of requiring a manual update at every
-    // reassignment site.
-    struct AVFrameGuard
-    {
-        AVFrame *&frame;
-        ~AVFrameGuard() { if (frame) av_frame_free(&frame); }
-    } frame_guard{frame};
-
-    // Unlike chiaki-ng's Qt GUI (which can render Vulkan/D3D11/VAAPI frames
-    // straight from the GPU and only transfers to CPU as a fallback), this
-    // function always has to hand back CPU-readable bytes for NumPy, so any
-    // hardware-resident frame must be transferred - there's no format for
-    // which skipping the transfer would still leave us with readable data.
-    // `disable_zero_copy` is accepted for API compatibility but currently
-    // has no effect, since that "zero copy" GPU-rendering path doesn't
-    // exist here.
-    (void)disable_zero_copy;
-    if (frame->hw_frames_ctx)
-    {
-        AVFrame *sw_frame = av_frame_alloc();
-        if (!sw_frame)
-            throw std::runtime_error("Failed to allocate software frame");
-
-        if (av_hwframe_transfer_data(sw_frame, frame, 0) < 0)
-        {
-            av_frame_free(&sw_frame);
-            throw std::runtime_error("Failed to transfer frame from hardware");
-        }
-
-        av_frame_copy_props(sw_frame, frame);
-        av_frame_free(&frame); // frame_guard.frame is now null, nothing double-freed
-        frame = sw_frame;      // frame_guard now owns sw_frame
-    }
-
-    // Holds the RGB conversion output, when needed. av_image_alloc uses a
-    // raw malloc'd buffer rather than the refcounted AVBufferRef pool, so it
-    // needs its own explicit free rather than av_frame_free/av_frame_unref.
-    AVFrame *rgb_frame = nullptr;
-    struct RgbFrameGuard
-    {
-        AVFrame *&frame;
-        ~RgbFrameGuard()
-        {
-            if (frame)
-            {
-                av_freep(&frame->data[0]);
-                av_frame_free(&frame);
-            }
-        }
-    } rgb_frame_guard{rgb_frame};
-
-    AVFrame *output = frame;
-
-    if (frame->format == AV_PIX_FMT_NV12)
-    {
-        struct SwsContext *sws_ctx = sws_getContext(
-            frame->width, frame->height, (AVPixelFormat)frame->format,
-            frame->width, frame->height, AV_PIX_FMT_RGB24,
-            SWS_BILINEAR, nullptr, nullptr, nullptr);
-        if (!sws_ctx)
-            throw std::runtime_error("Failed to create SwsContext");
-
-        struct SwsContextGuard
-        {
-            SwsContext *ctx;
-            ~SwsContextGuard() { sws_freeContext(ctx); }
-        } sws_guard{sws_ctx};
-
-        rgb_frame = av_frame_alloc();
-        if (!rgb_frame)
-            throw std::runtime_error("Failed to allocate RGB frame");
-
-        rgb_frame->format = AV_PIX_FMT_RGB24;
-        rgb_frame->width = frame->width;
-        rgb_frame->height = frame->height;
-
-        if (av_image_alloc(rgb_frame->data, rgb_frame->linesize, rgb_frame->width,
-                        rgb_frame->height, AV_PIX_FMT_RGB24, 1) < 0)
-        {
-            av_frame_free(&rgb_frame);
-            throw std::runtime_error("Failed to allocate RGB image buffer");
-        }
-
-        sws_scale(
-            sws_ctx,
-            frame->data, frame->linesize, 0, frame->height,
-            rgb_frame->data, rgb_frame->linesize);
-
-        output = rgb_frame;
-    }
-
-    if (output->format != AV_PIX_FMT_RGB24 && output->format != AV_PIX_FMT_GRAY8 && output->format != AV_PIX_FMT_YUV420P)
-    {
-        const char *name = av_get_pix_fmt_name((AVPixelFormat)output->format);
-        throw std::runtime_error("Unsupported pixel format for NumPy conversion: " + std::string(name ? name : "unknown"));
-    }
-
-    int height = output->height;
-    int width = output->width;
-    int data_size = av_image_get_buffer_size((AVPixelFormat)output->format, width, height, 1);
-    if (data_size <= 0)
-        throw std::runtime_error("Failed to get image buffer size");
-
-    py::buffer_info array_buf = target.request();
-    if (array_buf.size < data_size)
-        throw std::runtime_error("Target buffer is too small for frame data");
-
-    av_image_copy_to_buffer(static_cast<uint8_t *>(array_buf.ptr), data_size, output->data, output->linesize, (AVPixelFormat)output->format, width, height, 1);
-
-    return py::make_tuple(height, width);
-}
 
 PYBIND11_MODULE(chiaki_py, m)
 {
     m.doc() = "Python bindings for Chiaki CLI commands";
 
 #ifdef _WIN32
-    // Winsock must be initialized process-wide before any class in this
-    // module opens a socket (DiscoveryManager, Backend, StreamSession, ...).
-    // This used to happen only inside StreamSession's constructor, so any
-    // other class used without first constructing a StreamSession would
-    // fail with "failed to create socket".
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
@@ -209,16 +77,6 @@ PYBIND11_MODULE(chiaki_py, m)
     init_core_common(m_core_common);
     init_core_audio(m_core_audio);
     init_core_base64(m_core_base64);
-    // Log must be registered before Bitstream: Bitstream's constructor and
-    // `log` property are typed in terms of it, and pybind11 bakes the
-    // registered Python type name into a def()'d function's signature at
-    // bind time - if the type isn't registered yet, it falls back to the
-    // raw (and here, wrong - "LogWrapper" vs. the registered name "Log")
-    // C++ type name, which is what stub generators like pybind11-stubgen
-    // then pick up as the type hint. Runtime conversion is unaffected
-    // (that resolves the type registry dynamically per call, well after
-    // the whole module has finished importing), so this is a typehint-only
-    // fix, not a crash fix.
     init_core_log(m_core_log);
     init_core_bitstream(m_core_bitstream);
     init_core_controller(m_core_controller);
@@ -244,10 +102,6 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("Pi", Decoder::Pi)
         .export_values();
 
-    // These three were used as Settings getter/setter types without ever
-    // being registered, which doesn't fail to compile (pybind11 only
-    // resolves the caster at call time) but crashes every call at runtime
-    // with "Unable to convert function return value to a Python type!".
     py::enum_<ChiakiDisableAudioVideo>(m, "DisableAudioVideo")
         .value("None_", ChiakiDisableAudioVideo::CHIAKI_NONE_DISABLED)
         .value("Audio", ChiakiDisableAudioVideo::CHIAKI_AUDIO_DISABLED)
@@ -267,15 +121,8 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("FPS60", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_60)
         .export_values();
 
-    // Opaque handle - StreamSession::GetFfmpegDecoder() returns one only so
-    // it can be threaded back into get_frame() internally; there's nothing
-    // useful to call on it from Python. Registering it with no methods is
-    // enough to make it a real bindable type instead of crashing on return,
-    // same reasoning as the three enums above.
     py::class_<ChiakiFfmpegDecoder>(m, "FfmpegDecoder");
 
-    // Settings::GetVideoProfile*() return this plain struct without it ever
-    // being registered, same crash-on-return bug as the three enums above.
     py::class_<ChiakiConnectVideoProfile>(m, "ChiakiConnectVideoProfile")
         .def_readwrite("width", &ChiakiConnectVideoProfile::width)
         .def_readwrite("height", &ChiakiConnectVideoProfile::height)
@@ -283,12 +130,84 @@ PYBIND11_MODULE(chiaki_py, m)
         .def_readwrite("bitrate", &ChiakiConnectVideoProfile::bitrate)
         .def_readwrite("codec", &ChiakiConnectVideoProfile::codec);
 
-    m.def("get_frame", &get_frame,
-          py::arg("session"),
-          py::arg("disable_zero_copy"),
-          py::arg("target"),
-          "Pull the next decoded video frame into `target`. Returns (height, width) of "
-          "the frame written, or None if none was available yet. Raises RuntimeError on failure.");
+    py::class_<GpuFrame>(m, "GpuFrame",
+                         "A decoded video frame still resident in GPU memory. Keeps the decoder's frame "
+                         "pool slot and device alive until dropped, so release it promptly. The integers "
+                         "are raw handles for interop; what they point to depends on hw_type "
+                         "('vulkan': data[0] is an AVVkFrame*, 'cuda': one device pointer per plane, "
+                         "'d3d11va': data[0] is an ID3D11Texture2D* and data[1] its array slice).")
+        .def_property_readonly("hw_type", &GpuFrame::hw_type, "Hardware decoder type, e.g. 'vulkan', 'cuda', 'd3d11va'.")
+        .def_property_readonly("format", &GpuFrame::format, "Pixel format of the frame itself, e.g. 'vulkan', 'cuda', 'd3d11'.")
+        .def_property_readonly("sw_format", &GpuFrame::sw_format, "Underlying pixel layout on the GPU, e.g. 'nv12' or 'p010le'.")
+        .def_property_readonly("width", [](const GpuFrame &f) { return f.frame->width; })
+        .def_property_readonly("height", [](const GpuFrame &f) { return f.frame->height; })
+        .def_property_readonly("pts", [](const GpuFrame &f) { return f.pts; }, "Presentation time in seconds.")
+        .def_property_readonly("duration", [](const GpuFrame &f) { return f.duration; }, "Frame duration in seconds.")
+        .def_property_readonly("data", &GpuFrame::data, "Raw per-plane pointers / handles (integers).")
+        .def_property_readonly("linesize", &GpuFrame::linesize, "Row stride in bytes for each entry of `data`.")
+        .def_property_readonly("device_hwctx", &GpuFrame::device_hwctx,
+                               "Address of the hardware device context struct (AVVulkanDeviceContext*, "
+                               "AVCUDADeviceContext*, ...) the frame lives on.");
+
+    py::class_<CudaPlane, std::shared_ptr<CudaPlane>>(m, "CudaPlane",
+                                                      "One plane of a CUDA frame. Implements __cuda_array_interface__, so "
+                                                      "torch.as_tensor(plane, device='cuda') and cupy.asarray(plane) wrap it "
+                                                      "without copying. It keeps the frame's device memory alive (and its slot in "
+                                                      "the decoder's frame pool occupied) for as long as it, or anything made "
+                                                      "from it, exists.")
+        .def_property_readonly("__cuda_array_interface__", &CudaPlane::cuda_array_interface);
+
+    py::class_<CudaFrame>(m, "CudaFrame",
+                          "A decoded frame in CUDA device memory (device 0's primary context, shared with "
+                          "PyTorch/CuPy), as NV12 or P010/P016 planes: `y` is (H, W) and `uv` is (H/2, W/2, 2) "
+                          "with U and V interleaved. 8-bit samples are uint8; 10/16-bit ones are uint16 with the "
+                          "value in the high bits. Colour conversion to RGB is left to the caller.")
+        .def_readonly("width", &CudaFrame::width)
+        .def_readonly("height", &CudaFrame::height)
+        .def_readonly("pts", &CudaFrame::pts, "Presentation time in seconds.")
+        .def_readonly("duration", &CudaFrame::duration, "Frame duration in seconds.")
+        .def_readonly("sw_format", &CudaFrame::sw_format, "'nv12', 'p010le' or 'p016le'.")
+        .def_readonly("y", &CudaFrame::y, "Luma plane, shape (height, width).")
+        .def_readonly("uv", &CudaFrame::uv, "Interleaved chroma plane, shape (ceil(height/2), ceil(width/2), 2).");
+
+    py::class_<FrameHandler>(m, "FrameHandler",
+                             "Base class of the frame handlers, which pull decoded frames out of a StreamSession "
+                             "in different forms (CPUFrameHandler, CUDAFrameHandler, GPUFrameHandler). Not "
+                             "instantiable itself.")
+        .def("get_frame", &FrameHandler::get_frame,
+             py::arg("out") = py::none(),
+             "Pull the next decoded video frame, or None if none was available yet. What is returned, and "
+             "what `out` may be, depends on the subclass. Raises RuntimeError on decoding failure.");
+
+    py::class_<CPUFrameHandler, FrameHandler>(m, "CPUFrameHandler")
+        .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
+        .def("get_frame", &CPUFrameHandler::get_frame,
+             py::arg("out") = py::none(),
+             "Pull the next decoded video frame as a (height, width, 3) uint8 RGB array, or None if "
+             "none was available yet. If `out` is given it must already have the frame's exact shape "
+             "(C-contiguous, uint8, writable); the frame is written into it and `out` is returned, "
+             "otherwise a new array is allocated. Raises RuntimeError on decoding failure and "
+             "TypeError/ValueError for an unusable `out`.");
+
+    py::class_<CUDAFrameHandler, FrameHandler>(m, "CUDAFrameHandler")
+        .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
+        .def("get_frame", &CUDAFrameHandler::get_frame,
+             py::arg("out") = py::none(),
+             "Pull the next decoded video frame on the GPU, or None if none was available yet. Returns a "
+             "CudaFrame whose NV12 planes torch and cupy can wrap without copying. If `out` is given - a "
+             "writable, C-contiguous uint8 CUDA array such as a torch tensor or cupy array, shaped "
+             "(height, width, 3) - the frame is instead converted to RGB on the GPU into it, `out` is "
+             "returned, and the conversion has finished when this returns. Requires hardware_decoder='cuda' "
+             "(RuntimeError otherwise); a bad `out` raises TypeError/ValueError.");
+
+    py::class_<GPUFrameHandler, FrameHandler>(m, "GPUFrameHandler")
+        .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
+        .def("get_frame", &GPUFrameHandler::get_frame,
+             py::arg("out") = py::none(),
+             "Pull the next decoded video frame without leaving GPU memory. Returns a GpuFrame, or None "
+             "if none was available yet. If `out` is a GpuFrame it takes over the new frame (releasing "
+             "the one it held) and is returned instead of a new GpuFrame being created. Raises "
+             "RuntimeError if the session doesn't use a hardware decoder and TypeError if `out` isn't a GpuFrame.");
 
     py::class_<Settings>(m, "Settings")
         .def(py::init<>())
@@ -445,6 +364,19 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("set_audio_volume", &StreamSession::SetAudioVolume, py::arg("volume"), "Set the audio volume.")
         .def("get_cant_display", &StreamSession::GetCantDisplay, "Get the cant display status.")
         .def("get_ffmpeg_decoder", &StreamSession::GetFfmpegDecoder, "Get the FFmpeg decoder.", py::return_value_policy::reference)
+        .def("has_hardware_decoder", [](StreamSession &s) {
+            ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
+            return decoder && decoder->hw_device_ctx;
+        }, "Whether the video decoder is hardware-accelerated (i.e. get_frame_gpu() can return frames).")
+        .def("get_video_profile", &StreamSession::GetVideoProfile,
+             "The stream's video profile (width, height, max_fps, bitrate, codec): the requested one until the "
+             "console answers, then the negotiated one. Known before the first frame arrives.")
+        .def("hardware_decoder_type", [](StreamSession &s) -> std::string {
+            ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
+            if (!decoder || !decoder->hw_device_ctx)
+                return "";
+            return av_hwdevice_get_type_name(reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type);
+        }, "Type of hardware decoder in use ('vulkan', 'cuda', 'd3d11va', ...), or '' if decoding on the CPU.")
         .def("on_frame_available", &StreamSession::OnFfmpegFrameAvailable, "Retrieve the FFmpeg frame available event.", py::return_value_policy::reference)
         .def("on_session_quit", &StreamSession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
         .def("on_login_pin_requested", &StreamSession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)
@@ -520,9 +452,6 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("Standby", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_STANDBY)
         .export_values();
 
-    // get_host_mac() below returns a HostMAC without it ever being
-    // registered, same "Unable to convert function return value to a
-    // Python type!" crash as the enums above.
     py::class_<HostMAC>(m, "HostMAC")
         .def("to_string", &HostMAC::ToString, "Get the MAC address as a hex string.")
         .def("__str__", &HostMAC::ToString);

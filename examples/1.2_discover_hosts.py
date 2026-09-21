@@ -6,16 +6,13 @@ Usage:
 No pairing/PSN login required - this just listens for consoles announcing
 themselves, the same way the PS Remote Play app's "device list" does.
 """
-
-import sys
+import typer
 
 from chiaki_py import discover_hosts
 from chiaki_py.lib import Settings
 
 
-def main() -> None:
-    timeout = float(sys.argv[1]) if len(sys.argv) > 1 else 2.0
-
+def main(timeout: float = 3.0) -> None:
     settings = Settings()
     settings.set_log_verbose(False)
 
@@ -32,4 +29,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

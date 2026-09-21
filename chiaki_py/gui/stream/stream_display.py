@@ -1,4 +1,7 @@
+import time
+import warnings
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -9,11 +12,36 @@ from PyQt6.QtQml import QQmlApplicationEngine
 
 from chiaki_py import Session
 from chiaki_py.controller import attach_controller
+from chiaki_py.lib import CUDAFrameHandler
 from dualsense_py.backends import SDL3Backend
 from dualsense_py.utils import get_available_controllers
 
 
 QML_PATH = Path(__file__).with_name("stream_display.qml")
+
+
+class FpsCounter:
+    """Frames per second, measured over consecutive windows of at least `interval` seconds."""
+
+    def __init__(self, interval: float = 0.5, clock: Callable[[], float] = time.perf_counter):
+        self.interval = interval
+        self._clock = clock
+        self._start: float | None = None
+        self._frames = 0
+        self.fps: float | None = None
+
+    def tick(self) -> float | None:
+        """Call once per frame shown. Returns the latest measurement, or None until one window has passed."""
+        now = self._clock()
+        if self._start is None:
+            self._start = now      # the first frame only starts the clock, so time spent waiting for it isn't counted
+            return self.fps
+        self._frames += 1
+        elapsed = now - self._start
+        if elapsed >= self.interval:
+            self.fps = self._frames / elapsed
+            self._start, self._frames = now, 0
+        return self.fps
 
 
 class FrameProducer(QThread):
@@ -61,12 +89,16 @@ class ControllerThread(QThread):
 
 
 class StreamDisplay(QObject):
-    """Shows the session's frames in the window defined by gui_stream.qml."""
+    """Shows the session's frames in the window defined by stream_display.qml.
 
-    def __init__(self, session: Session):
+    With `show_fps` the frame rate (frames shown per second) is drawn in the window's top-right corner.
+    """
+
+    def __init__(self, session: Session, show_fps: bool = True):
         super().__init__()
         self.session = session
         self.frame_size: tuple[int, int] | None = None
+        self.fps = FpsCounter() if show_fps else None
 
         self.engine = QQmlApplicationEngine()
         self.engine.load(QUrl.fromLocalFile(str(QML_PATH)))
@@ -99,6 +131,10 @@ class StreamDisplay(QObject):
         q_image = QImage(data, width, height, channels *
                          width, QImage.Format.Format_RGB888)
         self.video_sink.setVideoFrame(QVideoFrame(q_image))
+        if self.fps is not None:
+            fps = self.fps.tick()
+            if fps is not None:
+                self.window.setProperty("fpsText", f"{fps:.1f} FPS")
 
     def close(self) -> None:
         self.controller_thread.stop()
@@ -106,7 +142,7 @@ class StreamDisplay(QObject):
         self.session.stop()
     
     @classmethod
-    def start(cls, session: Session, argv: list[str]):
+    def start(cls, session: Session, argv: list[str], show_fps: bool = True):
         app = QGuiApplication(argv)
-        window = StreamDisplay(session)
+        window = StreamDisplay(session, show_fps)
         return app.exec()

@@ -201,6 +201,8 @@ class StreamSession
 		bool IsConnected()	{ return connected; }
 		bool IsConnecting()	{ return connect_timer.isValid(); }
 
+		ChiakiConnectVideoProfile GetVideoProfile() const { return session.connect_info.video_profile; }
+
 		void Start();
 		void Stop();
 		void GoToBed();

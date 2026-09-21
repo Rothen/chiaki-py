@@ -18,9 +18,32 @@ Window {
     signal closeRequested()
     onClosing: root.closeRequested()
 
+    // The frame rate shown in the top-right corner, set from Python (root.fpsText = "59.9 FPS");
+    // nothing is drawn while it is empty, i.e. until the first measurement
+    property string fpsText: ""
+
     VideoOutput {
         id: videoOutput
         anchors.fill: parent
         fillMode: VideoOutput.PreserveAspectCrop
+    }
+
+    Rectangle {
+        visible: root.fpsText !== ""
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 12
+        width: fpsLabel.width + 12
+        height: fpsLabel.height + 12
+        color: "#96000000" // black at 150/255 opacity, so the text reads on any picture
+
+        Text {
+            id: fpsLabel
+            anchors.centerIn: parent
+            text: root.fpsText
+            color: "white"
+            font.pixelSize: 24
+            font.bold: true
+        }
     }
 }
