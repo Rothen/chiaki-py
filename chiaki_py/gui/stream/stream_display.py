@@ -13,7 +13,7 @@ from chiaki_py import Session
 from chiaki_py.controller import attach_controller
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.gui.stream.frame_stats import FrameStats
-from chiaki_py.lib import CPUFrameHandler, CUDAFrameHandler
+from chiaki_py.lib import CPUFrameHandler, CUDAFrameHandler, GPUFrameHandler
 from dualsense_py.backends import SDL3Backend
 from dualsense_py.utils import get_available_controllers
 
@@ -74,17 +74,23 @@ class StreamDisplay(QObject):
       - CUDAFrameHandler: frames are converted on the GPU and drawn straight from GPU
         memory by an OpenGL widget (gpu_view.py), never touching the CPU. This needs an
         NVIDIA GPU, a QApplication, and pip install cupy-cuda12x cuda-python PyOpenGL.
+      - GPUFrameHandler: frames stay where the Vulkan hardware decoder put them and are drawn
+        on that same Vulkan device by a shader that converts them to RGB (vulkan_view.py), so
+        they are not copied at all. Needs Settings.set_hardware_decoder("vulkan") and a
+        QApplication; works on any GPU with Vulkan video decoding, Windows only so far.
     Other handlers cannot be shown.
 
     Press F to show or hide the frame rate and the time needed per frame in the top-right
-    corner; `show_stats` says whether they start out shown. The time per frame is how long it
-    takes to get a frame plus how long it takes to paint it, averaged over the last half
-    second, e.g. "2.0 ms/frame (get 1.5 + paint 0.5)":
+    corner (in the title bar with a GPUFrameHandler, where Vulkan draws over anything Qt puts
+    on the window); `show_stats` says whether they start out shown. The time per frame is how
+    long it takes to get a frame plus how long it takes to paint it, averaged over the last
+    half second, e.g. "2.0 ms/frame (get 1.5 + paint 0.5)":
       - get: the frame handler fetching the frame, i.e. decoding it to system memory
-        (CPU) or converting it to RGB on the GPU (GPU).
+        (CPU), converting it to RGB on the GPU (CUDA) or just taking hold of it (GPU).
       - paint: on the CPU path, preparing the frame and handing it to Qt (the drawing
-        itself is done by Qt's render thread and not included); on the GPU path, copying
-        it into the texture and drawing it, up to the GPU having finished.
+        itself is done by Qt's render thread and not included); on the CUDA path, copying
+        it into the texture and drawing it, up to the GPU having finished; with a
+        GPUFrameHandler, recording and submitting the drawing, not the GPU doing it.
 
     With `keep_aspect_ratio` (the default) the window keeps the video's aspect ratio while it is
     resized by dragging, so there are no bars; without it the window can take any shape and the
@@ -100,11 +106,14 @@ class StreamDisplay(QObject):
         handler = session.frame_handler
         if isinstance(handler, CUDAFrameHandler):
             self._init_gpu(show_stats, keep_aspect_ratio)
+        elif isinstance(handler, GPUFrameHandler):
+            self._init_vulkan(show_stats, keep_aspect_ratio)
         elif isinstance(handler, CPUFrameHandler):
             self._init_cpu(show_stats, keep_aspect_ratio)
         else:
-            raise TypeError(f"StreamDisplay can't show frames from a {type(handler).__name__}: "
-                            "use a CPUFrameHandler (rendered on the CPU) or a CUDAFrameHandler (rendered on the GPU)")
+            raise TypeError(f"StreamDisplay can't show frames from a {type(handler).__name__}: use a CPUFrameHandler "
+                            "(rendered on the CPU), a CUDAFrameHandler (rendered on the GPU with OpenGL) "
+                            "or a GPUFrameHandler (rendered on the GPU with Vulkan)")
 
         self.controller_thread = ControllerThread(session)
         self.controller_thread.start()
@@ -144,6 +153,22 @@ class StreamDisplay(QObject):
         self.window = GpuStreamWindow(self.session, show_stats, keep_aspect_ratio)
         self.window.closeRequested.connect(self.close)  # type: ignore[attr-defined]
         self.window.show()
+
+    def _init_vulkan(self, show_stats: bool, keep_aspect_ratio: bool) -> None:
+        if not isinstance(QCoreApplication.instance(), QApplication):
+            raise RuntimeError("Rendering with Vulkan needs a QApplication (a QGuiApplication is not enough) "
+                               "to exist first; StreamDisplay.start() creates one")
+        from chiaki_py.gui.stream.vulkan_view import VulkanStreamWindow
+
+        self.window = VulkanStreamWindow(self.session, show_stats, keep_aspect_ratio)
+        self.window.closeRequested.connect(self.close)  # type: ignore[attr-defined]
+        self.window.show()
+        try:
+            self.window.start()   # needs the native window that showing it made
+        except Exception:
+            self.window.video.release()
+            self.window.hide()
+            raise
 
     @pyqtSlot(np.ndarray, float)  # type: ignore[attr-defined]
     def update_frame(self, frame: npt.NDArray[np.uint8], get_seconds: float) -> None:

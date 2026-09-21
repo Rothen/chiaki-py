@@ -45,6 +45,76 @@ std::vector<int> GpuFrame::linesize() const
 
 uintptr_t GpuFrame::device_hwctx() const { return reinterpret_cast<uintptr_t>(frames_ctx()->device_ctx->hwctx); }
 
+std::unique_ptr<GpuFrame> GpuFrame::upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
+                                                std::optional<int> visible_width, std::optional<int> visible_height)
+{
+    ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
+    if (!decoder || !decoder->hw_device_ctx ||
+        reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type != AV_HWDEVICE_TYPE_VULKAN)
+        throw std::runtime_error("Session is not using the Vulkan hardware decoder; use Settings.set_hardware_decoder(\"vulkan\")");
+    if (nv12.ndim() != 2 || nv12.shape(0) % 3 != 0 || nv12.shape(0) / 3 * 2 % 2 != 0 || nv12.shape(1) % 2 != 0)
+        throw py::value_error("nv12 must have shape (height * 3 / 2, width) with an even height and width");
+    const int width = static_cast<int>(nv12.shape(1));
+    const int height = static_cast<int>(nv12.shape(0) / 3 * 2);
+
+    AVBufferRef *frames_ref = av_hwframe_ctx_alloc(decoder->hw_device_ctx);
+    if (!frames_ref)
+        throw std::runtime_error("Failed to allocate a frames context");
+    auto *frames = reinterpret_cast<AVHWFramesContext *>(frames_ref->data);
+    frames->format = AV_PIX_FMT_VULKAN;
+    frames->sw_format = AV_PIX_FMT_NV12;
+    frames->width = width;
+    frames->height = height;
+    if (av_hwframe_ctx_init(frames_ref) < 0)
+    {
+        av_buffer_unref(&frames_ref);
+        throw std::runtime_error("Failed to initialise a Vulkan frames context");
+    }
+
+    AVFrame *hw = av_frame_alloc();
+    AVFrame *sw = av_frame_alloc();
+    auto cleanup = [&]() { av_frame_free(&hw); av_frame_free(&sw); av_buffer_unref(&frames_ref); };
+    if (!hw || !sw)
+    {
+        cleanup();
+        throw std::runtime_error("Failed to allocate a frame");
+    }
+    if (av_hwframe_get_buffer(frames_ref, hw, 0) < 0)
+    {
+        cleanup();
+        throw std::runtime_error("Failed to allocate a Vulkan frame");
+    }
+
+    // The system memory frame only borrows the array's memory, for the duration of the transfer.
+    sw->format = AV_PIX_FMT_NV12;
+    sw->width = width;
+    sw->height = height;
+    uint8_t *data = const_cast<uint8_t *>(nv12.data());
+    sw->data[0] = data;
+    sw->linesize[0] = width;
+    sw->data[1] = data + static_cast<size_t>(width) * height;
+    sw->linesize[1] = width;
+    if (av_hwframe_transfer_data(hw, sw, 0) < 0)
+    {
+        cleanup();
+        throw std::runtime_error("Failed to upload the picture to the GPU");
+    }
+    // Decoders allocate images of the coded size, which can exceed the picture that is meant to be shown
+    hw->width = visible_width.value_or(width);
+    hw->height = visible_height.value_or(height);
+    if (hw->width < 1 || hw->width > width || hw->height < 1 || hw->height > height)
+    {
+        cleanup();
+        throw py::value_error("The visible size must be within the uploaded picture");
+    }
+    hw->colorspace = AVCOL_SPC_BT709;
+    hw->color_range = AVCOL_RANGE_MPEG;
+
+    av_frame_free(&sw);
+    av_buffer_unref(&frames_ref); // the frame holds its own reference
+    return std::make_unique<GpuFrame>(hw, 0.0, 0.0);
+}
+
 CudaPlane::CudaPlane(const AVFrame *source, uintptr_t ptr, std::vector<py::ssize_t> shape,
                    std::vector<py::ssize_t> strides, std::string typestr)
     : frame(av_frame_clone(source)), ptr(ptr), shape(std::move(shape)),
@@ -122,6 +192,11 @@ std::unique_ptr<CudaFrame> CudaFrame::from_frame(const AVFrame *frame, double pt
 
 static YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, const CudaFrameLayout &layout)
 {
+    return yuv_to_rgb_params(frame, static_cast<int>(layout.bytes_per_sample));
+}
+
+YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, int bytes_per_sample)
+{
     double kr = 0.2126, kb = 0.0722;
     switch (frame->colorspace)
     {
@@ -142,7 +217,7 @@ static YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, const CudaFrameLay
     default:
         break;
     }
-    return YuvToRgbParams::make(kr, kb, frame->color_range == AVCOL_RANGE_JPEG, static_cast<int>(layout.bytes_per_sample));
+    return YuvToRgbParams::make(kr, kb, frame->color_range == AVCOL_RANGE_JPEG, bytes_per_sample);
 }
 
 CudaArrayDestination CudaArrayDestination::parse(const py::object &out)

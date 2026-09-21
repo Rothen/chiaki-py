@@ -28,12 +28,9 @@ import cv2
 import typer
 
 from chiaki_py import Session, discover_hosts, Serializer
-from chiaki_py.controller import attach_controller
-from chiaki_py.lib import Settings, DiscoveryHost, StreamSession, CPUFrameHandler, CUDAFrameHandler
+from chiaki_py.lib import Settings, DiscoveryHost, CPUFrameHandler
 from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
 from chiaki_py.registration import register, Registration
-from dualsense_py.backends import SDL3Backend
-from dualsense_py.utils import get_available_controllers
 import numpy as np
 from fps_overlay import FpsCounter, draw_text_top_right
 from helpers import setup_controller

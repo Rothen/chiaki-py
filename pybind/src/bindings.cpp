@@ -16,6 +16,7 @@
 #include "backend.h"
 #include "cuda_driver.h"
 #include "frame_handler.h"
+#include "vulkan_renderer.h"
 // #include "core/session.h"
 // #include "core/takion.h"
 // #include "core/remote/holepunch.h"
@@ -450,6 +451,34 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("set_orientation", &StreamSession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation x, y, z and w value [0, 1023].")
 
         .def("send_feedback_state", &StreamSession::SendFeedbackState, "Send the feedback state.");
+
+    // Bound here rather than with GpuFrame because it takes a StreamSession, which has to be known by then.
+    py::reinterpret_borrow<py::class_<GpuFrame>>(m.attr("GpuFrame"))
+        .def_static("upload_nv12", &GpuFrame::upload_nv12, py::arg("stream_session"), py::arg("nv12"),
+                    py::arg("visible_width") = py::none(), py::arg("visible_height") = py::none(),
+                    "Upload an NV12 picture from system memory - a C-contiguous uint8 array of shape "
+                    "(height * 3 / 2, width): the luma rows, then the interleaved chroma rows - into a new "
+                    "GpuFrame on the session's Vulkan hardware device (RuntimeError if it does not use one), "
+                    "as the decoder would have produced it. The frame shows only the top left "
+                    "visible_width x visible_height pixels if given, like a decoded picture that is smaller "
+                    "than the image it is stored in. For trying out consumers of GpuFrames, such as "
+                    "VulkanRenderer, without a console.");
+
+    py::class_<VulkanRenderer>(m, "VulkanRenderer",
+                               "Draws GpuFrames of the Vulkan hardware decoder into a native window without them "
+                               "leaving the GPU: the frames' NV12/P010 planes are converted to RGB by a shader "
+                               "and presented on the same Vulkan device the decoder decodes on. Windows only so "
+                               "far. Call from one thread (the GUI thread), and close() before the window is destroyed.")
+        .def(py::init<StreamSession &, uintptr_t>(), py::arg("stream_session"), py::arg("window"), py::keep_alive<1, 2>(),
+             "Draw into the native window `window` (an HWND). The session must use the Vulkan hardware decoder "
+             "(Settings.set_hardware_decoder(\"vulkan\")); raises RuntimeError otherwise, or if the window can't be drawn into.")
+        .def("render", &VulkanRenderer::render, py::arg("frame"), py::call_guard<py::gil_scoped_release>(),
+             "Draw `frame`, a GpuFrame from the Vulkan decoder, scaled to fit the window with its aspect "
+             "ratio kept, and present it. Does nothing while the window has no area (is minimised). Returns "
+             "once the drawing is submitted, not finished; the GPU is waited for when the next frame needs it.")
+        .def("close", &VulkanRenderer::close, py::call_guard<py::gil_scoped_release>(),
+             "Wait for the GPU to be done and free everything. Call before the window is destroyed.")
+        .def_static("is_supported", &VulkanRenderer::is_supported, "Whether windows of this platform can be drawn into (only Windows so far).");
 
     py::enum_<ChiakiDiscoveryHostState>(m, "DiscoveryHostState")
         .value("Unknown", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN)

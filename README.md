@@ -26,9 +26,19 @@ with Session.connect(settings, registration) as session:
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
-To keep frames in GPU memory instead of downloading them, use `session.gpu_frames()`. It yields `GpuFrame` handles (raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp) and needs a hardware decoder, e.g. `settings.set_hardware_decoder("cuda")`. Frames are NV12/P010, not RGB, and each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
+What `session.frames()` yields depends on the frame handler class you pass as the third argument to `Session.connect`. The default, `CPUFrameHandler`, downloads every frame to system memory as the numpy array above. The other two keep frames in GPU memory and need a hardware decoder, set with `settings.set_hardware_decoder(...)` before connecting:
 
-On an NVIDIA GPU, `session.cuda_frames()` (with `settings.set_hardware_decoder("cuda")`) yields `CudaFrame`s whose planes torch and cupy can wrap without a copy: `torch.as_tensor(frame.y, device="cuda")` or `cupy.asarray(frame.uv)`. `frame.y` is the (H, W) luma plane and `frame.uv` the (H/2, W/2, 2) interleaved chroma plane, so colour conversion to RGB is up to you. To get RGB instead, pass a uint8 CUDA tensor or array of shape (H, W, 3) as `out`, e.g. `session.cuda_frames(out=torch.empty((1080, 1920, 3), dtype=torch.uint8, device="cuda"))`: each frame is converted to RGB on the GPU into it and released right away.
+- **`GPUFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`) yields `GpuFrame` handles: raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp. Frames are NV12/P010, not RGB, and each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
+- **`CUDAFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`) yields `CudaFrame`s whose planes torch and cupy can wrap without a copy: `torch.as_tensor(frame.y, device="cuda")` or `cupy.asarray(frame.uv)`. `frame.y` is the (H, W) luma plane and `frame.uv` the (H/2, W/2, 2) interleaved chroma plane, so colour conversion to RGB is up to you. To get RGB instead, pass a uint8 CUDA tensor or array of shape (H, W, 3) as `out`, e.g. `session.frames(out=torch.empty((1080, 1920, 3), dtype=torch.uint8, device="cuda"))`: each frame is converted to RGB on the GPU into it and released right away.
+
+```python
+from chiaki_py.lib import CUDAFrameHandler
+
+settings.set_hardware_decoder("cuda")
+with Session.connect(settings, registration, CUDAFrameHandler) as session:
+    for frame in session.frames():
+        ...  # frame is a CudaFrame
+```
 
 ## Examples
 
@@ -46,8 +56,9 @@ The `1.x` scripts are the step-by-step path; `2_...` does the same in one script
    - **`examples/1.4.2_stream_gpu_qt.py`**: the same `StreamDisplay`, but with the `CUDAFrameHandler`: frames are converted to RGB on the GPU and drawn by an OpenGL widget straight from GPU memory, never downloaded to the CPU. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
    - **`examples/1.4.3_stream_cuda_glfw.py`**: the same idea without Qt, in a plain GLFW window. Each frame lands in a CuPy array and CUDA-OpenGL interop hands it to OpenGL. NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
    - **`examples/1.4.4_stream_tensor.py`**: like 1.4.3 but the frame is a PyTorch tensor on the GPU, so it can be fed to a model without leaving the GPU. The example computes the per-channel mean colour on the GPU and shows it in the window title. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
+   - **`examples/1.4.5_stream_vulkan_qt.py`**: the same `StreamDisplay`, with the `GPUFrameHandler` and the Vulkan hardware decoder (`settings.set_hardware_decoder("vulkan")`). The window is drawn by a shader on the very Vulkan device that decoded the frames, so they are not copied at all, not even within the GPU. No CUDA or OpenGL, so it isn't tied to NVIDIA and needs no extra packages, only a GPU and driver with Vulkan video decoding. Windows only so far.
 
-   The GLFW examples draw the frame rate in the top-right corner (`q` or Esc quits). In the Qt viewers it starts hidden: press `F` to show it, together with the time spent per frame.
+   The GLFW examples draw the frame rate in the top-right corner (`q` or Esc quits). In the Qt viewers it starts hidden: press `F` to show it, together with the time spent per frame (in the title bar for 1.4.5, where Vulkan draws over anything Qt puts on the window).
 
 ### All in one
 

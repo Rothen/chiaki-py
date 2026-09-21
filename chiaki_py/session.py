@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from typing import Any, Callable, Iterator, TypeVar
+from types import TracebackType
 
 import numpy as np
 import numpy.typing as npt
@@ -77,7 +78,7 @@ class Session:
 
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None) -> None:
         self.stop()
 
     def stop(self) -> None:

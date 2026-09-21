@@ -58,6 +58,8 @@ set(SOURCES
     include/streamsession.h
     include/discovery_manager.h
     include/frame_handler.h
+    include/vulkan_renderer.h
+    include/vulkan_shaders.h
     include/timer.h
     include/utils.h
     src/core/audio.cpp
@@ -78,6 +80,7 @@ set(SOURCES
     src/streamsession.cpp
     src/discovery_manager.cpp
     src/frame_handler.cpp
+    src/vulkan_renderer.cpp
     src/utils.cpp
     src/bindings.cpp
 )

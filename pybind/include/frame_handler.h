@@ -20,6 +20,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -73,6 +74,15 @@ struct GpuFrame
     std::vector<int> linesize() const;
 
     uintptr_t device_hwctx() const;
+
+    // Uploads an NV12 picture from system memory (a (height * 3 / 2, width) uint8 array: the luma rows, then
+    // the interleaved chroma rows) into a new frame on the session's Vulkan hardware device, as the decoder
+    // would have produced it. For trying out consumers of GpuFrames without a console. The frame is
+    // `visible_width` x `visible_height` (the whole picture by default), like a decoded picture that is
+    // smaller than the image it is stored in.
+    static std::unique_ptr<GpuFrame> upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
+                                                 std::optional<int> visible_width = std::nullopt,
+                                                 std::optional<int> visible_height = std::nullopt);
 };
 
 struct CudaPlane
@@ -119,6 +129,9 @@ struct CudaFrame
 };
 
 static YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, const CudaFrameLayout &layout);
+
+// The colour conversion (matrix and range) of `frame`, for samples of `bytes_per_sample` bytes (1: NV12, 2: P010/P016).
+YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, int bytes_per_sample);
 
 struct CudaArrayDestination
 {

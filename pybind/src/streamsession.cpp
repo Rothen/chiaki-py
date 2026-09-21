@@ -206,6 +206,21 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
         }
     }
 
+    if (!device_ctx && connect_info.hw_decoder == "vulkan")
+    {
+        // Create the decoder's Vulkan device here, rather than letting the decoder do it, to have it enable
+        // what VulkanRenderer needs to draw into a window on that same device instead of copying the frames.
+        AVDictionary *options = nullptr;
+#ifdef _WIN32
+        av_dict_set(&options, "instance_extensions", "VK_KHR_surface+VK_KHR_win32_surface", 0);
+        av_dict_set(&options, "device_extensions", "VK_KHR_swapchain", 0);
+#endif
+        // If that does not work the decoder makes a plain device of its own, which decodes just as well
+        if (options && av_hwdevice_ctx_create(&owned_device_ctx, AV_HWDEVICE_TYPE_VULKAN, nullptr, options, 0) == 0)
+            device_ctx = owned_device_ctx;
+        av_dict_free(&options);
+    }
+
     err = chiaki_ffmpeg_decoder_init(ffmpeg_decoder,
                                         chiaki_log_sniffer_get_log(&sniffer),
                                         chiaki_target_is_ps5(connect_info.target) ? connect_info.video_profile.codec : CHIAKI_CODEC_H264,
