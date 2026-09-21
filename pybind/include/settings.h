@@ -78,6 +78,7 @@ class Settings
         // Settings
         ChiakiDisableAudioVideo audioVideoDisabled;
         bool logVerbose;
+        ChiakiLogLevel logLevel;
         // uint32_t logLevelMask;
         RumbleHapticsIntensity rumbleHapticsIntensity;
         bool buttonsByPosition;
@@ -137,7 +138,10 @@ class Settings
 
         bool GetLogVerbose() const { return logVerbose; }
         void SetLogVerbose(bool logVerbose) { this->logVerbose = logVerbose; }
-        uint32_t GetLogLevelMask() const { uint32_t mask = CHIAKI_LOG_ALL; if (!GetLogVerbose()) { mask &= ~CHIAKI_LOG_VERBOSE; } return mask; };
+        // Least severe level still logged; the levels are single bits ordered ERROR < WARNING < INFO < VERBOSE < DEBUG.
+        ChiakiLogLevel GetLogLevel() const { return logLevel; }
+        void SetLogLevel(ChiakiLogLevel logLevel) { this->logLevel = logLevel; }
+        uint32_t GetLogLevelMask() const { uint32_t mask = ((uint32_t)logLevel << 1) - 1; mask &= CHIAKI_LOG_ALL; if (!GetLogVerbose()) { mask &= ~CHIAKI_LOG_VERBOSE; } return mask; };
 
         RumbleHapticsIntensity GetRumbleHapticsIntensity() const { return rumbleHapticsIntensity; };
         void SetRumbleHapticsIntensity(RumbleHapticsIntensity rumbleHapticsIntensity) { this->rumbleHapticsIntensity = rumbleHapticsIntensity; }

@@ -214,6 +214,11 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("get_audio_video_disabled", &Settings::GetAudioVideoDisabled, "Get the audio/video disabled.")
         .def("get_log_verbose", &Settings::GetLogVerbose, "Get the log verbose.")
         .def("set_log_verbose", &Settings::SetLogVerbose, py::arg("log_verbose") , "Set the log verbose.")
+        .def("get_log_level", &Settings::GetLogLevel, "Get the least severe log level that is still logged.")
+        .def("set_log_level", &Settings::SetLogLevel, py::arg("log_level"),
+             "Set the least severe log level that is still logged, e.g. LogLevel.WARNING to hide the "
+             "INFO chatter (the default, LogLevel.DEBUG, logs everything). VERBOSE is additionally "
+             "controlled by set_log_verbose.")
         .def("get_log_level_mask", &Settings::GetLogLevelMask, "Get the log level mask.")
         .def("get_rumble_haptics_intensity", &Settings::GetRumbleHapticsIntensity, "Get the rumble haptics intensity.")
         .def("set_rumble_haptics_intensity", &Settings::SetRumbleHapticsIntensity, py::arg("rumble_haptics_intensity"), "Set the rumble haptics intensity.")

@@ -14,35 +14,48 @@ Window {
     // Push decoded frames into this sink from Python: root.videoSink.setVideoFrame(frame)
     readonly property var videoSink: videoOutput.videoSink
 
+    // Where the picture is within the window: it is scaled to fit, keeping its aspect ratio, so
+    // it follows the window's size, with bars at the sides or at the top and bottom if the
+    // aspect ratios differ
+    readonly property rect videoRect: videoOutput.contentRect
+
     // Emitted when the window is closed; stop the threads and the session in response
     signal closeRequested()
     onClosing: root.closeRequested()
 
-    // The frame rate shown in the top-right corner, set from Python (root.fpsText = "59.9 FPS");
-    // nothing is drawn while it is empty, i.e. until the first measurement
-    property string fpsText: ""
+    // The frame rate and time per frame in the top-right corner, set from Python
+    // (root.statsText = "59.9 FPS\n16.7 ms/frame"); F shows or hides them. Nothing is drawn while the
+    // text is empty, i.e. until the first measurement
+    property string statsText: ""
+    property bool showStats: false
+
+    Shortcut {
+        sequence: "F"
+        onActivated: root.showStats = !root.showStats
+    }
 
     VideoOutput {
         id: videoOutput
         anchors.fill: parent
-        fillMode: VideoOutput.PreserveAspectCrop
+        fillMode: VideoOutput.PreserveAspectFit
     }
 
     Rectangle {
-        visible: root.fpsText !== ""
+        visible: root.showStats && root.statsText !== ""
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: 12
-        width: fpsLabel.width + 12
-        height: fpsLabel.height + 12
+        width: statsLabel.width + 16
+        height: statsLabel.height + 12
         color: "#96000000" // black at 150/255 opacity, so the text reads on any picture
 
         Text {
-            id: fpsLabel
+            id: statsLabel
             anchors.centerIn: parent
-            text: root.fpsText
+            text: root.statsText
             color: "white"
-            font.pixelSize: 24
+            horizontalAlignment: Text.AlignRight
+            font.pixelSize: 16
             font.bold: true
         }
     }

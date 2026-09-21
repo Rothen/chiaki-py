@@ -12,6 +12,7 @@ from chiaki_py.gui import StreamDisplay
 from chiaki_py.registration import Registration
 from chiaki_py.lib import Settings
 from chiaki_py.lib.core.log import LogLevel
+from chiaki_py.session import CUDAFrameHandler
 
 from helpers import setup_controller
 
@@ -27,12 +28,13 @@ def main() -> None:
     registration = Serializer.load(Registration, Path("./cache", "registration.json"))
 
     settings = Settings()
-    settings.set_log_verbose(False)
     settings.set_log_level(LogLevel.ERROR)
+    settings.set_hardware_decoder("cuda")
 
     session = Session.connect(
         settings,
-        registration
+        registration,
+        CUDAFrameHandler
     )
 
     session.stream_session.on_session_quit().subscribe(lambda reason: print("Session Quit:", reason))

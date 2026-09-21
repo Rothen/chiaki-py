@@ -8,6 +8,8 @@
 #define SETTINGS_VERSION 2
 
 Settings::Settings() : audioVideoDisabled(CHIAKI_NONE_DISABLED),
+                       logVerbose(false),
+                       logLevel(CHIAKI_LOG_DEBUG),
                        rumbleHapticsIntensity(RumbleHapticsIntensity::Normal),
                        buttonsByPosition(false),
                        startMicUnmuted(false),

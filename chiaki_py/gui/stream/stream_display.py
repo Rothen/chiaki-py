@@ -1,47 +1,22 @@
-import time
-import warnings
 from pathlib import Path
-from typing import Any, Callable
 
 import numpy as np
 import numpy.typing as npt
-from PyQt6.QtCore import QObject, QThread, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QGuiApplication, QImage
+from PyQt6.QtCore import QCoreApplication, QObject, QThread, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QImage
 from PyQt6.QtMultimedia import QVideoFrame, QVideoSink
 from PyQt6.QtQml import QQmlApplicationEngine
+from PyQt6.QtWidgets import QApplication
 
 from chiaki_py import Session
 from chiaki_py.controller import attach_controller
-from chiaki_py.lib import CUDAFrameHandler
+from chiaki_py.gui.stream.frame_stats import FpsCounter
+from chiaki_py.lib import CPUFrameHandler, CUDAFrameHandler
 from dualsense_py.backends import SDL3Backend
 from dualsense_py.utils import get_available_controllers
 
 
 QML_PATH = Path(__file__).with_name("stream_display.qml")
-
-
-class FpsCounter:
-    """Frames per second, measured over consecutive windows of at least `interval` seconds."""
-
-    def __init__(self, interval: float = 0.5, clock: Callable[[], float] = time.perf_counter):
-        self.interval = interval
-        self._clock = clock
-        self._start: float | None = None
-        self._frames = 0
-        self.fps: float | None = None
-
-    def tick(self) -> float | None:
-        """Call once per frame shown. Returns the latest measurement, or None until one window has passed."""
-        now = self._clock()
-        if self._start is None:
-            self._start = now      # the first frame only starts the clock, so time spent waiting for it isn't counted
-            return self.fps
-        self._frames += 1
-        elapsed = now - self._start
-        if elapsed >= self.interval:
-            self.fps = self._frames / elapsed
-            self._start, self._frames = now, 0
-        return self.fps
 
 
 class FrameProducer(QThread):
@@ -89,16 +64,40 @@ class ControllerThread(QThread):
 
 
 class StreamDisplay(QObject):
-    """Shows the session's frames in the window defined by stream_display.qml.
+    """Shows the session's frames in a window, scaled to fit it as it is resized.
 
-    With `show_fps` the frame rate (frames shown per second) is drawn in the window's top-right corner.
+    How the frames are rendered follows the session's frame handler:
+      - CPUFrameHandler: frames are decoded to system memory and shown by a QML window
+        (stream_display.qml).
+      - CUDAFrameHandler: frames are converted on the GPU and drawn straight from GPU
+        memory by an OpenGL widget (gpu_view.py), never touching the CPU. This needs an
+        NVIDIA GPU, a QApplication, and pip install cupy-cuda12x cuda-python PyOpenGL.
+    Other handlers cannot be shown.
+
+    Press F to show or hide the frame rate and time per frame in the top-right corner;
+    `show_stats` says whether they start out shown.
     """
 
-    def __init__(self, session: Session, show_fps: bool = True):
+    def __init__(self, session: Session, show_stats: bool = False):
         super().__init__()
         self.session = session
+        self.frame_thread: FrameProducer | None = None
+
+        handler = session.frame_handler
+        if isinstance(handler, CUDAFrameHandler):
+            self._init_gpu(show_stats)
+        elif isinstance(handler, CPUFrameHandler):
+            self._init_cpu(show_stats)
+        else:
+            raise TypeError(f"StreamDisplay can't show frames from a {type(handler).__name__}: "
+                            "use a CPUFrameHandler (rendered on the CPU) or a CUDAFrameHandler (rendered on the GPU)")
+
+        self.controller_thread = ControllerThread(session)
+        self.controller_thread.start()
+
+    def _init_cpu(self, show_stats: bool) -> None:
         self.frame_size: tuple[int, int] | None = None
-        self.fps = FpsCounter() if show_fps else None
+        self.stats = FpsCounter()
 
         self.engine = QQmlApplicationEngine()
         self.engine.load(QUrl.fromLocalFile(str(QML_PATH)))
@@ -106,17 +105,27 @@ class StreamDisplay(QObject):
             raise RuntimeError(f"Failed to load {QML_PATH}")
 
         self.window = self.engine.rootObjects()[0]
+        self.window.setProperty("showStats", show_stats)
         self.video_sink: QVideoSink = self.window.property("videoSink")
         self.window.closeRequested.connect(
             self.close)  # type: ignore[attr-defined]
 
-        self.frame_thread = FrameProducer(session)
+        self.frame_thread = FrameProducer(self.session)
         self.frame_thread.frame_ready.connect(self.update_frame)
-
-        self.controller_thread = ControllerThread(session)
-
         self.frame_thread.start()
-        self.controller_thread.start()
+
+    def _init_gpu(self, show_stats: bool) -> None:
+        if not isinstance(QCoreApplication.instance(), QApplication):
+            raise RuntimeError("Rendering on the GPU needs a QApplication (a QGuiApplication is not enough) "
+                               "to exist first; StreamDisplay.start() creates one")
+        try:
+            from chiaki_py.gui.stream.gpu_view import GpuStreamWindow
+        except ImportError as e:
+            raise ImportError("Rendering on the GPU needs: pip install cupy-cuda12x cuda-python PyOpenGL") from e
+
+        self.window = GpuStreamWindow(self.session, show_stats)
+        self.window.closeRequested.connect(self.close)
+        self.window.show()
 
     @pyqtSlot(np.ndarray)
     def update_frame(self, frame: npt.NDArray[np.uint8]) -> None:
@@ -131,18 +140,19 @@ class StreamDisplay(QObject):
         q_image = QImage(data, width, height, channels *
                          width, QImage.Format.Format_RGB888)
         self.video_sink.setVideoFrame(QVideoFrame(q_image))
-        if self.fps is not None:
-            fps = self.fps.tick()
-            if fps is not None:
-                self.window.setProperty("fpsText", f"{fps:.1f} FPS")
+        self.stats.tick()
+        summary = self.stats.summary()
+        if summary is not None:
+            self.window.setProperty("statsText", summary)
 
     def close(self) -> None:
         self.controller_thread.stop()
-        self.frame_thread.stop()
+        if self.frame_thread is not None:
+            self.frame_thread.stop()
         self.session.stop()
-    
+
     @classmethod
-    def start(cls, session: Session, argv: list[str], show_fps: bool = True):
-        app = QGuiApplication(argv)
-        window = StreamDisplay(session, show_fps)
+    def start(cls, session: Session, argv: list[str], show_stats: bool = False):
+        app = QCoreApplication.instance() or QApplication(argv)
+        window = StreamDisplay(session, show_stats)
         return app.exec()
