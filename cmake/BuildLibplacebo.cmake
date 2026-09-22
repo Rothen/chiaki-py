@@ -2,8 +2,8 @@
 # DLL in bin/) unless it is there already. Windows only, like the renderer.
 #
 # libplacebo needs a SPIR-V compiler to make its shaders, and the prebuilt libplacebo builds around do not have one, so
-# it is built here: with shaderc, which comes with the prebuilt FFmpeg in <deps_dir>, and the Vulkan loader from
-# vcpkg. Needs git, meson (pip install meson) and clang-cl, run from a Visual Studio dev shell like the rest of the build.
+# it is built here: with shaderc and the Vulkan loader, both from vcpkg (see vcpkg.json). Needs git, meson
+# (pip install meson) and clang-cl, run from a Visual Studio dev shell like the rest of the build.
 set(CHIAKI_PY_LIBPLACEBO_REPOSITORY "https://github.com/haasn/libplacebo.git" CACHE STRING "libplacebo git repository to build")
 set(CHIAKI_PY_LIBPLACEBO_TAG "v7.349.0" CACHE STRING "libplacebo git tag to build")
 mark_as_advanced(CHIAKI_PY_LIBPLACEBO_REPOSITORY)
@@ -28,32 +28,17 @@ function(chiaki_py_build_libplacebo deps_dir)
     if(NOT CHIAKI_PY_PKGCONF)
         message(FATAL_ERROR "Building libplacebo needs pkgconf, which vcpkg installs (see vcpkg.json)")
     endif()
-    if(NOT EXISTS "${deps_dir}/lib/shaderc_shared.lib" OR NOT EXISTS "${_vcpkg_prefix}/lib/vulkan-1.lib")
-        message(FATAL_ERROR "Building libplacebo needs shaderc_shared.lib in ${deps_dir}/lib (it comes with the prebuilt FFmpeg) "
-                            "and vulkan-1.lib in ${_vcpkg_prefix}/lib (vcpkg's vulkan)")
+    if(NOT EXISTS "${_vcpkg_prefix}/lib/shaderc.lib" OR NOT EXISTS "${_vcpkg_prefix}/lib/vulkan-1.lib")
+        message(FATAL_ERROR "Building libplacebo needs shaderc.lib and vulkan-1.lib in ${_vcpkg_prefix}/lib "
+                            "(vcpkg's shaderc and vulkan, see vcpkg.json)")
     endif()
 
     set(_src "${CMAKE_BINARY_DIR}/libplacebo-src")
     set(_build "${CMAKE_BINARY_DIR}/libplacebo-build")
-    set(_pc "${CMAKE_BINARY_DIR}/libplacebo-pc")
-
-    # What meson looks up with pkg-config. The .pc file that comes with the prebuilt FFmpeg's shaderc has the prefix of
-    # the machine it was built on, so these are written here.
-    file(MAKE_DIRECTORY "${_pc}")
-    file(WRITE "${_pc}/shaderc.pc"
-"Name: shaderc
-Description: Tools and libraries for Vulkan shader compilation
-Version: 2023.8.1
-Libs: -L${deps_dir}/lib -lshaderc_shared
-Cflags: -I${deps_dir}/include
-")
-    file(WRITE "${_pc}/vulkan.pc"
-"Name: vulkan
-Description: Vulkan loader
-Version: 1.3.0
-Libs: -L${_vcpkg_prefix}/lib -lvulkan-1
-Cflags: -I${_vcpkg_prefix}/include
-")
+    # vcpkg's shaderc and vulkan-loader ports each install a shaderc.pc/vulkan.pc with paths already fixed up to
+    # ${_vcpkg_prefix}, so meson finds both by pkg-config directly from there; shaderc is static, so it (and glslang
+    # and SPIR-V Tools, which its .pc lists as extra libs) end up linked straight into libplacebo.dll.
+    set(_pc "${_vcpkg_prefix}/lib/pkgconfig")
 
     if(NOT EXISTS "${_src}/meson.build")
         message(STATUS "Fetching libplacebo ${CHIAKI_PY_LIBPLACEBO_TAG}")

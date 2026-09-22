@@ -14,6 +14,7 @@
         "lcms",
         "speexdsp",
         "vulkan",
+        "shaderc",
         "fmt",
         "zlib",
         "libssh2",
