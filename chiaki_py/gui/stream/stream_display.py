@@ -19,6 +19,11 @@ from .threads.fps_thread import FpsThread
 
 
 class ControllerThread(QThread):
+    """Attaches the first available DualSense controller to the session's input, off the GUI
+    thread (dualsense-py's SDL3 backend needs its own event loop). Does nothing but log if no
+    controller is found; `stop()` releases the sticks and sends a final feedback state so the
+    console doesn't see them stuck wherever they last were."""
+
     def __init__(self, session: Session):
         super().__init__()
         self.session = session
@@ -113,6 +118,9 @@ class StreamDisplay(QObject):
 
     @classmethod
     def start(cls, session: Session, argv: list[str], show_stats: bool = False, keep_aspect_ratio: bool = False):
+        """Open a StreamDisplay for `session` and run the Qt event loop until its window is closed.
+        Reuses an existing QApplication if one is already running, otherwise creates one from `argv`.
+        Returns the process exit code from `QApplication.exec()`."""
         app = QCoreApplication.instance() or QApplication(argv)
         _ = StreamDisplay(session, show_stats, keep_aspect_ratio)
         return app.exec()

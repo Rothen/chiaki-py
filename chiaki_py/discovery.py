@@ -17,6 +17,6 @@ def discover_hosts(settings: Settings, timeout: float = 2.0) -> List[DiscoveryHo
     manager.set_active(True)
     try:
         time.sleep(timeout)
-        return manager.discovery_service_hosts()
+        return manager.get_hosts()
     finally:
         manager.set_active(False)

@@ -34,16 +34,25 @@ void init_backend(py::module &m)
         .value("ConnectFailedConsoleUnreachable", PsnConnectState::ConnectFailedConsoleUnreachable)
         .export_values();
 
-    py::class_<EventSource<ChiakiRegistEvent *>::Subscription>(m, "RegistEventSourceSubscription")
+    py::class_<EventSource<ChiakiRegistEvent *>::Subscription>(m, "RegistEventSourceSubscription",
+        "Returned by RegistEventSource.subscribe(); call unsubscribe() to stop receiving callbacks.")
         .def("unsubscribe", &EventSource<ChiakiRegistEvent *>::Subscription::unsubscribe);
 
-    py::class_<EventSource<ChiakiRegistEvent *>>(m, "RegistEventSource")
+    py::class_<EventSource<ChiakiRegistEvent *>>(m, "RegistEventSource",
+        "What Backend.register_host_async() returns: a one-shot stream of registration progress that "
+        "calls `on_next` with the final RegistEvent once registration succeeds, `on_error` if it fails, "
+        "and `on_completed` in either case.")
         .def("subscribe", &EventSource<ChiakiRegistEvent *>::subscribe,
              py::arg("on_next"),
              py::arg("on_error") = py::none(),
-             py::arg("on_completed") = py::none(), py::return_value_policy::reference);
+             py::arg("on_completed") = py::none(), py::return_value_policy::reference,
+             "Register callbacks for this registration attempt and return a subscription that can be "
+             "unsubscribe()'d. Registration only actually starts once the first subscriber attaches.");
 
-    py::class_<ChiakiRegisteredHost>(m, "RegisteredHost")
+    py::class_<ChiakiRegisteredHost>(m, "RegisteredHost",
+        "The result of a successful registration, as delivered through RegistEvent.registered_host by "
+        "Backend.register_host_async(). Backend.register_host() (the blocking variant) returns the "
+        "equivalent information as a RegistResult instead.")
         .def_readonly("target", &ChiakiRegisteredHost::target)
         .def_readonly("ap_ssid", &ChiakiRegisteredHost::ap_ssid)
         .def_readonly("ap_bssid", &ChiakiRegisteredHost::ap_bssid)
@@ -81,7 +90,9 @@ void init_backend(py::module &m)
         .value("FINISHED_SUCCESS", ChiakiRegistEventType::CHIAKI_REGIST_EVENT_TYPE_FINISHED_SUCCESS)
         .export_values();
 
-    py::class_<ChiakiRegistEvent>(m, "RegistEvent")
+    py::class_<ChiakiRegistEvent>(m, "RegistEvent",
+        "Delivered to Backend.register_host_async()'s `on_next` callback once registration finishes; "
+        "`type` says how (see RegistEventType), and `registered_host` carries the result if it succeeded.")
         .def_readonly("type", &ChiakiRegistEvent::type)
         .def_readonly("registered_host", &ChiakiRegistEvent::registered_host)
         .def("__repr__",
@@ -93,7 +104,9 @@ void init_backend(py::module &m)
                  return ss.str();
              });
 
-    py::class_<RegistResult>(m, "RegistResult")
+    py::class_<RegistResult>(m, "RegistResult",
+        "What Backend.register_host() (the blocking variant) returns on success: the same fields as "
+        "RegisteredHost, copied out of the underlying RegistEvent once registration completes.")
         .def_readonly("type", &RegistResult::type)
         .def_readonly("target", &RegistResult::target)
         .def_readonly("ap_ssid", &RegistResult::ap_ssid)
@@ -154,7 +167,10 @@ void init_backend(py::module &m)
                 return oss.str();
             });
 
-    py::class_<Backend>(m, "Backend")
+    py::class_<Backend>(m, "Backend",
+        "Registers with a console: the one-time PIN pairing that gets back the registration key "
+        "StreamSession later needs to connect. `chiaki_py.register_host()` wraps register_host() with "
+        "a pythonic result type (HostRegistration) and is the easier way to call this from Python.")
         .def(py::init<Settings *>(), py::arg("settings"))
         .def("register_host_async", &Backend::registerHostAsync,
              py::arg("host"),
@@ -162,12 +178,20 @@ void init_backend(py::module &m)
              py::arg("pin"),
              py::arg("cpin"),
              py::arg("broadcast"),
-             py::arg("target"), py::return_value_policy::reference)
+             py::arg("target"), py::return_value_policy::reference,
+             "Start registering with `host` and return a RegistEventSource that reports the outcome "
+             "once subscribed to, instead of blocking. `psn_id` is the PSN account-ID (base64) for a "
+             "PS5 or a PS4 in 'PS4 8.0' mode, or the online ID for an older PS4; `pin` is the one-time "
+             "PIN shown on the console's registration screen, `cpin` its login PIN if it has one "
+             "(otherwise empty). Raises RuntimeError immediately if `psn_id` is not valid base64 of the "
+             "expected length for a PS5/PS4-8.0 `target`.")
         .def("register_host", &Backend::registerHost,
              py::arg("host"),
              py::arg("psn_id"),
              py::arg("pin"),
              py::arg("cpin"),
              py::arg("broadcast"),
-             py::arg("target"), py::return_value_policy::copy);
+             py::arg("target"), py::return_value_policy::copy,
+             "Like register_host_async(), but blocks until registration finishes and returns the "
+             "RegistResult directly, or raises RuntimeError on failure.");
 }

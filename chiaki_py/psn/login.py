@@ -44,6 +44,10 @@ class PSNLoginParser:
 
     @classmethod
     def parse_psn_account(cls, redirect_url: str) -> PSNAccount:
+        """Turn the redirect URL PSN's OAuth login page ends on (starting with `REDIRECT_URL`,
+        carrying a `code` query parameter) into a `PSNAccount`: exchanges the code for a token
+        and fetches the account info with it. Raises ValueError if the URL or the exchange is
+        invalid, or if either HTTP call fails."""
         code = cls.__parse_redirect_url(redirect_url)
         if code is None:
             raise ValueError("Code is None")
@@ -125,17 +129,24 @@ class PSNLoginParser:
 
 
 class LoginError(Exception):
+    """Raised by `PSNLogin.login()` when signing in did not produce a usable `PSNAccount`
+    (the user closed the window, gave no redirect URL, or it could not be parsed)."""
+
     def __init__(self, message: str):
         self.message = message
         super().__init__(self.message)
 
 
 class PSNLogin(ABC):
+    """A way to sign in to a PSN account and get back the `PSNAccount` needed to register with
+    a console: `PSNLoginQt` (an embedded browser) or `PSNLoginTerminal` (paste the URL by hand)."""
+
     @classmethod
     @abstractmethod
     def login(cls) -> PSNAccount:
+        """Sign in interactively and return the resulting account. Raises LoginError on failure."""
         ...
-        
+
 
 class PSNLoginQt(PSNLogin):
     """Opens a PSN login page in an embedded QML WebEngineView and captures the resulting account."""

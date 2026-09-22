@@ -5,15 +5,14 @@ PS4/PS5 Remote Play from Python, built on [chiaki-ng](https://github.com/streetp
 ## Quickstart
 
 ```python
-from chiaki_py import Session, discover_hosts, register, Serializer
+from chiaki_py import Session, discover_hosts, register_host, Serializer
 from chiaki_py.lib import Settings
-from chiaki_py.psn.login import PSNLoginQt
-from chiaki_py import Serializer
+from chiaki_py.psn import PSNLoginQt
 
 settings = Settings()
 host = discover_hosts(settings, timeout=3.0)[0]
 psn_account = PSNLoginQt.login()
-registration = register(
+registration = register_host(
     settings,
     host=host.host_addr,
     psn_id=psn_account.user_rpid,  # or .online_id for a PS4
@@ -26,10 +25,13 @@ with Session.connect(settings, registration) as session:
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
-What `session.frames()` yields depends on the frame handler class you pass as the third argument to `Session.connect`. The default, `CpuFrameHandler`, downloads every frame to system memory as the numpy array above. The other two keep frames in GPU memory and need a hardware decoder, set with `settings.set_hardware_decoder(...)` before connecting:
+`Serializer.save(registration, path)` / `Serializer.load(HostRegistration, path)` persist a `registration` to JSON so you don't have to pair every run.
 
-- **`VulkanFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`) yields `VulkanFrame` handles: raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp. Frames are NV12/P010, not RGB, and each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
-- **`CudaFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`) converts every frame to RGB on the GPU and yields a (H, W, 3) uint8 CuPy array. Pass a uint8 CUDA tensor or array of that shape as `out` to have the frame converted into it instead (e.g. a PyTorch tensor), e.g. `session.frames(out=torch.empty((1080, 1920, 3), dtype=torch.uint8, device="cuda"))`: `out` is then returned and released right away.
+What `session.frames()` yields depends on the frame handler class passed as the third argument to `Session.connect`:
+
+- **`CpuFrameHandler`** (default): downloads every frame to system memory as the numpy array above.
+- **`VulkanFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`, set with `settings.set_hardware_decoder(...)` before connecting): yields `VulkanFrame` handles — raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp, NV12/P010 rather than RGB. Each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
+- **`CudaFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`): converts every frame to RGB on the GPU and yields a (H, W, 3) uint8 CuPy array. Pass a uint8 CUDA tensor or array of that shape as `out` to have the frame converted into it instead (e.g. a PyTorch tensor); `out` is then returned and released right away.
 
 ```python
 from chiaki_py.lib import CudaFrameHandler
@@ -42,46 +44,40 @@ with Session.connect(settings, registration, CudaFrameHandler) as session:
 
 ## Examples
 
-Run these from the root of a clone of the repo, e.g. `python examples/1.2_discover_hosts.py`. The scripts share a `./cache` directory (relative to where you run them) for the PSN account and the console registration, so run them from the same place every time.
-
-The `1.x` scripts are the step-by-step path; `2_...` does the same in one script.
+Run these from the root of a clone of the repo, e.g. `python examples/1.2_discover_hosts.py`. The scripts share a `./cache` directory (relative to where you run them) for the PSN account and console registration, so run them from the same place every time. The `1.x` scripts are the step-by-step path; `2_...` does the same in one script.
 
 ### Step by step
 
-1. **`examples/1.1_login.py`**: PSN login. Opens a Qt web view for you to sign in (`--headless` logs in from the terminal instead) and saves the account to `cache/psn_account.json`.
-2. **`examples/1.2_discover_hosts.py [--timeout 3.0]`**: scans the network and prints the consoles that answer. No login or pairing needed.
-3. **`examples/1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]`**: pairs with the console at `<host>` using the PIN from its Link Device screen (PS5: Settings > System > Remote Play > Link Device; PS4: Settings > Remote Play Connection Settings > Add Device) and saves `cache/host_registration.json`. It needs the account from step 1 and exits if `cache/psn_account.json` isn't there. Defaults to a PS5; pass `--ps4` for a PS4.
-4. **Stream.** Each of these loads `cache/host_registration.json` from step 3, attaches a DualSense if one is connected, and differs in how the frames get on screen:
-   - **`examples/1.4.1_stream_qt.py`**: the built-in PyQt6 `StreamDisplay`, with frames decoded to system memory. Works everywhere, no GPU needed.
-   - **`examples/1.4.2_stream_gpu_qt.py`**: the same `StreamDisplay`, but with the `CudaFrameHandler`: frames are converted to RGB on the GPU and drawn by an OpenGL widget straight from GPU memory, never downloaded to the CPU. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
-   - **`examples/1.4.3_stream_cuda_glfw.py`**: the same idea without Qt, in a plain GLFW window. Each frame lands in a CuPy array and CUDA-OpenGL interop hands it to OpenGL. NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
-   - **`examples/1.4.4_stream_tensor.py`**: like 1.4.3 but the frame is a PyTorch tensor on the GPU, so it can be fed to a model without leaving the GPU. The example computes the per-channel mean colour on the GPU and shows it in the window title. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
-   - **`examples/1.4.5_stream_vulkan_qt.py`**: the same `StreamDisplay`, with the `VulkanFrameHandler` and the Vulkan hardware decoder (`settings.set_hardware_decoder("vulkan")`). The window is drawn by [libplacebo](https://code.videolan.org/videolan/libplacebo) on the very Vulkan device that decoded the frames, so they are not copied at all, not even within the GPU. No CUDA or OpenGL, so it isn't tied to NVIDIA and needs no extra packages, only a GPU and driver with Vulkan video decoding. Windows only so far.
-
-   The GLFW examples draw the frame rate in the top-right corner (`q` or Esc quits). In the Qt viewers it starts hidden: press `F` to show it, together with the time spent per frame (for 1.4.5 libplacebo draws it over the video, as Vulkan draws over anything Qt puts on the window).
+1. **`1.1_login.py`**: PSN login. Opens a Qt web view to sign in (`--headless` for the terminal instead) and saves the account to `cache/psn_account.json`.
+2. **`1.2_discover_hosts.py [--timeout 3.0]`**: scans the network and prints the consoles that answer. No login or pairing needed.
+3. **`1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]`**: pairs with the console at `<host>` using the PIN from its Link Device screen (PS5: Settings > System > Remote Play > Link Device; PS4: Settings > Remote Play Connection Settings > Add Device) and saves `cache/host_registration.json`. Needs the account from step 1. Defaults to a PS5; pass `--ps4` for a PS4.
+4. **Stream.** Each of these loads `cache/host_registration.json` from step 3, attaches a DualSense if one is connected, and differs in how frames get on screen. Press `F` for the frame-rate overlay, `A` to lock the aspect ratio:
+   - **`1.4.1_stream_cpu_qt.py`**: the built-in PyQt6 `StreamDisplay`, frames decoded to system memory. Works everywhere, no GPU needed.
+   - **`1.4.2_stream_cuda_qt.py`**: same `StreamDisplay`, with `CudaFrameHandler` — frames are RGB-converted on the GPU and drawn by an OpenGL widget straight from GPU memory. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
+   - **`1.4.3_stream_vulkan_qt.py`**: same `StreamDisplay`, with `VulkanFrameHandler` and the Vulkan hardware decoder. [libplacebo](https://code.videolan.org/videolan/libplacebo) draws the window on the very Vulkan device that decoded the frames, so nothing is copied, not even within the GPU. No CUDA/OpenGL, no extra packages — just a GPU and driver with Vulkan video decoding. Windows only so far.
+   - **`1.4.4_stream_cuda_glfw.py`**: the CUDA path without Qt, in a plain GLFW window (frame rate drawn in the top-right corner; `q`/Esc quits). NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
+   - **`1.4.5_stream_tensor.py`**: like 1.4.4 but each frame lands in a PyTorch tensor on the GPU, so it can feed a model without leaving the GPU; the example prints the per-channel mean colour computed on the GPU. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
 
 ### All in one
 
-- **`examples/2_discover_and_stream_opencv.py [--force-pair] [--headless] [--dir ./cache]`**: discover a console (you pick one if several answer), log in to PSN, pair, and stream into an OpenCV window (`q` quits) with the frame rate in the top-right corner, all without the other scripts. The pairing is cached per console as `<console name>.json` in `--dir`, so later runs skip login and pairing; pass `--force-pair` to pair again (e.g. after removing the device on the console). Frames come to the CPU as a numpy array, which makes it the easiest one to adapt if you want to process frames with OpenCV.
+- **`2_discover_and_stream_opencv.py [--force-pair] [--headless] [--dir ./cache]`**: discover a console (you pick one if several answer), log in, pair and stream into an OpenCV window (`q` quits), all without the other scripts. Pairing is cached per console as `<console name>.json` in `--dir`; pass `--force-pair` to pair again. Frames arrive as a CPU numpy array, the easiest one to adapt for processing with OpenCV.
 
 ### Shared code
 
-- **`examples/helpers.py`**: `setup_controller()`, which attaches the first DualSense it finds to the stream.
-- **`examples/glfw_video.py`**, **`examples/cuda_gl.py`**: the GLFW window and the CUDA-OpenGL interop used by 1.4.3 and 1.4.4.
-- **`examples/fps_overlay.py`**: the frame-rate counter and its top-right text overlay, used by the GLFW and OpenCV examples.
+`helpers.py` (attaches a DualSense), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 1.4.4/1.4.5), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
 
 ## Building from source
 
-Only needed for development, or for platforms/Python versions without a wheel. CMake fetches [chiaki-ng](https://github.com/streetpea/chiaki-ng) into `libs/` automatically on first configure; on Windows it also downloads FFmpeg into `deps/` and builds [libplacebo](https://code.videolan.org/videolan/libplacebo) (which draws the Vulkan viewer's frames) there, from source with shaderc as its shader compiler, and the first build is slow.
+Only needed for development, or for platforms/Python versions without a wheel. CMake fetches [chiaki-ng](https://github.com/streetpea/chiaki-ng) into `libs/` automatically on first configure; on Windows it also downloads FFmpeg into `deps/` and builds [libplacebo](https://code.videolan.org/videolan/libplacebo) there from source (shaderc as its shader compiler), so the first build is slow.
 
 ### Windows
 
-Install [Git](https://git-scm.com/), [Python 3.11](https://www.python.org/downloads/), [Visual Studio](https://visualstudio.microsoft.com/) 2022 or newer (or Build Tools) with the *Desktop development with C++* workload, LLVM (for `clang-cl`), CMake and Ninja (e.g. `choco install llvm cmake ninja`), [Meson](https://mesonbuild.com/) (`pip install meson`, to build libplacebo), and [vcpkg](https://github.com/microsoft/vcpkg):
+Install [Git](https://git-scm.com/), [Python 3.11](https://www.python.org/downloads/), Visual Studio 2022+ (or Build Tools) with the *Desktop development with C++* workload, LLVM (for `clang-cl`), CMake and Ninja (e.g. `choco install llvm cmake ninja`), [Meson](https://mesonbuild.com/) (`pip install meson`, to build libplacebo), and [vcpkg](https://github.com/microsoft/vcpkg):
 
 ```powershell
 git clone https://github.com/microsoft/vcpkg C:\vcpkg
 C:\vcpkg\bootstrap-vcpkg.bat
-setx VCPKG_ROOT C:\vcpkg    
+setx VCPKG_ROOT C:\vcpkg
 setx VCPKG_TOOLCHAIN $env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake    # then restart your terminal
 ```
 
@@ -100,9 +96,11 @@ cmake --build build-debug --config Debug --target chiaki-py -- -j4
 pip install -e .
 ```
 
+`shaderc` and the Vulkan loader/headers come from vcpkg (`vcpkg.json`); the configure step builds [libplacebo](https://code.videolan.org/videolan/libplacebo) from source with them into `deps/`, which is slow the first time but skipped on later configures as long as `deps/lib/libplacebo.lib` is still there. Point `-DPLACEBO_ROOT=<path>` at an existing libplacebo build (with a shader compiler) to skip building it entirely. `.github/workflows/build-windows.yml` is the reference for this recipe, including the exact CMake/LLVM/vcpkg versions CI pins.
+
 ### Ubuntu
 
-Install the native dependencies from apt; FFmpeg, SDL2, protobuf, OpenSSL, etc. come from there rather than vcpkg:
+Native dependencies come from apt (FFmpeg, SDL2, protobuf, OpenSSL, etc.), rather than vcpkg:
 
 ```bash
 sudo apt-get update
@@ -113,11 +111,7 @@ sudo apt-get install -y \
   libgf-complete-dev libspeexdsp-dev libidn2-dev libnghttp2-dev libssh2-1-dev \
   libfmt-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavdevice-dev \
   libsdl2-dev libhidapi-dev libssl-dev libfftw3-dev liblcms2-dev libvulkan-dev zlib1g-dev
-```
 
-Then build the extension:
-
-```bash
 git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
 
 pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
@@ -133,7 +127,7 @@ pip install -e .
 
 ### macOS
 
-Apple Silicon (arm64) only - that's what CI builds. Install the Xcode command line tools, [Homebrew](https://brew.sh/) and Python 3.11, then the native dependencies:
+Apple Silicon (arm64) only — that's what CI builds.
 
 ```bash
 xcode-select --install
@@ -142,8 +136,7 @@ brew install python@3.11 cmake ninja nasm pkgconf protobuf@29 openssl@3 fmt \
   vulkan-headers vulkan-loader
 ```
 
-Build SDL2 from source instead of using `brew install sdl2`: Homebrew's `sdl2` is now [sdl2-compat](https://github.com/libsdl-org/sdl2-compat), a shim that loads SDL3 with `dlopen()`, which can't be bundled into a wheel and hangs on import when SDL3 isn't found. `ffmpeg` installs it as a dependency anyway, so unlink it to keep CMake from
-finding it first:
+Build SDL2 from source instead of `brew install sdl2`: Homebrew's `sdl2` is now [sdl2-compat](https://github.com/libsdl-org/sdl2-compat), a shim that loads SDL3 via `dlopen()`, which can't be bundled into a wheel and hangs on import when SDL3 isn't found. `ffmpeg` installs it as a dependency anyway, so unlink it first:
 
 ```bash
 brew unlink sdl2-compat 2>/dev/null || true
@@ -167,8 +160,8 @@ export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib"
 export PKG_CONFIG_PATH="$SDL2_PREFIX/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf@29)/lib/pkgconfig"
 export PATH="$(brew --prefix protobuf@29)/bin:$PATH"
 
-# The -rpath flags let the extension find the Homebrew and SDL2 libraries at
-# runtime: pybind/CMakeLists.txt skips CMake's own RPATH on non-Windows builds.
+# -rpath lets the extension find Homebrew and SDL2 libraries at runtime:
+# pybind/CMakeLists.txt skips CMake's own RPATH on non-Windows builds.
 cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
@@ -182,20 +175,20 @@ cmake --build build-release --config Release --target chiaki-py -- -j"$(sysctl -
 pip install -e .
 ```
 
-The exports only last for the current shell; set them again before re-running CMake in a new terminal. `.github/workflows/build-macos.yml` is the reference for this recipe.
+The exports only last for the current shell; set them again in a new terminal. `.github/workflows/build-macos.yml` is the reference for this recipe.
 
 ### Notes
 
-- All builds put the compiled module (and, on Windows, its DLLs) in `chiaki_py/lib/`. After C++ changes under `pybind/`, re-run only the `cmake --build` step (the CMake target is `chiaki-py`, with a hyphen). Re-run the configure step too if you add or remove a source file.
+All builds put the compiled module (and, on Windows, its DLLs) in `chiaki_py/lib/`. After C++ changes under `pybind/`, re-run only `cmake --build ... --target chiaki-py`; re-run the configure step too if you add or remove a source file.
 
 ## Known limitations
 
-- **Audio:** the console's audio is not played or exposed to Python yet; only video frames are delivered. The audio settings exist but currently have no effect.
-- **Rumble and haptics:** controller rumble and haptic feedback from the console aren't forwarded to your controller yet.
-- **Microphone:** microphone input isn't sent to the console yet, so voice chat doesn't work.
+- **Audio:** not played or exposed to Python yet; only video frames are delivered. The audio settings exist but have no effect.
+- **Rumble/haptics:** controller feedback from the console isn't forwarded to your controller yet.
+- **Microphone:** not sent to the console yet, so voice chat doesn't work.
 - Only Windows, Ubuntu and macOS (Apple Silicon) are tested; other Linux distros and Intel Macs aren't supported yet.
 - PS4 pairing is implemented but far less tested than PS5.
 
 ## License
 
-AGPL-3.0-only (see `LICENSE`) - the compiled extension statically links [chiaki-ng](https://github.com/streetpea/chiaki-ng)'s AGPL-3.0-licensed `chiaki-lib`, so the combined work must be distributed under the same terms.
+AGPL-3.0-only (see `LICENSE`) — the compiled extension statically links [chiaki-ng](https://github.com/streetpea/chiaki-ng)'s AGPL-3.0-licensed `chiaki-lib`, so the combined work must be distributed under the same terms.

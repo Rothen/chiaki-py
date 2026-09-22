@@ -50,7 +50,10 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(chiaki_py, m)
 {
-    m.doc() = "Python bindings for Chiaki CLI commands";
+    m.doc() = "Low-level pybind11 bindings around Chiaki, the PS4/PS5 Remote Play client library: "
+              "discover consoles (DiscoveryManager), register with one (Backend), connect and stream "
+              "one (StreamSession) and pull its decoded frames (FrameHandler and subclasses). Most "
+              "users want the pythonic wrapper in the `chiaki_py` package instead of this module directly.";
 
 #ifdef _WIN32
     WSADATA wsaData;
@@ -122,9 +125,13 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("FPS60", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_60)
         .export_values();
 
-    py::class_<ChiakiFfmpegDecoder>(m, "FfmpegDecoder");
+    py::class_<ChiakiFfmpegDecoder>(m, "FfmpegDecoder",
+        "An opaque handle to a StreamSession's FFmpeg decoder, as returned by "
+        "StreamSession.get_ffmpeg_decoder(). Not usable from Python beyond passing it back around; "
+        "StreamSession.has_hardware_decoder() and .hardware_decoder_type() are how to inspect it.");
 
-    py::class_<ChiakiConnectVideoProfile>(m, "ChiakiConnectVideoProfile")
+    py::class_<ChiakiConnectVideoProfile>(m, "ChiakiConnectVideoProfile",
+        "The stream's negotiated video settings, as returned by StreamSession.get_video_profile().")
         .def_readwrite("width", &ChiakiConnectVideoProfile::width)
         .def_readwrite("height", &ChiakiConnectVideoProfile::height)
         .def_readwrite("max_fps", &ChiakiConnectVideoProfile::max_fps)
@@ -338,7 +345,11 @@ PYBIND11_MODULE(chiaki_py, m)
                     << ")>";
                 return repr.str(); });
 
-    py::class_<StreamSessionConnectInfo>(m, "StreamSessionConnectInfo")
+    py::class_<StreamSessionConnectInfo>(m, "StreamSessionConnectInfo",
+        "Everything StreamSession needs to open a connection to an already-registered console. "
+        "Built from the registration a prior Backend.register_host() produced (`host`, `nickname`, "
+        "`regist_key`, `morning` i.e. the RP key, `target`) plus `settings`; the pythonic "
+        "`chiaki_py.Session.connect()` builds one of these from a `HostRegistration` for you.")
         .def(py::init<>())
         .def(py::init<Settings *,
                       ChiakiTarget,
@@ -357,7 +368,13 @@ PYBIND11_MODULE(chiaki_py, m)
              py::arg("duid"), py::arg("auto_regist"), py::arg("fullscreen"),
              py::arg("zoom"), py::arg("stretch"));
 
-    py::class_<StreamSession>(m, "StreamSession")
+    py::class_<StreamSession>(m, "StreamSession",
+        "A live or about-to-be-started connection to a console: start()/stop() it, feed it "
+        "controller/motion input with the press_*/release_*/set_* methods, and pull decoded video "
+        "through a FrameHandler built around it (see FrameHandler.get_frame() and the CpuFrameHandler/ "
+        "CudaFrameHandler/VulkanFrameHandler subclasses). The on_*() methods each return an event "
+        "source frames/state changes can be subscribed to. Usually built and driven indirectly, via "
+        "chiaki_py.Session, rather than used directly.")
         .def(py::init<const StreamSessionConnectInfo &>(), py::arg("connect_info"))
         .def("start", &StreamSession::Start, "Start the stream session.")
         .def("stop", &StreamSession::Stop, "Stop the stream session.")
@@ -503,11 +520,15 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("Standby", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_STANDBY)
         .export_values();
 
-    py::class_<HostMAC>(m, "HostMAC")
+    py::class_<HostMAC>(m, "HostMAC",
+        "A console's 6-byte Ethernet MAC address, as used to identify a registered/discovered host.")
         .def("to_string", &HostMAC::ToString, "Get the MAC address as a hex string.")
         .def("__str__", &HostMAC::ToString);
 
-    py::class_<DiscoveryHostWrapper>(m, "DiscoveryHost")
+    py::class_<DiscoveryHostWrapper>(m, "DiscoveryHost",
+        "One console found by DiscoveryManager's broadcast discovery, or filled in by hand to "
+        "register a manual one. `ps5`, `host_addr` and `state` (whether it's awake or in standby) "
+        "are the fields most callers need; the rest mirrors what the console's discovery reply reports.")
         .def(py::init<>())
         .def("get_host_mac", &DiscoveryHostWrapper::GetHostMAC, "Get the host MAC address.")
         .def_property("ps5", &DiscoveryHostWrapper::getPs5, &DiscoveryHostWrapper::setPs5, "Get or set the PS5.")
@@ -523,13 +544,29 @@ PYBIND11_MODULE(chiaki_py, m)
         .def_property("running_app_titleid", &DiscoveryHostWrapper::getRunningAppTitleId, &DiscoveryHostWrapper::setRunningAppTitleId, "Get or set the running app title ID.")
         .def_property("running_app_name", &DiscoveryHostWrapper::getRunningAppName, &DiscoveryHostWrapper::setRunningAppName, "Get or set the running app name.");
 
-    py::class_<DiscoveryManager>(m, "DiscoveryManager")
+    py::class_<DiscoveryManager>(m, "DiscoveryManager",
+                                 "Broadcasts for PS4/PS5 hosts on the local network (IPv4 and IPv6) in the background and keeps "
+                                 "track of what answered, plus individually pings any manually-added registered hosts from "
+                                 "`settings` so they show up even when broadcast can't reach them. `chiaki_py.discover_hosts()` "
+                                 "wraps the start/wait/collect/stop sequence this class otherwise requires driving by hand.")
         .def(py::init<>())
-        .def("set_active", &DiscoveryManager::SetActive, py::arg("active"))
-        .def("set_settings", &DiscoveryManager::SetSettings, py::arg("settings"))
-        .def("send_wakeup", &DiscoveryManager::SendWakeup, py::arg("host"), py::arg("regist_key"), py::arg("ps5"))
-        .def("get_active", &DiscoveryManager::GetActive)
-        .def("discovery_service_hosts", &DiscoveryManager::GetHosts)
-        .def("update_manual_services", &DiscoveryManager::DiscoveryServiceHosts, py::arg("hosts"))
-        .def("hosts_updated", &DiscoveryManager::UpdateManualServices);
+        .def("set_active", &DiscoveryManager::SetActive, py::arg("active"),
+             "Start or stop broadcasting. Starting re-inits the discovery sockets if they were not "
+             "already active; stopping tears them down and clears the discovered host list.")
+        .def("set_settings", &DiscoveryManager::SetSettings, py::arg("settings"),
+             "Set the Settings this manager reads its log level and manually-registered hosts from, "
+             "and refresh the manual per-host discovery services from it immediately.")
+        .def("send_wakeup", &DiscoveryManager::SendWakeup, py::arg("host"), py::arg("regist_key"), py::arg("ps5"),
+             "Send a wakeup packet to `host` (a registration's `regist_key`, hex-encoded) so a console "
+             "in standby powers on. Raises RuntimeError if `regist_key` is malformed or sending fails.")
+        .def("get_active", &DiscoveryManager::GetActive, "Whether broadcast discovery is currently running.")
+        .def("get_hosts", &DiscoveryManager::GetHosts,
+             "The hosts discovered so far: everything the last broadcast round found, plus any manually "
+             "probed host currently confirmed reachable. Empty until set_active(True) has had time to hear back.")
+        .def("discovery_service_hosts", &DiscoveryManager::DiscoveryServiceHosts, py::arg("hosts"),
+             "Replace the broadcast-discovered host list wholesale. Called internally as broadcast replies "
+             "come in; not normally needed from Python.")
+        .def("update_manual_services", &DiscoveryManager::UpdateManualServices,
+             "Re-sync the per-host discovery pings from `settings`' currently registered manual hosts, "
+             "starting one for each newly added host and dropping ones no longer configured.");
 }

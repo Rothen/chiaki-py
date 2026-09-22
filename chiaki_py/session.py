@@ -19,6 +19,15 @@ _T = TypeVar("_T")
 FrameHandler = CpuFrameHandler | CudaFrameHandler | VulkanFrameHandler
 
 class Session:
+    """A Remote Play connection to a console, and the frame handler that pulls its decoded video.
+
+    Wraps the pybind11 `StreamSession` (the actual connection, input and event source) together
+    with a `FrameHandler` (how decoded frames are retrieved: to system memory, to a CUDA buffer or
+    kept on the Vulkan device - see `frames()`). Build one with `connect()`, which takes a
+    `HostRegistration` instead of a raw `StreamSessionConnectInfo`; use it as a context manager, or
+    call `stop()` directly, to make sure the connection is torn down.
+    """
+
     def __init__(self, connect_info: StreamSessionConnectInfo, frame_handler_cls: type[FrameHandler] = CpuFrameHandler):
         self.__stream_session = StreamSession(connect_info)
         self.__frame_handler: FrameHandler = frame_handler_cls(self.__stream_session)
@@ -26,6 +35,7 @@ class Session:
 
     @property
     def stream_session(self) -> StreamSession:
+        """The underlying pybind11 connection: input, low-level events, connection state."""
         return self.__stream_session
 
     @property
@@ -35,6 +45,7 @@ class Session:
 
     @property
     def frame_handler(self) -> FrameHandler:
+        """The handler frames() pulls decoded frames through; matches `frame_handler_cls`."""
         return self.__frame_handler
 
     @classmethod
@@ -44,6 +55,9 @@ class Session:
         registration: HostRegistration,
         frame_handler_cls: type[FrameHandler] = CpuFrameHandler
     ) -> "Session":
+        """Build a Session for the console `registration` describes. Does not connect yet -
+        use the returned Session as a context manager, or call `__enter__`/`stop()` directly,
+        to actually start and stop the stream."""
         connect_info = StreamSessionConnectInfo(
             settings=settings,
             target=registration.target,
@@ -60,7 +74,9 @@ class Session:
         )
         return cls(connect_info, frame_handler_cls)
 
-    def __enter__(self) -> "Session":        
+    def __enter__(self) -> "Session":
+        """Start the connection: raises RuntimeError up front if `frame_handler` needs a hardware
+        decoder that `settings` was not set up for, rather than failing once frames start arriving."""
         hw_type = self.__stream_session.hardware_decoder_type()
         
         if isinstance(self.__frame_handler, VulkanFrameHandler) and not self.__stream_session.has_hardware_decoder():
@@ -82,6 +98,7 @@ class Session:
         self.stop()
 
     def stop(self) -> None:
+        """Disconnect, if a connection is up or in progress. Safe to call more than once."""
         if self.__stream_session.is_connected() or self.__stream_session.is_connecting():
             self.__stream_session.stop()
 
