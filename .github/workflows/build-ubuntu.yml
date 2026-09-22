@@ -14,7 +14,11 @@ on:
 jobs:
     build:
         name: Build wheel (linux_x86_64, cp311)
-        runs-on: ubuntu-latest
+        # Pinned rather than ubuntu-latest: auditwheel can only repair a wheel into a manylinux tag it
+        # recognizes, and a too-new glibc (e.g. from ubuntu-latest tracking a very recent Ubuntu release)
+        # fails with "too-recent versioned symbols". ubuntu-24.04 (glibc 2.39) is within auditwheel's
+        # known manylinux policies.
+        runs-on: ubuntu-24.04
         env:
             PYTHON_VERSION: "3.11"
 
