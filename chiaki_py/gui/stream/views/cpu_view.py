@@ -19,8 +19,8 @@ class CpuVideoWidget(VideoMixin[npt.NDArray[np.uint8]], QWidget):
     """Draws the latest frame scaled to fit the widget, letterboxed, with the frame rate and the time
     per frame in the top-right corner on request."""
 
-    def __init__(self, frame_thread: FrameThread, fps_thread: FpsThread, show_stats: bool = False, parent=None):
-        super().__init__(frame_thread, fps_thread, show_stats, parent)
+    def __init__(self, frame_thread: FrameThread, fps_thread: FpsThread, parent=None):
+        super().__init__(frame_thread, fps_thread, parent)
         self._image: QImage | None = None
         self._data = b""
 

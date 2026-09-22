@@ -28,8 +28,8 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
     corner, so it is never part of the frame that is drawn.
     """
 
-    def __init__(self, session: Session, frame_thread: FrameThread, fps_thread: FpsThread, show_stats: bool = False, parent=None):
-        super().__init__(frame_thread, fps_thread, show_stats, parent)
+    def __init__(self, session: Session, frame_thread: FrameThread, fps_thread: FpsThread, parent=None):
+        super().__init__(frame_thread, fps_thread, parent)
         self.session = session
         self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
         self.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors)

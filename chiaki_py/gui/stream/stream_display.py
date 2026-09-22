@@ -81,7 +81,8 @@ class StreamDisplay(QObject):
         self.controller_thread = ControllerThread(session)
  
         try:
-            self.window = BaseView(self.__init_video_mixin(show_stats), self.frame_thread, keep_aspect_ratio)
+            self.window = BaseView(self.__init_video_mixin(), self.frame_thread, self.fps_thread,
+                                    show_stats, keep_aspect_ratio)
             self.window.closeRequested.connect(self.close)  # type: ignore[attr-defined]
             self.window.show()
         except Exception as e:
@@ -91,14 +92,14 @@ class StreamDisplay(QObject):
         self.frame_thread.start()
         self.fps_thread.start()
         self.controller_thread.start()
-    
-    def __init_video_mixin(self, show_stats: bool) -> VideoMixin:
+
+    def __init_video_mixin(self) -> VideoMixin:
         if isinstance(self.session.frame_handler, CpuFrameHandler):
-            return CpuVideoWidget(self.frame_thread, self.fps_thread, show_stats)
+            return CpuVideoWidget(self.frame_thread, self.fps_thread)
         elif isinstance(self.session.frame_handler, CudaFrameHandler):
-            return CudaVideoWidget(self.frame_thread, self.fps_thread, show_stats)
+            return CudaVideoWidget(self.frame_thread, self.fps_thread)
         elif isinstance(self.session.frame_handler, VulkanFrameHandler):
-            return VulkanVideoWidget(self.session, self.frame_thread, self.fps_thread, show_stats)
+            return VulkanVideoWidget(self.session, self.frame_thread, self.fps_thread)
         else:
             raise TypeError(f"StreamDisplay can't show frames from a {type(self.session.frame_handler).__name__}: use a CpuFrameHandler (rendered on the CPU), a CudaFrameHandler (rendered on the GPU with OpenGL) or a VulkanFrameHandler (rendered on the GPU with Vulkan)")
 

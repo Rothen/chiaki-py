@@ -142,8 +142,8 @@ class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[
     OpenGL context current. The picture is scaled to fit the widget, letterboxed.
     """
 
-    def __init__(self, frame_thread: FrameThread, fps_thread: FpsThread, show_stats: bool = False, parent=None):
-        super().__init__(frame_thread, fps_thread, show_stats, parent)
+    def __init__(self, frame_thread: FrameThread, fps_thread: FpsThread, parent=None):
+        super().__init__(frame_thread, fps_thread, parent)
         fmt = QSurfaceFormat()
         fmt.setVersion(3, 3)
         fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
