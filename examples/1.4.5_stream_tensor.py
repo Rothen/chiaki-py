@@ -25,9 +25,9 @@ from pathlib import Path
 import torch
 import typer
 
-from chiaki_py import Session, Serializer
+from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.lib import Settings, CudaFrameHandler
-from chiaki_py.registration import Registration
+
 from glfw_video import GLVideoSurface
 from helpers import setup_controller
 
@@ -36,13 +36,13 @@ def main() -> None:
     if not torch.cuda.is_available():
         sys.exit("PyTorch can't see a CUDA device: install a CUDA build of torch.")
     cache_dir = Path("./cache")
-    registration_file = Path(cache_dir, "registration.json")
+    registration_file = Path(cache_dir, "host_registration.json")
 
     if not cache_dir.exists() or not registration_file.exists():
         print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
-    registration = Serializer.load(Registration, Path("./cache", "registration.json"))
+    registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
 
     settings = Settings()
     settings.set_log_verbose(False)
@@ -54,9 +54,8 @@ def main() -> None:
         CudaFrameHandler
     )
 
-    session.stream_session.on_session_quit().subscribe(lambda reason: print("Session Quit:", reason))
-    session.stream_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login Pin Requested:", incorrect))
-    session.stream_session.on_connected_changed().subscribe(lambda connected: print("Connected Changed:", connected))
+    session.stream_session.on_session_quit().subscribe(lambda reason: _logger.info(f"session quit ({reason})"))
+    session.stream_session.on_connected_changed().subscribe(lambda connected: _logger.info(f"connected to {registration.nickname}" if connected else "connection closed"))
 
     try:
         with session:
@@ -70,7 +69,7 @@ def main() -> None:
                     # asked for 1080p downgrades to 720p once connected, which would not fit).
                     frame = torch.empty((profile.height, profile.width, 3), dtype=torch.uint8, device="cuda")
 
-                    print("Streaming - press 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.")
+                    _logger.info("Streaming - press 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.")
                     title_updated = 0.0
                     # max_fps=0: no limit, the stream already has its own frame rate.
                     for _ in session.frames(max_fps=0, out=frame):

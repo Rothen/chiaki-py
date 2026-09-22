@@ -48,17 +48,7 @@ local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 
 [tool.setuptools]
-packages = [
-    "chiaki_py",
-    "chiaki_py.lib",
-    "chiaki_py.lib.core",
-    "chiaki_py.psn",
-    "chiaki_py.controller",
-    "chiaki_py.gui",
-    "chiaki_py.gui.stream",
-    "chiaki_py.gui.stream.views",
-    "chiaki_py.gui.stream.threads",
-]
+packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.psn", "chiaki_py.controller", "chiaki_py.gui"]
 
 [tool.setuptools.package-data]
 "*" = ["*.pyi", "*.pyd", "*.so", "*.dll", "*.qml"]

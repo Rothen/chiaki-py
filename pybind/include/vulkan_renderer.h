@@ -13,7 +13,9 @@
 // planes, converts them to RGB with the frame's own colour space (SDR or HDR), scales them to the window and
 // presents the result on the window's swapchain. Nothing is copied.
 //
-// All calls must come from one thread (the GUI thread), and close() before the window is destroyed.
+// All calls must come from one thread (not necessarily the GUI thread - the Python binding uses a
+// dedicated thread of its own, since a call here can block for a while - see VulkanRenderThread),
+// and close() before the window is destroyed.
 class VulkanRenderer
 {
 public:

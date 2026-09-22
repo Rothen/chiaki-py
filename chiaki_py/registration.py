@@ -30,7 +30,7 @@ TargetField = Annotated[
 ]
 
 
-class Registration(BaseModel):
+class HostRegistration(BaseModel):
     """Connection settings for a single console, loadable from a JSON file."""
 
     host: str
@@ -48,7 +48,7 @@ class Registration(BaseModel):
     discover_timeout: float = 2.0
 
 
-def register(
+def register_host(
     settings: Settings,
     host: str,
     psn_id: str,
@@ -56,7 +56,7 @@ def register(
     console_pin: str = "",
     target: Target = Target.PS5_1,
     broadcast: bool = False,
-) -> Registration:
+) -> HostRegistration:
     result = Backend(settings).register_host(
         host=host,
         psn_id=psn_id,
@@ -65,7 +65,7 @@ def register(
         broadcast=broadcast,
         target=target,
     )
-    return Registration(
+    return HostRegistration(
         host=host,
         target=Target.PS5_1,
         regist_key=result.rp_regist_key,

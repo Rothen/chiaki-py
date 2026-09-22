@@ -26,12 +26,11 @@ from typing import Any
 
 import cv2
 import typer
+import numpy as np
 
-from chiaki_py import Session, discover_hosts, Serializer
+from chiaki_py import Session, discover_hosts, Serializer, HostRegistration, register_host
 from chiaki_py.lib import Settings, DiscoveryHost, CpuFrameHandler
 from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
-from chiaki_py.registration import register, Registration
-import numpy as np
 from fps_overlay import FpsCounter, draw_text_top_right
 from helpers import setup_controller
 
@@ -54,7 +53,7 @@ def _register(settings: Settings, host: DiscoveryHost, dir: Path, headless: bool
     pin = input(
         "Enter the registration PIN shown on the console's Link Device screen: ").strip()
     print("Registering...")
-    registration = register(
+    registration = register_host(
         settings, host=host.host_addr, psn_id=psn_id, pin=pin, target=host.target)
     return registration
 
@@ -76,7 +75,7 @@ def pairing_cache_path(dir: Path, host: DiscoveryHost) -> Path:
     return Path(dir, f"{host.host_name}.json")
 
 
-def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_pair: bool, headless: bool) -> Registration:
+def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_pair: bool, headless: bool) -> HostRegistration:
     cache_path = pairing_cache_path(dir, host)
 
     if force_pair:
@@ -85,7 +84,7 @@ def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_p
         print(f"Saved pairing for next time at {cache_path}")
     else:
         print(f"Reusing saved pairing for '{host.host_name}'.")
-        registration = Serializer.load_or(Registration, cache_path, lambda: _register(settings, host, dir, headless))
+        registration = Serializer.load_or(HostRegistration, cache_path, lambda: _register(settings, host, dir, headless))
 
     return registration
 

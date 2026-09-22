@@ -1,5 +1,5 @@
 """Pairs with a PS4/PS5 over the local network and writes
-cache/registration.json, which the 1.4.x streaming examples (or any
+cache/host_registration.json, which the 1.4.x streaming examples (or any
 chiaki_py.Session.connect call) can use directly.
 
 Usage:
@@ -15,17 +15,15 @@ from pathlib import Path
 
 import typer
 
-from chiaki_py import Serializer
-from chiaki_py.lib import Settings
-from chiaki_py.lib.core.common import Target
+from chiaki_py import Serializer, register_host
+from chiaki_py.lib import Settings, Target
 from chiaki_py.psn import PSNLoginQt, PSNAccount
-from chiaki_py.registration import register
 
 
 def main(host: str, pin: str, ps4: bool = False, console_pin: str = "") -> None:
     cache_dir = Path("./cache")
     psn_account_file = Path(cache_dir, "psn_account.json")
-    registration_file = Path(cache_dir, "registration.json")
+    registration_file = Path(cache_dir, "host_registration.json")
     
     if not cache_dir.exists() or not psn_account_file.exists():
         print(f"PSN Account not found under {psn_account_file}. Run examples/1.1_login.py first")
@@ -37,7 +35,7 @@ def main(host: str, pin: str, ps4: bool = False, console_pin: str = "") -> None:
     settings = Settings()
     settings.set_log_verbose(False)
 
-    registration = register(
+    registration = register_host(
         settings,
         host=host,
         psn_id=psn_account.user_rpid,

@@ -11,24 +11,22 @@ window to show the frame rate.
 import sys
 from pathlib import Path
 
-from chiaki_py import Session, Serializer
+from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.gui import StreamDisplay
-from chiaki_py.registration import Registration
-from chiaki_py.lib import Settings
-from chiaki_py.lib.core.log import LogLevel
+from chiaki_py.lib import Settings, LogLevel
 
 from helpers import setup_controller
 
 
 def main() -> None:
     cache_dir = Path("./cache")
-    registration_file = Path(cache_dir, "registration.json")
+    registration_file = Path(cache_dir, "host_registration.json")
     
     if not cache_dir.exists() or not registration_file.exists():
         print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
-    registration = Serializer.load(Registration, Path("./cache", "registration.json"))
+    registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
 
     settings = Settings()
     settings.set_log_verbose(False)
@@ -39,9 +37,8 @@ def main() -> None:
         registration
     )
 
-    session.stream_session.on_session_quit().subscribe(lambda reason: print("Session Quit:", reason))
-    session.stream_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login Pin Requested:", incorrect))
-    session.stream_session.on_connected_changed().subscribe(lambda connected: print("Connected Changed:", connected))
+    session.stream_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.stream_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
     
     with session:
         controller_attached = setup_controller(session.stream_session)

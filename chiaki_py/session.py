@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .lib import VulkanFrame, Settings, StreamSession, StreamSessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
-from .registration import Registration
+from .registration import HostRegistration
 
 _logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class Session:
     def connect(
         cls,
         settings: Settings,
-        registration: Registration,
+        registration: HostRegistration,
         frame_handler_cls: type[FrameHandler] = CpuFrameHandler
     ) -> "Session":
         connect_info = StreamSessionConnectInfo(
