@@ -180,14 +180,22 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("get_frame", &CudaFrameHandler::get_frame,
              py::arg("out") = py::none(),
              "Pull the next decoded video frame on the GPU as a (height, width, 3) uint8 RGB CuPy array, "
-             "converted on the GPU, or None if none was available yet. If `out` is given - a writable, "
-             "C-contiguous uint8 CUDA array such as a torch tensor or cupy array, shaped (height, width, 3) "
-             "- the frame is converted into it instead and `out` is returned; otherwise a new CuPy array is "
-             "allocated. The conversion has finished when this returns. Requires hardware_decoder='cuda' "
-             "(RuntimeError otherwise); a bad `out` raises TypeError/ValueError.")
-        .def_static("empty_frame", &CudaFrameHandler::empty_frame, py::arg("width"), py::arg("height"),
-             "A (height, width, 3) uint8 CuPy array, ready to be reused as `out` for get_frame() of frames "
-             "of this size.");
+             "converted on the GPU, or None if none was available yet. If `out` is given - a writable "
+             "uint8 CUDA array such as a torch tensor or cupy array, exposing __cuda_array_interface__, "
+             "shaped (height, width, 3) and C-contiguous ('channels last'), or (3, height, width) as a "
+             "transpose/permute view over that same interleaved memory ('channels first', e.g. from "
+             "empty_frame(channels_last=False)) - the frame is converted into it instead and `out` is "
+             "returned; otherwise a new CuPy array is allocated. The conversion has finished when this "
+             "returns. Requires hardware_decoder='cuda' (RuntimeError otherwise); a bad `out` raises "
+             "TypeError/ValueError.")
+        .def_static("empty_frame", &CudaFrameHandler::empty_frame,
+             py::arg("width"), py::arg("height"), py::arg("backend") = "cupy", py::arg("channels_last") = true,
+             "A uint8 CUDA array, ready to be reused as `out` for get_frame() of frames of this size. "
+             "`backend` is 'cupy' (default) or 'torch', selecting what allocates it - torch requires a "
+             "CUDA build of PyTorch and returns a tensor on 'cuda'. With `channels_last` true (default) "
+             "it is shaped (height, width, 3); with it false, (3, height, width) instead - a "
+             "transpose/permute view of that same interleaved RGB memory, for a model that wants CHW, "
+             "with no extra copy.");
 
     py::class_<VulkanFrameHandler, FrameHandler>(m, "VulkanFrameHandler")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())

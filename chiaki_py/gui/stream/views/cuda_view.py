@@ -174,7 +174,7 @@ class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[
             _logger.warning("Dropping unusable frames")
             return
         self._size = size
-        self._frame = cp.empty((size[1], size[0], 3), dtype=cp.uint8)
+        self._frame = CudaFrameHandler.empty_frame(size[1], size[0])
         self._has_frame = False
         self.stream_size_changed.emit(*size)
 

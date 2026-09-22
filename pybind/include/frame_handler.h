@@ -108,6 +108,7 @@ struct CudaArrayDestination
 {
     uintptr_t ptr;
     std::vector<py::ssize_t> shape;
+    std::vector<py::ssize_t> strides;   // empty if the source reported none (implies C-contiguous)
 
     static CudaArrayDestination parse(const py::object &out);
 
@@ -164,8 +165,11 @@ public:
     CudaFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
 
-    // A (height, width, 3) uint8 CuPy array, suitable as `out` for get_frame() of this size.
-    static py::object empty_frame(int width, int height);
+    // A (height, width, 3) uint8 CUDA array, suitable as `out` for get_frame() of this size: a CuPy
+    // array by default, or a torch tensor if `backend` is "torch". With `channels_last` false, the
+    // array is instead shaped (3, height, width) - a transposed/permuted view of that same
+    // interleaved memory, so it is still a valid `out` (get_frame() writes RGB interleaved either way).
+    static py::object empty_frame(int width, int height, const std::string &backend = "cupy", bool channels_last = true);
 };
 
 class VulkanFrameHandler : public FrameHandler

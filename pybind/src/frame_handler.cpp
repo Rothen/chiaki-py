@@ -196,27 +196,44 @@ CudaArrayDestination CudaArrayDestination::parse(const py::object &out)
     if (data[1].cast<bool>())
         throw py::value_error("out is read-only");
 
-    // No strides means C-contiguous.
+    // No strides means C-contiguous; keep whatever was reported (possibly none) for check_fits,
+    // which knows the frame's width/height and so can tell a (height, width, 3) layout from a
+    // (3, height, width) one and validate strides against the one that matches.
     if (interface.contains("strides") && !interface["strides"].is_none())
-    {
-        const auto strides = interface["strides"].cast<std::vector<py::ssize_t>>();
-        py::ssize_t expected = 1;
-        for (size_t i = destination.shape.size(); i-- > 0;)
-        {
-            if (destination.shape[i] != 1 && strides[i] != expected)
-                throw py::value_error("out must be C-contiguous");
-            expected *= destination.shape[i];
-        }
-    }
+        destination.strides = interface["strides"].cast<std::vector<py::ssize_t>>();
     return destination;
 }
 
 void CudaArrayDestination::check_fits(const CudaFrameLayout &layout) const
 {
-    const std::vector<py::ssize_t> expected_shape{layout.height, layout.width, 3};
-    if (shape != expected_shape)
+    // Either the usual (height, width, 3) - "channels last" - or a (3, height, width) view over
+    // that same memory, e.g. a transposed CuPy array or a permuted torch tensor: still physically
+    // interleaved RGB, just presented CHW-first for a model that wants it that way.
+    const std::vector<py::ssize_t> hwc_shape{layout.height, layout.width, 3};
+    const std::vector<py::ssize_t> chw_shape{3, layout.height, layout.width};
+    const bool is_hwc = shape == hwc_shape;
+    const bool is_chw = shape == chw_shape;
+    if (!is_hwc && !is_chw)
         throw py::value_error("out has the wrong shape for this frame: need (" + std::to_string(layout.height) + ", " +
-                              std::to_string(layout.width) + ", 3)");
+                              std::to_string(layout.width) + ", 3) or (3, " + std::to_string(layout.height) + ", " +
+                              std::to_string(layout.width) + ")");
+
+    if (!strides.empty())
+    {
+        const std::vector<py::ssize_t> expected = is_hwc
+            ? std::vector<py::ssize_t>{layout.width * 3, 3, 1}
+            : std::vector<py::ssize_t>{1, layout.width * 3, 3};
+        for (size_t i = 0; i < 3; i++)
+            if (shape[i] != 1 && strides[i] != expected[i])
+                throw py::value_error("out must be RGB-interleaved: (height, width, 3) C-contiguous, or a "
+                                      "(3, height, width) transpose/permute view of that same memory");
+    }
+    else if (is_chw)
+    {
+        throw py::value_error("out has shape (3, height, width) but no strides: it must be a "
+                              "transpose/permute view over interleaved (height, width, 3) memory, "
+                              "not separately-allocated planar storage");
+    }
 }
 
 FrameHandler::FrameHandler(StreamSession *streamSession) : streamSession(streamSession) {}
@@ -338,9 +355,29 @@ py::object CudaFrameHandler::get_frame(const py::object &out = py::none())
     return result;
 }
 
-py::object CudaFrameHandler::empty_frame(int width, int height)
+py::object CudaFrameHandler::empty_frame(int width, int height, const std::string &backend, bool channels_last)
 {
-    return py::module_::import("cupy").attr("empty")(py::make_tuple(height, width, 3), "uint8");
+    py::object array;
+    if (backend == "cupy")
+    {
+        array = py::module_::import("cupy").attr("empty")(py::make_tuple(height, width, 3), "uint8");
+    }
+    else if (backend == "torch")
+    {
+        py::module_ torch = py::module_::import("torch");
+        array = torch.attr("empty")(py::make_tuple(height, width, 3), py::arg("dtype") = torch.attr("uint8"),
+                                    py::arg("device") = "cuda");
+    }
+    else
+    {
+        throw py::value_error("backend must be 'cupy' or 'torch', not '" + backend + "'");
+    }
+
+    // A (3, height, width) transpose/permute: still the same interleaved memory underneath, just
+    // presented channels-first, which get_frame()'s `out` handling understands (see CudaArrayDestination).
+    if (!channels_last)
+        array = backend == "torch" ? array.attr("permute")(2, 0, 1) : array.attr("transpose")(2, 0, 1);
+    return array;
 }
 
 py::object VulkanFrameHandler::get_frame(const py::object &out = py::none())
