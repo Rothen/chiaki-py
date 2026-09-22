@@ -105,7 +105,16 @@ class Session:
         ready = threading.Event()
         subscription = self.__stream_session.on_frame_available().subscribe(lambda _: ready.set())
         try:
-            last_yield = 0.0
+            # The next scheduled yield time, not the last actual one: advancing by a fixed
+            # min_interval step (instead of snapping to `now` on every accept) keeps this on an
+            # even schedule. Snapping to `now` makes the accept/reject decision beat against the
+            # source's own rate whenever it is close to max_fps - e.g. a 60fps stream against a
+            # 60fps cap would have every frame arrive a hair earlier or later than the previous
+            # frame's exact timestamp plus min_interval, so the threshold ends up rejecting close
+            # to half of them instead of the small few actually over the cap. The max(..., now -
+            # min_interval) clamp keeps a real stall (no frames for a while) from letting this
+            # fall arbitrarily far behind and then bursting a backlog through once frames resume.
+            next_yield = 0.0
             while self.__stream_session.is_connecting() or self.__stream_session.is_connected():
                 if not ready.wait(timeout=0.5):
                     continue
@@ -121,9 +130,9 @@ class Session:
                     continue
                 self.__last_get_time = get_time
                 now = time.perf_counter()
-                if now - last_yield < min_interval:
+                if now < next_yield:
                     continue
-                last_yield = now
+                next_yield = max(next_yield + min_interval, now - min_interval)
                 yield frame
         finally:
             subscription.unsubscribe()

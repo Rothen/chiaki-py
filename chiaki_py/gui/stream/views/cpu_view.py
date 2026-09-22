@@ -10,16 +10,17 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPainter, QPaintEvent
 from PyQt6.QtWidgets import QWidget
 
-from chiaki_py.lib import CpuFrameHandler
 from chiaki_py.gui.stream.views.base_view import VideoMixin
+from ..frame_thread import FrameThread
+from ..fps_thread import FpsThread
 
 
 class CpuVideoWidget(VideoMixin[npt.NDArray[np.uint8]], QWidget):
     """Draws the latest frame scaled to fit the widget, letterboxed, with the frame rate and the time
     per frame in the top-right corner on request."""
 
-    def __init__(self, stream_session, handler, width: int, height: int, show_stats: bool = False, parent=None):
-        super().__init__(stream_session, handler, width, height, CpuFrameHandler.empty_frame(width, height), show_stats, parent)
+    def __init__(self, frame_thread: FrameThread, fps_thread: FpsThread, show_stats: bool = False, parent=None):
+        super().__init__(frame_thread, fps_thread, show_stats, parent)
         self._image: QImage | None = None
         self._data = b""
 

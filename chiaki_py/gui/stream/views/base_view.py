@@ -18,11 +18,10 @@ with warnings.catch_warnings():
         "ignore", message="CUDA path could not be detected")
     import cupy as cp
 
-from chiaki_py import Session
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
-from chiaki_py.gui.stream.frame_stats import FrameStats
-from chiaki_py.lib import StreamSession
 from chiaki_py.gui.stream.stats_overlay import StatsOverlay
+from ..frame_thread import FrameThread
+from ..fps_thread import FpsThread
 
 _logger = logging.getLogger(__name__)
 
@@ -49,31 +48,32 @@ class VideoMixin(Generic[F], _QWidgetBase):
     """Shared behaviour for a video widget, mixed into a concrete widget class:
     `class ConcreteVideoWidget(VideoMixin[F], QOpenGLWidget)`. VideoMixin must come first in the
     bases list (see the runtime `_QWidgetBase` note above), and `super().__init__(parent)` below
-    then cooperatively forwards to the concrete Qt widget's constructor."""
+    then cooperatively forwards to the concrete Qt widget's constructor.
 
-    _frame_available = pyqtSignal()   # emitted from the decoder's thread, delivered on the GUI thread
+    Frames arrive from a FrameProducer running on its own thread (its `new_frame` signal, connected
+    in start()): it does the decoding/converting work, so the GUI thread only has to paint what it is
+    handed. `handler` is otherwise unused here - concrete subclasses that need it directly (e.g. to
+    build an initial placeholder frame) take it as a constructor argument of their own."""
+
     stream_size_changed = pyqtSignal(int, int)   # the frames turned out to be another size than expected
     stats_changed = pyqtSignal(str)
 
-    def __init__(self, stream_session: StreamSession, handler, width: int, height: int, frame_init: F, show_stats: bool = False, parent=None):
+    def __init__(self, frame_thread: FrameThread[F], fps_thread: FpsThread, show_stats: bool = False, parent=None):
         super().__init__(parent)
 
-        self._stream_session = stream_session
-        self._handler = handler
-        self._subscription = None
-        self._frame: F = frame_init
-        self._size: tuple[int, int] = (width, height)
-        self._warned = False
+        self._frame_thread = frame_thread
+        self._fps_thread = fps_thread
+        self._frame: F = frame_thread.frame_init
+        self._size: tuple[int, int] = frame_thread.size
 
-        self._stats = FrameStats(interval=1.0)   # the stats box shows a new measurement once a second
         self.stats_visible = show_stats
-        self._overlay_text: str | None = None
+        self._overlay_text: str = ""
         self._stats_box: StatsOverlay = StatsOverlay(self)
 
     def set_stats_visible(self, visible: bool) -> None:
         self.stats_visible = visible
         if visible:
-            self._show_stats(self._stats.summary())
+            self._show_stats(self._overlay_text)
 
     def _show_stats(self, summary: str) -> None:
         """Show `summary` over the video, or nothing if it is None."""
@@ -90,15 +90,6 @@ class VideoMixin(Generic[F], _QWidgetBase):
     @abstractmethod
     def _get_frame_size(self) -> tuple[int, int]:
         ...  # (frame.width, frame.height)
-
-    def _adopt_stream_size(self) -> None:
-        """Called when `self._frame` no longer fits what the handler decodes, because the stream's
-        actual size changed. Subclasses that pre-allocate a fixed-size `out` buffer should override
-        this to reallocate it to match and emit `stream_size_changed`; by default the frame is just
-        dropped and the next one tried again."""
-        if not self._warned:
-            self._warned = True
-            _logger.warning("Dropping unusable frames")
 
     def resizeEvent(self, a0: QResizeEvent | None) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         super().resizeEvent(a0)
@@ -117,49 +108,45 @@ class VideoMixin(Generic[F], _QWidgetBase):
                 self._stats_box.show()
         return super().eventFilter(a0, a1)
             
-    def _pull(self) -> None:
-        """if self._released:
-            return"""
+    def _on_frame(self, frame: F) -> None:
+        """Slot for FrameProducer.new_frame: `frame` replaces the one currently shown. `get_time` is how
+        long the producer took to get/convert it (seconds); added to how long painting it takes here for
+        the combined per-frame time shown in the stats overlay."""
+        self._frame = frame
         try:
-            started = time.perf_counter()
-            if self._handler.get_frame(self._frame) is None:
-                return
             self._frame_pulled()
-        except ValueError:
-            self._adopt_stream_size()
+        except (ValueError, RuntimeError):
+            _logger.warning("Dropping unusable frame", exc_info=True)
             return
-        except RuntimeError:
-            if not self._warned:
-                self._warned = True
-                _logger.warning("Dropping unusable frames", exc_info=True)
-            return
-        done = time.perf_counter()
 
         size = self._get_frame_size()
         if size != self._size:
-            first = self._size is None
             self._size = size
-            if not first:
-                self.stream_size_changed.emit(*size)   # a PS4 asked for 1080p downgrades to 720p once connected
-
-        self._stats.add(done - started)
-        self._stats.tick()
-        if self.stats_visible:
-            self._show_stats(self._stats.summary())
+            self.stream_size_changed.emit(*size)   # a PS4 asked for 1080p downgrades to 720p once connected
     
+    def _on_fps(self, fps: float) -> None:
+        self._show_stats(f"FPS: {fps:.2f}")
+
     def start(self) -> None:
         """Start drawing the session's frames. The widget must be shown already, for its native window to be there;
         raises RuntimeError if the session can't be drawn (it does not use the Vulkan decoder, ...)."""
         if (window := self.window()) is not None:
             window.installEventFilter(self)
-        self._frame_available.connect(self._pull)
-        self._subscription = self._stream_session.on_frame_available().subscribe(lambda _: self._frame_available.emit())
+        self._frame_thread.new_frame.connect(self._on_frame)
+        self._fps_thread.new_fps.connect(self._on_fps)
 
     def release(self) -> None:
         """Stop listening for frames and free the GPU resources; the widget must not be used afterwards."""
-        if self._subscription is not None:
-            self._subscription.unsubscribe()
-            self._subscription = None
+        try:
+            self._frame_thread.new_frame.disconnect(self._on_frame)
+        except TypeError:
+            pass
+
+        try:
+            self._frame_thread.new_frame.disconnect(self._on_fps)
+        except TypeError:
+            pass
+
         if self._stats_box:
             if (window := self.window()) is not None:
                 window.removeEventFilter(self)
@@ -178,17 +165,15 @@ class BaseView(QMainWindow, Generic[T]):
 
     closeRequested = pyqtSignal()
 
-    def __init__(self, session: Session, widget_cls: type[T], show_stats: bool = False, keep_aspect_ratio: bool = False):
+    def __init__(self, video_mixin: T, frame_producer, keep_aspect_ratio: bool = False):
         super().__init__()
         self.setWindowTitle("Live Image Stream")
-        profile = session.stream_session.get_video_profile()
-        self.video: T = widget_cls(session.stream_session, session.frame_handler, profile.width, profile.height, show_stats)
+        self.video: T = video_mixin
         self.video.stream_size_changed.connect(self._set_video_size)
         self.setCentralWidget(self.video)
-        self._aspect = profile.width / profile.height
-        self._aspect_lock = AspectRatioLock(
-            lambda: self._aspect) if keep_aspect_ratio else None
-        self.resize(profile.width, profile.height)
+        self._aspect = frame_producer.width / frame_producer.height
+        self._aspect_lock = AspectRatioLock(lambda: self._aspect) if keep_aspect_ratio else None
+        self.resize(frame_producer.width, frame_producer.height)
 
     def showEvent(self, a0: QShowEvent | None) -> None:
         super().showEvent(a0)

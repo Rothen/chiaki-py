@@ -12,22 +12,25 @@ from PyQt6.QtWidgets import QWidget
 
 from chiaki_py import Session
 from chiaki_py.lib import VulkanFrame, VulkanRenderer, StreamSession
-from .base_view import BaseView, VideoMixin
+from .base_view import VideoMixin
+from ..frame_thread import FrameThread
+from ..fps_thread import FpsThread
 
 
 class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
     """A native window that a stream session's frames are drawn into by a VulkanRenderer.
 
-    Frames are pulled on the GUI thread: the decoder's "frame available" event becomes a Qt
-    signal (queued across threads) and its slot hands the newest frame to the renderer, which
-    only records and submits the drawing (a fraction of a millisecond) - the GPU does the rest.
-    Vulkan owns what is drawn in the window, so Qt paints nothing and widgets on top of it
-    would not show; the frame rate is a window of its own (a StatsOverlay) that follows this
-    widget around, in the top-right corner, so it is never part of the frame that is drawn.
+    Frames are pulled by a FrameProducer on its own thread and handed over as a fresh VulkanFrame each
+    time (a Qt signal, queued across threads); the slot here just hands it to the renderer, which only
+    records and submits the drawing (a fraction of a millisecond) - the GPU does the rest. Vulkan owns
+    what is drawn in the window, so Qt paints nothing and widgets on top of it would not show; the frame
+    rate is a window of its own (a StatsOverlay) that follows this widget around, in the top-right
+    corner, so it is never part of the frame that is drawn.
     """
 
-    def __init__(self, stream_session: StreamSession, handler, width: int, height: int, show_stats: bool = False, parent=None):
-        super().__init__(stream_session, handler, width, height, handler.empty_frame(width, height), show_stats, parent)
+    def __init__(self, session: Session, frame_thread: FrameThread, fps_thread: FpsThread, show_stats: bool = False, parent=None):
+        super().__init__(frame_thread, fps_thread, show_stats, parent)
+        self.session = session
         self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
         self.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors)
         self.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen)
@@ -52,7 +55,7 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
         raises RuntimeError if the session can't be drawn (it does not use the Vulkan decoder, ...)."""
         if self._renderer is not None:
             return
-        self._renderer = VulkanRenderer(self._stream_session, int(self.winId()))
+        self._renderer = VulkanRenderer(self.session.stream_session, int(self.winId()))
         super().start()
 
     def release(self) -> None:

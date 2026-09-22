@@ -1,8 +1,3 @@
-from typing import Any
-
-import numpy as np
-import cupy as cp
-import numpy.typing as npt
 from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 from dualsense_py.backends import SDL3Backend
@@ -11,35 +6,16 @@ from dualsense_py.utils import get_available_controllers
 from chiaki_py import Session
 from chiaki_py.controller import attach_controller
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
-from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, VulkanFrame
+from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
-from chiaki_py.gui.stream.views.cuda_view import _CupyArray
-
-
-class FrameProducer(QThread):
-    """Bridges Session.frames() (a plain generator) into a Qt signal, along with how long getting the frame took."""
-    new_frame = pyqtSignal(np.ndarray)
-
-    def __init__(self, session: Session, max_fps: float = 60.0):
-        super().__init__()
-        self.session = session
-        self.max_fps = max_fps
-        self._running = True
-
-    def run(self) -> None:
-        vw = self.session.stream_session.get_video_profile()
-
-        frame: Any | npt.NDArray[np.uint8] | VulkanFrame | None = self.session.frame_handler.empty_frame(vw.height, vw.width)
-
-        for _ in self.session.frames(max_fps=self.max_fps, out=frame):
-            if not self._running:
-                break
-            self.new_frame.emit(frame)
-
-    def stop(self) -> None:
-        self._running = False
-        self.quit()
-        self.wait()
+from .frame_thread import FrameThread
+from .views.cpu_view import CpuVideoWidget
+from .views.cuda_view import CudaVideoWidget
+from .views.vulkan_view import VulkanVideoWidget
+from chiaki_py.gui.stream.views.cpu_view import CpuVideoWidget
+from chiaki_py.gui.stream.views.cuda_view import CudaVideoWidget
+from chiaki_py.gui.stream.views.vulkan_view import VulkanVideoWidget
+from .fps_thread import FpsThread
 
 
 class ControllerThread(QThread):
@@ -99,59 +75,39 @@ class StreamDisplay(QObject):
     def __init__(self, session: Session, show_stats: bool = False, keep_aspect_ratio: bool = False):
         super().__init__()
         self.session = session
-        self.frame_thread: FrameProducer | None = None
         self.aspect_lock: AspectRatioLock | None = None
-
-        handler = session.frame_handler
-        if isinstance(handler, CudaFrameHandler):
-            VideoMixinClass = self._init_cuda()
-        elif isinstance(handler, VulkanFrameHandler):
-            VideoMixinClass = self._init_vulkan()
-        elif isinstance(handler, CpuFrameHandler):
-            VideoMixinClass = self._init_cpu()
-        else:
-            raise TypeError(f"StreamDisplay can't show frames from a {type(handler).__name__}: use a CpuFrameHandler "
-                            "(rendered on the CPU), a CudaFrameHandler (rendered on the GPU with OpenGL) "
-                            "or a VulkanFrameHandler (rendered on the GPU with Vulkan)")
-            
+        self.frame_thread = FrameThread(session)
+        self.fps_thread = FpsThread(self.frame_thread)
+        self.controller_thread = ControllerThread(session)
+ 
         try:
-            self.window = BaseView(self.session, VideoMixinClass, show_stats, keep_aspect_ratio)
+            self.window = BaseView(self.__init_video_mixin(show_stats), self.frame_thread, keep_aspect_ratio)
             self.window.closeRequested.connect(self.close)  # type: ignore[attr-defined]
             self.window.show()
         except Exception as e:
             print(e)
             raise e
 
-        self.controller_thread = ControllerThread(session)
+        self.frame_thread.start()
+        self.fps_thread.start()
         self.controller_thread.start()
+    
+    def __init_video_mixin(self, show_stats: bool) -> VideoMixin:
+        if isinstance(self.session.frame_handler, CpuFrameHandler):
+            return CpuVideoWidget(self.frame_thread, self.fps_thread, show_stats)
+        elif isinstance(self.session.frame_handler, CudaFrameHandler):
+            return CudaVideoWidget(self.frame_thread, self.fps_thread, show_stats)
+        elif isinstance(self.session.frame_handler, VulkanFrameHandler):
+            return VulkanVideoWidget(self.session, self.frame_thread, self.fps_thread, show_stats)
+        else:
+            raise TypeError(f"StreamDisplay can't show frames from a {type(self.session.frame_handler).__name__}: use a CpuFrameHandler (rendered on the CPU), a CudaFrameHandler (rendered on the GPU with OpenGL) or a VulkanFrameHandler (rendered on the GPU with Vulkan)")
 
-    def _init_cpu(self) -> type[VideoMixin]:
-        from chiaki_py.gui.stream.views.cpu_view import CpuVideoWidget
-
-        return CpuVideoWidget
-
-    def _init_cuda(self) -> type[VideoMixin]:
-        if not isinstance(QCoreApplication.instance(), QApplication):
-            raise RuntimeError("Rendering on the GPU needs a QApplication (a QGuiApplication is not enough) to exist first; StreamDisplay.start() creates one")
-
-        from chiaki_py.gui.stream.views.cuda_view import CudaVideoWidget
-        
-        return CudaVideoWidget
-
-    def _init_vulkan(self) -> type[VideoMixin]:
-        if not isinstance(QCoreApplication.instance(), QApplication):
-            raise RuntimeError("Rendering with Vulkan needs a QApplication (a QGuiApplication is not enough) to exist first; StreamDisplay.start() creates one")
-
-        from chiaki_py.gui.stream.views.vulkan_view import VulkanVideoWidget
-        
-        return VulkanVideoWidget
 
     def close(self) -> None:
         if self.aspect_lock is not None:
             self.aspect_lock.remove()
         self.controller_thread.stop()
-        if self.frame_thread is not None:
-            self.frame_thread.stop()
+        self.frame_thread.stop()
         self.session.stop()
 
     @classmethod

@@ -7,7 +7,6 @@ renders the window, and the optional dependencies
     pip install cupy-cuda12x cuda-python PyOpenGL
 """
 
-import logging
 import warnings
 from typing import TypeVar, Any
 
@@ -19,10 +18,9 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 import numpy as np
 import numpy.typing as npt
-from chiaki_py.lib import CudaFrameHandler, StreamSession
 from .base_view import VideoMixin
-
-_logger = logging.getLogger(__name__)
+from ..frame_thread import FrameThread
+from ..fps_thread import FpsThread
 
 
 def check(result):
@@ -138,15 +136,14 @@ class _CupyArray(npt.NDArray[_ScalarT]):
 class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[reportIncompatibleMethodOverride]
     """Shows a stream session's frames, decoded, converted and drawn without leaving the GPU.
 
-    Frames are pulled on the GUI thread: the decoder's "frame available" event becomes a Qt
-    signal (queued across threads), its slot converts the newest frame into a CUDA buffer
-    (a fraction of a millisecond) and paintGL copies it to the texture and draws it. So all
-    CUDA and OpenGL work happens on one thread, with this widget's OpenGL context current,
-    and there is nothing to lock. The picture is scaled to fit the widget, letterboxed.
+    Frames are pulled by a FrameProducer on its own thread, which converts each one into a fresh CUDA
+    buffer (a fraction of a millisecond) and hands it over as a Qt signal (queued across threads); the
+    slot here just marks it ready and paintGL copies it to the texture and draws it, with this widget's
+    OpenGL context current. The picture is scaled to fit the widget, letterboxed.
     """
 
-    def __init__(self, stream_session: StreamSession, handler, width: int, height: int, show_stats: bool = False, parent=None):
-        super().__init__(stream_session, handler, width, height, CudaFrameHandler.empty_frame(width, height), show_stats, parent)
+    def __init__(self, frame_thread: FrameThread, fps_thread: FpsThread, show_stats: bool = False, parent=None):
+        super().__init__(frame_thread, fps_thread, show_stats, parent)
         fmt = QSurfaceFormat()
         fmt.setVersion(3, 3)
         fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
@@ -156,27 +153,6 @@ class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[
         self._texture: CudaGLTexture | None = None
         self._new_frame = False
         self._has_frame = False
-
-    def _adopt_stream_size(self) -> None:
-        """A frame did not fit the buffer: the stream is not the size that was expected (a PS4 asked for
-        1080p downgrades to 720p once connected). Without an `out` buffer the handler allocates and returns
-        an RGB array sized to the real frame, so learn the size from it and size our own buffer to match."""
-        try:
-            probe = self._handler.get_frame(None)
-        except (RuntimeError, ValueError):
-            probe = None
-        if probe is None:
-            return                     # nothing to learn from yet; the next frame tries again
-        probe_height, probe_width, _ = probe.shape
-        size = (probe_width, probe_height)
-        del probe
-        if size == self._size:
-            _logger.warning("Dropping unusable frames")
-            return
-        self._size = size
-        self._frame = CudaFrameHandler.empty_frame(size[1], size[0])
-        self._has_frame = False
-        self.stream_size_changed.emit(*size)
 
     def initializeGL(self) -> None:
         self._texture = CudaGLTexture(*self._size)
