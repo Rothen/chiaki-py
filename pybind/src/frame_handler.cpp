@@ -1,6 +1,52 @@
 #include "frame_handler.h"
 
+#include <cstring>
+
 namespace py = pybind11;
+
+namespace
+{
+// Allocates a Vulkan-resident NV12 frame of `width` x `height` on `session`'s hardware device, ready
+// for its pixels to be filled in and transferred with av_hwframe_transfer_data(). `frames_ref` receives
+// the frames context, which the caller must av_buffer_unref() once the transfer is done (the frame
+// holds its own reference, so the context itself isn't needed past that point). Throws if the session
+// isn't using the Vulkan hardware decoder.
+AVFrame *alloc_vulkan_nv12_frame(StreamSession &session, int width, int height, AVBufferRef *&frames_ref)
+{
+    ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
+    if (!decoder || !decoder->hw_device_ctx ||
+        reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type != AV_HWDEVICE_TYPE_VULKAN)
+        throw std::runtime_error("Session is not using the Vulkan hardware decoder; use Settings.set_hardware_decoder(\"vulkan\")");
+
+    frames_ref = av_hwframe_ctx_alloc(decoder->hw_device_ctx);
+    if (!frames_ref)
+        throw std::runtime_error("Failed to allocate a frames context");
+    auto *frames = reinterpret_cast<AVHWFramesContext *>(frames_ref->data);
+    frames->format = AV_PIX_FMT_VULKAN;
+    frames->sw_format = AV_PIX_FMT_NV12;
+    frames->width = width;
+    frames->height = height;
+    if (av_hwframe_ctx_init(frames_ref) < 0)
+    {
+        av_buffer_unref(&frames_ref);
+        throw std::runtime_error("Failed to initialise a Vulkan frames context");
+    }
+
+    AVFrame *hw = av_frame_alloc();
+    if (!hw)
+    {
+        av_buffer_unref(&frames_ref);
+        throw std::runtime_error("Failed to allocate a frame");
+    }
+    if (av_hwframe_get_buffer(frames_ref, hw, 0) < 0)
+    {
+        av_frame_free(&hw);
+        av_buffer_unref(&frames_ref);
+        throw std::runtime_error("Failed to allocate a Vulkan frame");
+    }
+    return hw;
+}
+}
 
 ThreadSwsContext ::~ThreadSwsContext() { sws_freeContext(ctx); }
 
@@ -58,41 +104,19 @@ uintptr_t VulkanFrame::device_hwctx() const { return reinterpret_cast<uintptr_t>
 std::unique_ptr<VulkanFrame> VulkanFrame::upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
                                                 std::optional<int> visible_width, std::optional<int> visible_height)
 {
-    ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
-    if (!decoder || !decoder->hw_device_ctx ||
-        reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type != AV_HWDEVICE_TYPE_VULKAN)
-        throw std::runtime_error("Session is not using the Vulkan hardware decoder; use Settings.set_hardware_decoder(\"vulkan\")");
     if (nv12.ndim() != 2 || nv12.shape(0) % 3 != 0 || nv12.shape(0) / 3 * 2 % 2 != 0 || nv12.shape(1) % 2 != 0)
         throw py::value_error("nv12 must have shape (height * 3 / 2, width) with an even height and width");
     const int width = static_cast<int>(nv12.shape(1));
     const int height = static_cast<int>(nv12.shape(0) / 3 * 2);
 
-    AVBufferRef *frames_ref = av_hwframe_ctx_alloc(decoder->hw_device_ctx);
-    if (!frames_ref)
-        throw std::runtime_error("Failed to allocate a frames context");
-    auto *frames = reinterpret_cast<AVHWFramesContext *>(frames_ref->data);
-    frames->format = AV_PIX_FMT_VULKAN;
-    frames->sw_format = AV_PIX_FMT_NV12;
-    frames->width = width;
-    frames->height = height;
-    if (av_hwframe_ctx_init(frames_ref) < 0)
-    {
-        av_buffer_unref(&frames_ref);
-        throw std::runtime_error("Failed to initialise a Vulkan frames context");
-    }
-
-    AVFrame *hw = av_frame_alloc();
+    AVBufferRef *frames_ref = nullptr;
+    AVFrame *hw = alloc_vulkan_nv12_frame(session, width, height, frames_ref);
     AVFrame *sw = av_frame_alloc();
     auto cleanup = [&]() { av_frame_free(&hw); av_frame_free(&sw); av_buffer_unref(&frames_ref); };
-    if (!hw || !sw)
+    if (!sw)
     {
         cleanup();
         throw std::runtime_error("Failed to allocate a frame");
-    }
-    if (av_hwframe_get_buffer(frames_ref, hw, 0) < 0)
-    {
-        cleanup();
-        throw std::runtime_error("Failed to allocate a Vulkan frame");
     }
 
     // The system memory frame only borrows the array's memory, for the duration of the transfer.
@@ -116,6 +140,48 @@ std::unique_ptr<VulkanFrame> VulkanFrame::upload_nv12(StreamSession &session, co
     {
         cleanup();
         throw py::value_error("The visible size must be within the uploaded picture");
+    }
+    hw->colorspace = AVCOL_SPC_BT709;
+    hw->color_range = AVCOL_RANGE_MPEG;
+
+    av_frame_free(&sw);
+    av_buffer_unref(&frames_ref); // the frame holds its own reference
+    return std::make_unique<VulkanFrame>(hw, 0.0, 0.0);
+}
+
+std::unique_ptr<VulkanFrame> VulkanFrame::black(StreamSession &session, int width, int height)
+{
+    if (width < 1 || height < 1)
+        throw py::value_error("width and height must be positive");
+
+    AVBufferRef *frames_ref = nullptr;
+    AVFrame *hw = alloc_vulkan_nv12_frame(session, width, height, frames_ref);
+    AVFrame *sw = av_frame_alloc();
+    auto cleanup = [&]() { av_frame_free(&hw); av_frame_free(&sw); av_buffer_unref(&frames_ref); };
+    if (!sw)
+    {
+        cleanup();
+        throw std::runtime_error("Failed to allocate a frame");
+    }
+
+    sw->format = AV_PIX_FMT_NV12;
+    sw->width = width;
+    sw->height = height;
+    if (av_frame_get_buffer(sw, 0) < 0)
+    {
+        cleanup();
+        throw std::runtime_error("Failed to allocate a system memory frame");
+    }
+    // Limited-range (MPEG) black: luma 16, chroma 128 - matches the color_range set below.
+    for (int y = 0; y < height; y++)
+        memset(sw->data[0] + static_cast<size_t>(y) * sw->linesize[0], 16, width);
+    for (int y = 0; y < (height + 1) / 2; y++)
+        memset(sw->data[1] + static_cast<size_t>(y) * sw->linesize[1], 128, width);
+
+    if (av_hwframe_transfer_data(hw, sw, 0) < 0)
+    {
+        cleanup();
+        throw std::runtime_error("Failed to upload the picture to the GPU");
     }
     hw->colorspace = AVCOL_SPC_BT709;
     hw->color_range = AVCOL_RANGE_MPEG;
@@ -425,7 +491,7 @@ py::object VulkanFrameHandler::get_frame(const py::object &out = py::none())
 
 std::unique_ptr<VulkanFrame> VulkanFrameHandler::empty_frame(int width, int height)
 {
-    return std::make_unique<VulkanFrame>();
+    return VulkanFrame::black(*streamSession, width, height);
 }
 
 py::array_t<uint8_t> CpuFrameHandler::empty_frame(int width, int height)

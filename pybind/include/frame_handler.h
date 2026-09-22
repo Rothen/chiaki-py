@@ -62,7 +62,7 @@ struct VulkanFrame
 
     void reset(AVFrame *new_frame, double new_pts, double new_duration);
 
-    // Throws if `frame` is null (an empty_frame() that no decoded frame has been reset() into yet):
+    // Throws if `frame` is null (a default-constructed VulkanFrame that nothing has reset() into yet):
     // every accessor below needs this, since dereferencing a null AVFrame* would otherwise segfault
     // the whole interpreter instead of raising a catchable Python exception.
     void require_frame() const;
@@ -89,6 +89,10 @@ struct VulkanFrame
     static std::unique_ptr<VulkanFrame> upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
                                                  std::optional<int> visible_width = std::nullopt,
                                                  std::optional<int> visible_height = std::nullopt);
+
+    // A new all-black `width` x `height` frame uploaded to the session's Vulkan hardware device, for
+    // VulkanFrameHandler::empty_frame() to hand out before any frame has been decoded yet.
+    static std::unique_ptr<VulkanFrame> black(StreamSession &session, int width, int height);
 };
 
 struct CudaFrameLayout
@@ -183,10 +187,11 @@ public:
     VulkanFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
 
-    // An empty VulkanFrame holding no decoded frame yet, suitable as `out` for get_frame(); width
-    // and height are accepted for a uniform empty_frame(width, height) call but otherwise unused,
-    // since a VulkanFrame takes on whatever size the next decoded frame actually has.
-    static std::unique_ptr<VulkanFrame> empty_frame(int width = 0, int height = 0);
+    // A new all-black VulkanFrame of this size, uploaded to the session's Vulkan hardware device -
+    // suitable to show before the first decoded frame arrives, and equally usable as `out` for
+    // get_frame() (which replaces its contents regardless of size once a real frame lands). Unlike
+    // the other handlers' empty_frame(), this needs the session's device, so it isn't static.
+    std::unique_ptr<VulkanFrame> empty_frame(int width, int height);
 };
 
 #endif // CHIAKI_PY_FRAME_HANDLER_H

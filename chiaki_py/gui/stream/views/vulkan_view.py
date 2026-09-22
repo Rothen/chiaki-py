@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
 from chiaki_py import Session
-from chiaki_py.lib import VulkanFrame, VulkanFrameHandler, VulkanRenderer, StreamSession
+from chiaki_py.lib import VulkanFrame, VulkanRenderer, StreamSession
 from .base_view import BaseView, VideoMixin
 
 
@@ -27,7 +27,7 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
     """
 
     def __init__(self, stream_session: StreamSession, handler, width: int, height: int, show_stats: bool = False, parent=None):
-        super().__init__(stream_session, handler, width, height, VulkanFrameHandler.empty_frame(), show_stats, parent)
+        super().__init__(stream_session, handler, width, height, handler.empty_frame(width, height), show_stats, parent)
         self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
         self.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors)
         self.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen)
@@ -60,14 +60,3 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
         if renderer is not None:
             renderer.close()           # before the window it draws into goes away
         super().release()
-
-
-
-class VulkanStreamWindow(BaseView[VulkanVideoWidget]):
-    """A window around a VulkanVideoWidget. F shows or hides the frame rate and the time needed per frame in
-    the top-right corner (getting the frame from the decoder plus recording and submitting its drawing, not
-    counting the GPU's own work); A locks or unlocks the video's aspect ratio while the window is resized. With
-    `keep_aspect_ratio` the window starts with it locked, so there are no bars."""
-
-    def __init__(self, session: Session, show_stats: bool = False, keep_aspect_ratio: bool = False):
-        super().__init__(session, VulkanVideoWidget, show_stats, keep_aspect_ratio)

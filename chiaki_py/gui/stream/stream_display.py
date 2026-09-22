@@ -13,11 +13,12 @@ from chiaki_py.controller import attach_controller
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, VulkanFrame
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
+from chiaki_py.gui.stream.views.cuda_view import _CupyArray
 
 
 class FrameProducer(QThread):
     """Bridges Session.frames() (a plain generator) into a Qt signal, along with how long getting the frame took."""
-    frame_ready = pyqtSignal(np.ndarray, float)
+    new_frame = pyqtSignal(np.ndarray)
 
     def __init__(self, session: Session, max_fps: float = 60.0):
         super().__init__()
@@ -28,19 +29,12 @@ class FrameProducer(QThread):
     def run(self) -> None:
         vw = self.session.stream_session.get_video_profile()
 
-        frame: npt.NDArray[np.uint8] | VulkanFrame | Any | None = None
-        
-        # A CpuFrameHandler gets no buffer: every frame is a new array, so the GUI thread can keep
-        # reading one while the next is decoded, and it can be any size the stream turns out to be.
-        if isinstance(self.session.frame_handler, CudaFrameHandler):
-            frame: Any = cp.empty((vw.height, vw.width, 3), dtype=cp.uint8)
-        elif isinstance(self.session.frame_handler, VulkanFrameHandler):
-            frame = VulkanFrame()
+        frame: Any | npt.NDArray[np.uint8] | VulkanFrame | None = self.session.frame_handler.empty_frame(vw.height, vw.width)
 
-        for decoded in self.session.frames(max_fps=self.max_fps, out=frame):
+        for _ in self.session.frames(max_fps=self.max_fps, out=frame):
             if not self._running:
                 break
-            self.frame_ready.emit(decoded, self.session.last_get_time)
+            self.new_frame.emit(frame)
 
     def stop(self) -> None:
         self._running = False
