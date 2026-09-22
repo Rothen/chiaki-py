@@ -491,7 +491,7 @@ py::object VulkanFrameHandler::get_frame(const py::object &out = py::none())
 
 std::unique_ptr<VulkanFrame> VulkanFrameHandler::empty_frame(int width, int height)
 {
-    return VulkanFrame::black(*streamSession, width, height);
+    return std::make_unique<VulkanFrame>();
 }
 
 py::array_t<uint8_t> CpuFrameHandler::empty_frame(int width, int height)

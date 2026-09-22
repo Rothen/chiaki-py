@@ -205,14 +205,13 @@ PYBIND11_MODULE(chiaki_py, m)
              "if none was available yet. If `out` is a VulcanFrame it takes over the new frame (releasing "
              "the one it held) and is returned instead of a new VulcanFrame being created. Raises "
              "RuntimeError if the session doesn't use a hardware decoder and TypeError if `out` isn't a VulcanFrame.")
-        .def("empty_frame", &VulkanFrameHandler::empty_frame,
-             py::arg("width"), py::arg("height"),
-             "A new all-black VulkanFrame of this size, uploaded to the session's Vulkan hardware device - "
-             "suitable to show before the first decoded frame arrives, and equally usable as `out` for "
-             "get_frame() (which replaces its contents regardless of size once a real frame lands). Unlike "
-             "the other handlers' empty_frame(), this is an instance method: it needs the session's device, "
-             "so call it on a VulkanFrameHandler, not the class. Raises RuntimeError if the session isn't "
-             "using the Vulkan hardware decoder.");
+        .def_static("empty_frame", &VulkanFrameHandler::empty_frame,
+             py::arg("width") = 0, py::arg("height") = 0,
+             "An empty VulkanFrame holding no decoded frame yet, ready to be reused as `out` for get_frame(). "
+             "`width`/`height` are accepted for a uniform empty_frame(width, height) signature but otherwise "
+             "unused, since a VulkanFrame takes on whatever size the next decoded frame actually has. Does no "
+             "GPU work, unlike VulkanFrame.black(): use that directly if you need a real placeholder picture "
+             "and can guarantee it won't run concurrently with the hardware decoder's own Vulkan submissions.");
 
     py::class_<Settings>(m, "Settings")
         .def(py::init<>())

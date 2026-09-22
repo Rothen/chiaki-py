@@ -187,11 +187,16 @@ public:
     VulkanFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
 
-    // A new all-black VulkanFrame of this size, uploaded to the session's Vulkan hardware device -
-    // suitable to show before the first decoded frame arrives, and equally usable as `out` for
-    // get_frame() (which replaces its contents regardless of size once a real frame lands). Unlike
-    // the other handlers' empty_frame(), this needs the session's device, so it isn't static.
-    std::unique_ptr<VulkanFrame> empty_frame(int width, int height);
+    // An empty VulkanFrame holding no decoded frame yet, suitable as `out` for get_frame(); width
+    // and height are accepted for a uniform empty_frame(width, height) call but otherwise unused,
+    // since a VulkanFrame takes on whatever size the next decoded frame actually has. Deliberately
+    // does no GPU work (unlike VulkanFrame::black()): this is called synchronously from the GUI
+    // thread while the hardware decoder may already be submitting its own Vulkan commands on its
+    // own thread, and nothing in this codebase synchronizes access to the Vulkan queue between them -
+    // a black() upload here raced with the decoder's startup and brought down the whole device
+    // (VK_ERROR_DEVICE_LOST). Use VulkanFrame::black() directly where a real placeholder picture is
+    // needed and the caller can guarantee it isn't racing the decoder.
+    static std::unique_ptr<VulkanFrame> empty_frame(int width = 0, int height = 0);
 };
 
 #endif // CHIAKI_PY_FRAME_HANDLER_H
