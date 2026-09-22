@@ -1,22 +1,10 @@
 import logging
-import time
-import warnings
-from typing import TYPE_CHECKING, TypeVar, Generic, cast
+from typing import TYPE_CHECKING, TypeVar, Generic
 from abc import ABC, abstractmethod
-import traceback
 
-from OpenGL import GL
-from OpenGL.GL.shaders import compileProgram, compileShader
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QSurfaceFormat, QKeyEvent, QShowEvent, QCloseEvent
-from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtWidgets import QWidget, QLabel, QMainWindow
-
-with warnings.catch_warnings():
-    # cupy warns on Windows when there is no system CUDA Toolkit, though the pip wheels bring what it needs.
-    warnings.filterwarnings(
-        "ignore", message="CUDA path could not be detected")
-    import cupy as cp
+from PyQt6.QtGui import QKeyEvent, QShowEvent, QCloseEvent
+from PyQt6.QtWidgets import QWidget, QMainWindow
 
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.gui.stream.stats_overlay import StatsOverlay
@@ -121,15 +109,7 @@ class BaseView(QMainWindow, Generic[T]):
         self.resize(frame_producer.width, frame_producer.height)
 
         self._fps_thread = fps_thread
-        self._stats_box = StatsOverlay(self.video)
-        self._stats_box.set_visible(show_stats)
-
-    def set_stats_visible(self, visible: bool) -> None:
-        self._stats_box.set_visible(visible)
-
-    def _on_fps(self, fps: float, pull_time: float, render_time: float, total_time: float) -> None:
-        self._stats_box.set_text(f"FPS: {fps:.2f}\nPull Time: {pull_time:.2f} ms\n"
-                                  f"Render Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")
+        self._stats_box = StatsOverlay(self.video, fps_thread, show_stats)
 
     def showEvent(self, a0: QShowEvent | None) -> None:
         super().showEvent(a0)
@@ -146,9 +126,7 @@ class BaseView(QMainWindow, Generic[T]):
             super().keyPressEvent(a0)
             return
 
-        if a0.key() == Qt.Key.Key_F:
-            self.set_stats_visible(not self._stats_box.visible)
-        elif a0.key() == Qt.Key.Key_A:
+        if a0.key() == Qt.Key.Key_A:
             if self._aspect_lock is None:
                 self._aspect_lock = AspectRatioLock(lambda: self._aspect)
                 self._aspect_lock.attach(int(self.winId()))
@@ -157,12 +135,15 @@ class BaseView(QMainWindow, Generic[T]):
                 self._aspect_lock.remove()
                 self._aspect_lock = None
         else:
-            super().keyPressEvent(a0)
+            self._stats_box.keyPressEvent(a0)
+            
+            if a0.isAccepted():
+                super().keyPressEvent(a0)
 
     def start(self) -> None:
         """Start drawing; the window must be shown already."""
-        self._fps_thread.new_fps.connect(self._on_fps)
         self.video.start()
+        self._stats_box.start()
 
     def show(self) -> None:
         super().show()
@@ -176,10 +157,6 @@ class BaseView(QMainWindow, Generic[T]):
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         if self._aspect_lock is not None:
             self._aspect_lock.remove()
-        try:
-            self._fps_thread.new_fps.disconnect(self._on_fps)
-        except TypeError:
-            pass
         self._stats_box.release()
         self.video.release()
         self.closeRequested.emit()

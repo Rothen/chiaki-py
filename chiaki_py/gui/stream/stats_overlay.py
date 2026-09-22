@@ -1,8 +1,9 @@
 """The frame-rate box of the stream viewers whose video is drawn by something other than Qt, as a window on top of it."""
 
 from PyQt6.QtCore import QEvent, QObject, QPoint, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPaintEvent
+from PyQt6.QtGui import QColor, QFont, QPainter, QPaintEvent, QCloseEvent, QKeyEvent
 from PyQt6.QtWidgets import QLabel, QWidget
+from .threads.fps_thread import FpsThread
 
 # The same look as the box in stream_display.qml: white bold text right-aligned on black at 150/255 opacity
 FONT_PIXEL_SIZE = 16
@@ -21,9 +22,10 @@ class StatsOverlay(QLabel):
     installed on it), so its owner only has to call `set_text` and `set_visible`.
     """
 
-    def __init__(self, video: QWidget):
+    def __init__(self, video: QWidget, fps_thread: FpsThread, show_stats: bool = False):
         super().__init__(video.window())
         self._video = video
+        self._fps_thread = fps_thread
         self._text: str | None = None
         self.visible = False   # whether showing stats has been requested; actually shown once there is text and the video is on screen
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint
@@ -40,6 +42,8 @@ class StatsOverlay(QLabel):
 
         if (window := video.window()) is not None:
             window.installEventFilter(self)
+        
+        self.set_visible(show_stats)
 
     def set_text(self, text: str) -> None:
         """Show `text` (lines separated by newlines), if stats are visible and the video is on screen."""
@@ -89,3 +93,28 @@ class StatsOverlay(QLabel):
         painter.fillRect(self.rect(), BACKGROUND)
         painter.end()
         super().paintEvent(a0)
+
+    def start(self) -> None:
+        """Start drawing; the window must be shown already."""
+        self._fps_thread.new_fps.connect(self._on_fps)
+
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
+        try:
+            self._fps_thread.new_fps.disconnect(self._on_fps)
+        except TypeError:
+            pass
+        super().closeEvent(a0)
+
+    def keyPressEvent(self, ev: QKeyEvent | None) -> None:
+        if ev is None:
+            super().keyPressEvent(ev)
+            return
+        
+        if ev.key() == Qt.Key.Key_F:
+            self.set_visible(not self.visible)
+            ev.ignore()
+        else:
+            super().keyPressEvent(ev)
+
+    def _on_fps(self, fps: float, pull_time: float, render_time: float, total_time: float) -> None:
+        self.set_text(f"FPS: {fps:.2f}\nPull Time: {pull_time:.2f} ms\nRender Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")
