@@ -92,7 +92,8 @@ PYBIND11_MODULE(chiaki_py, m)
     // init_core_session(m_core_session);
     // init_core_remote_holepunch(m_remote_holepunch);
 
-    py::enum_<RumbleHapticsIntensity>(m, "RumbleHapticsIntensity")
+    py::enum_<RumbleHapticsIntensity>(m, "RumbleHapticsIntensity",
+        "How strongly the controller rumbles for haptic feedback, from Settings.get/set_rumble_haptics_intensity().")
         .value("Off", RumbleHapticsIntensity::Off)
         .value("VeryWeak", RumbleHapticsIntensity::VeryWeak)
         .value("Weak", RumbleHapticsIntensity::Weak)
@@ -101,26 +102,32 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("VeryStrong", RumbleHapticsIntensity::VeryStrong)
         .export_values();
 
-    py::enum_<Decoder>(m, "Decoder")
+    py::enum_<Decoder>(m, "Decoder",
+        "Which decoder implementation Settings.get/set_decoder() selects: Ffmpeg (the normal path, used "
+        "by all of FrameHandler's subclasses) or Pi (the Raspberry Pi hardware decoder).")
         .value("Ffmpeg", Decoder::Ffmpeg)
         .value("Pi", Decoder::Pi)
         .export_values();
 
-    py::enum_<ChiakiDisableAudioVideo>(m, "DisableAudioVideo")
+    py::enum_<ChiakiDisableAudioVideo>(m, "DisableAudioVideo",
+        "Which of the audio/video streams to skip receiving, as returned by Settings.get_audio_video_disabled().")
         .value("None_", ChiakiDisableAudioVideo::CHIAKI_NONE_DISABLED)
         .value("Audio", ChiakiDisableAudioVideo::CHIAKI_AUDIO_DISABLED)
         .value("Video", ChiakiDisableAudioVideo::CHIAKI_VIDEO_DISABLED)
         .value("AudioVideo", ChiakiDisableAudioVideo::CHIAKI_AUDIO_VIDEO_DISABLED)
         .export_values();
 
-    py::enum_<ChiakiVideoResolutionPreset>(m, "VideoResolutionPreset")
+    py::enum_<ChiakiVideoResolutionPreset>(m, "VideoResolutionPreset",
+        "The resolution presets Settings' get/set_resolution_local_ps4/ps5 and .../remote_ps4/ps5 "
+        "methods store; the actual pixel dimensions negotiated end up in StreamSession.get_video_profile().")
         .value("Resolution360p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_360p)
         .value("Resolution540p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_540p)
         .value("Resolution720p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_720p)
         .value("Resolution1080p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_1080p)
         .export_values();
 
-    py::enum_<ChiakiVideoFPSPreset>(m, "VideoFPSPreset")
+    py::enum_<ChiakiVideoFPSPreset>(m, "VideoFPSPreset",
+        "The frame rate presets Settings' get/set_fpslocal/remote_ps4/ps5 methods store.")
         .value("FPS30", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_30)
         .value("FPS60", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_60)
         .export_values();
@@ -169,7 +176,9 @@ PYBIND11_MODULE(chiaki_py, m)
              py::arg("width") = 0, py::arg("height") = 0,
              "Not implemented on the base class; call empty_frame() on a concrete subclass instead.");
 
-    py::class_<CpuFrameHandler, FrameHandler>(m, "CpuFrameHandler")
+    py::class_<CpuFrameHandler, FrameHandler>(m, "CpuFrameHandler",
+        "Decodes and converts frames to RGB entirely on the CPU. Works with any decoder, needs no "
+        "hardware decoder configured, and is the default FrameHandler `chiaki_py.Session` uses.")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &CpuFrameHandler::get_frame,
              py::arg("out") = py::none(),
@@ -182,7 +191,10 @@ PYBIND11_MODULE(chiaki_py, m)
              "A (height, width, 3) uint8 numpy array, ready to be reused as `out` for get_frame() of frames "
              "of this size.");
 
-    py::class_<CudaFrameHandler, FrameHandler>(m, "CudaFrameHandler")
+    py::class_<CudaFrameHandler, FrameHandler>(m, "CudaFrameHandler",
+        "Converts decoded frames to RGB on the GPU with CUDA and returns them as a CuPy (or PyTorch) "
+        "array, without a round trip through system memory. Requires an NVIDIA GPU and "
+        "Settings.set_hardware_decoder('cuda') before connecting.")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &CudaFrameHandler::get_frame,
              py::arg("out") = py::none(),
@@ -204,7 +216,10 @@ PYBIND11_MODULE(chiaki_py, m)
              "transpose/permute view of that same interleaved RGB memory, for a model that wants CHW, "
              "with no extra copy.");
 
-    py::class_<VulkanFrameHandler, FrameHandler>(m, "VulkanFrameHandler")
+    py::class_<VulkanFrameHandler, FrameHandler>(m, "VulkanFrameHandler",
+        "Hands out frames as VulkanFrame objects that stay resident on the Vulkan device the decoder "
+        "decoded them on - no conversion, no copy. Requires Settings.set_hardware_decoder('vulkan') "
+        "before connecting; pair with VulkanRenderer to draw them, e.g. via chiaki_py.gui.VulkanVideoWidget.")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &VulkanFrameHandler::get_frame,
              py::arg("out") = py::none(),
@@ -220,7 +235,12 @@ PYBIND11_MODULE(chiaki_py, m)
              "GPU work, unlike VulkanFrame.black(): use that directly if you need a real placeholder picture "
              "and can guarantee it won't run concurrently with the hardware decoder's own Vulkan submissions.");
 
-    py::class_<Settings>(m, "Settings")
+    py::class_<Settings>(m, "Settings",
+        "In-memory connection/decoding/UI settings, passed to StreamSessionConnectInfo, Backend and "
+        "DiscoveryManager. A fresh instance starts at chiaki-ng's defaults; there is no persistence "
+        "here (use chiaki_py.Serializer to save/load whichever of these settings an application cares "
+        "about). Most get_/set_ pairs are self-explanatory config knobs; set_hardware_decoder() and "
+        "set_log_level()/set_log_verbose() are the ones most callers need to touch directly.")
         .def(py::init<>())
         .def("get_audio_video_disabled", &Settings::GetAudioVideoDisabled, "Get the audio/video disabled.")
         .def("get_log_verbose", &Settings::GetLogVerbose, "Get the log verbose.")
@@ -514,7 +534,9 @@ PYBIND11_MODULE(chiaki_py, m)
              "Wait for the GPU to be done and free everything. Call before the window is destroyed.")
         .def_static("is_supported", &VulkanRenderer::is_supported, "Whether windows of this platform can be drawn into (only Windows so far).");
 
-    py::enum_<ChiakiDiscoveryHostState>(m, "DiscoveryHostState")
+    py::enum_<ChiakiDiscoveryHostState>(m, "DiscoveryHostState",
+        "A discovered console's power state (DiscoveryHost.state): Ready to stream, Standby (needs a "
+        "wakeup packet first, see DiscoveryManager.send_wakeup()), or Unknown before a reply is parsed.")
         .value("Unknown", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN)
         .value("Ready", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_READY)
         .value("Standby", ChiakiDiscoveryHostState::CHIAKI_DISCOVERY_HOST_STATE_STANDBY)

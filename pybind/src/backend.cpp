@@ -20,7 +20,10 @@ void init_backend(py::module &m)
     m.attr("WAKEUP_PSN_IGNORE_SECONDS") = WAKEUP_PSN_IGNORE_SECONDS;
     m.attr("WAKEUP_WAIT_SECONDS") = WAKEUP_WAIT_SECONDS;
 
-    py::enum_<PsnConnectState>(m, "PsnConnectState")
+    py::enum_<PsnConnectState>(m, "PsnConnectState",
+        "Stages of connecting to a console over PSN (remote play over the internet, via holepunching) "
+        "rather than the local network. Exported for forward compatibility; no bound method currently "
+        "returns one, since the PSN remote-connect path (core/remote/holepunch.h) isn't wired up yet.")
         .value("NotStarted", PsnConnectState::NotStarted)
         .value("WaitingForInternet", PsnConnectState::WaitingForInternet)
         .value("InitiatingConnection", PsnConnectState::InitiatingConnection)
@@ -84,7 +87,9 @@ void init_backend(py::module &m)
                         ">";
              });
 
-    py::enum_<ChiakiRegistEventType>(m, "RegistEventType")
+    py::enum_<ChiakiRegistEventType>(m, "RegistEventType",
+        "How a Backend.register_host_async() attempt ended: FINISHED_SUCCESS (registered_host is set), "
+        "FINISHED_FAILED (wrong PIN, console unreachable, ...) or FINISHED_CANCELED.")
         .value("FINISHED_CANCELED", ChiakiRegistEventType::CHIAKI_REGIST_EVENT_TYPE_FINISHED_CANCELED)
         .value("FINISHED_FAILED", ChiakiRegistEventType::CHIAKI_REGIST_EVENT_TYPE_FINISHED_FAILED)
         .value("FINISHED_SUCCESS", ChiakiRegistEventType::CHIAKI_REGIST_EVENT_TYPE_FINISHED_SUCCESS)
