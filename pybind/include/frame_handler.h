@@ -62,6 +62,11 @@ struct VulkanFrame
 
     void reset(AVFrame *new_frame, double new_pts, double new_duration);
 
+    // Throws if `frame` is null (an empty_frame() that no decoded frame has been reset() into yet):
+    // every accessor below needs this, since dereferencing a null AVFrame* would otherwise segfault
+    // the whole interpreter instead of raising a catchable Python exception.
+    void require_frame() const;
+
     const AVHWFramesContext *frames_ctx() const;
 
     static std::string format_name(int format);

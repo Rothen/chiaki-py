@@ -3,6 +3,7 @@ import time
 import warnings
 from typing import TYPE_CHECKING, TypeVar, Generic, cast
 from abc import ABC, abstractmethod
+import traceback
 
 from OpenGL import GL
 from OpenGL.GL.shaders import compileProgram, compileShader
@@ -121,7 +122,8 @@ class VideoMixin(Generic[F], _QWidgetBase):
             return"""
         try:
             started = time.perf_counter()
-            _ = self._handler.get_frame(self._frame)
+            if self._handler.get_frame(self._frame) is None:
+                return
             self._frame_pulled()
         except ValueError:
             self._adopt_stream_size()

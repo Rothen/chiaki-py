@@ -79,7 +79,7 @@ struct VulkanRenderer::Impl
     }
 
     void init(StreamSession &session, uintptr_t native_window);
-    void render(const VulkanFrame &gpu_frame);
+    void render(const VulkanFrame &frame);
     void set_overlay(const uint8_t *rgba, int width, int height, int margin);
     void clear_overlay();
     void close();
@@ -122,14 +122,15 @@ void VulkanRenderer::Impl::init(StreamSession &session, uintptr_t native_window)
         throw std::runtime_error("libplacebo failed to create its renderer");
 }
 
-void VulkanRenderer::Impl::render(const VulkanFrame &gpu_frame)
+void VulkanRenderer::Impl::render(const VulkanFrame &frame)
 {
     if (closed)
         throw std::runtime_error("The renderer has been closed");
 
-    const AVFrame *source = gpu_frame.frame;
+    const AVFrame *source = frame.frame;
     if (!source || source->format != AV_PIX_FMT_VULKAN || !source->hw_frames_ctx)
-        throw std::runtime_error("Only frames from the Vulkan hardware decoder can be drawn");
+        throw std::domain_error("Only frames from the Vulkan hardware decoder can be drawn");
+        // throw std::runtime_error("Only frames from the Vulkan hardware decoder can be drawn");
     auto *frames = reinterpret_cast<AVHWFramesContext *>(source->hw_frames_ctx->data);
     if (frames->device_ctx != device)
         throw std::runtime_error("The frame was decoded on another Vulkan device than this renderer draws on");

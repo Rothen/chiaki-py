@@ -16,8 +16,15 @@ void VulkanFrame::reset(AVFrame *new_frame, double new_pts, double new_duration)
     duration = new_duration;
 }
 
+void VulkanFrame::require_frame() const
+{
+    if (!frame)
+        throw std::runtime_error("VulkanFrame holds no decoded frame yet");
+}
+
 const AVHWFramesContext *VulkanFrame::frames_ctx() const
 {
+    require_frame();
     return reinterpret_cast<const AVHWFramesContext *>(frame->hw_frames_ctx->data);
 }
 
@@ -28,11 +35,12 @@ std::string VulkanFrame::format_name(int format)
 }
 
 std::string VulkanFrame::hw_type() const { return av_hwdevice_get_type_name(frames_ctx()->device_ctx->type); }
-std::string VulkanFrame::format() const { return format_name(frame->format); }
+std::string VulkanFrame::format() const { require_frame(); return format_name(frame->format); }
 std::string VulkanFrame::sw_format() const { return format_name(frames_ctx()->sw_format); }
 
 std::vector<uintptr_t> VulkanFrame::data() const
 {
+    require_frame();
     std::vector<uintptr_t> out;
     for (int i = 0; i < AV_NUM_DATA_POINTERS && frame->data[i]; i++)
         out.push_back(reinterpret_cast<uintptr_t>(frame->data[i]));
@@ -41,6 +49,7 @@ std::vector<uintptr_t> VulkanFrame::data() const
 
 std::vector<int> VulkanFrame::linesize() const
 {
+    require_frame();
     return std::vector<int>(frame->linesize, frame->linesize + data().size());
 }
 
