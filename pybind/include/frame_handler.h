@@ -48,16 +48,17 @@ struct ThreadSwsContext
     ~ThreadSwsContext();
 };
 
-struct GpuFrame
+struct VulkanFrame
 {
-    AVFrame *frame;
-    double pts;
-    double duration;
+    AVFrame *frame = nullptr;
+    double pts = 0.0;
+    double duration = 0.0;
 
-    GpuFrame(AVFrame *frame, double pts, double duration);
-    GpuFrame(const GpuFrame &) = delete;
-    GpuFrame &operator=(const GpuFrame &) = delete;
-    ~GpuFrame();
+    VulkanFrame();
+    VulkanFrame(AVFrame *frame, double pts, double duration);
+    VulkanFrame(const VulkanFrame &) = delete;
+    VulkanFrame &operator=(const VulkanFrame &) = delete;
+    ~VulkanFrame();
 
     void reset(AVFrame *new_frame, double new_pts, double new_duration);
 
@@ -77,29 +78,12 @@ struct GpuFrame
 
     // Uploads an NV12 picture from system memory (a (height * 3 / 2, width) uint8 array: the luma rows, then
     // the interleaved chroma rows) into a new frame on the session's Vulkan hardware device, as the decoder
-    // would have produced it. For trying out consumers of GpuFrames without a console. The frame is
+    // would have produced it. For trying out consumers of VulkanFrames without a console. The frame is
     // `visible_width` x `visible_height` (the whole picture by default), like a decoded picture that is
     // smaller than the image it is stored in.
-    static std::unique_ptr<GpuFrame> upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
+    static std::unique_ptr<VulkanFrame> upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
                                                  std::optional<int> visible_width = std::nullopt,
                                                  std::optional<int> visible_height = std::nullopt);
-};
-
-struct CudaPlane
-{
-    AVFrame *frame;
-    uintptr_t ptr;
-    std::vector<py::ssize_t> shape;
-    std::vector<py::ssize_t> strides; // in bytes
-    std::string typestr;
-
-    CudaPlane(const AVFrame *source, uintptr_t ptr, std::vector<py::ssize_t> shape,
-              std::vector<py::ssize_t> strides, std::string typestr);
-    CudaPlane(const CudaPlane &) = delete;
-    CudaPlane &operator=(const CudaPlane &) = delete;
-    ~CudaPlane();
-
-    py::dict cuda_array_interface() const;
 };
 
 struct CudaFrameLayout
@@ -113,19 +97,6 @@ struct CudaFrameLayout
     py::ssize_t uv_height;
 
     static CudaFrameLayout of(const AVFrame *frame);
-};
-
-struct CudaFrame
-{
-    int width;
-    int height;
-    double pts;
-    double duration;
-    std::string sw_format;
-    std::shared_ptr<CudaPlane> y;
-    std::shared_ptr<CudaPlane> uv;
-
-    static std::unique_ptr<CudaFrame> from_frame(const AVFrame *frame, double pts, double duration);
 };
 
 static YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, const CudaFrameLayout &layout);
@@ -151,6 +122,10 @@ public:
 
     virtual py::object get_frame(const py::object &out) = 0;
 
+    // Not overridable (static): concrete subclasses hide this with their own empty_frame() of the
+    // same name, each returning the empty buffer/frame that its own get_frame() knows how to fill.
+    static py::object empty_frame(int width = 0, int height = 0);
+
 protected:
     StreamSession *streamSession;
 
@@ -163,11 +138,14 @@ protected:
     ChiakiFfmpegFrame pull_decoded_frame();
 };
 
-class CPUFrameHandler : public FrameHandler
+class CpuFrameHandler : public FrameHandler
 {
 public:
-    CPUFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
+    CpuFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
+
+    // A (height, width, 3) uint8 numpy array, suitable as `out` for get_frame() of this size.
+    static py::array_t<uint8_t> empty_frame(int width, int height);
 
 private:
     AVFrame *frame = nullptr;
@@ -180,18 +158,26 @@ private:
     py::array_t<uint8_t> output_array(const py::object &out, int height, int width);
 };
 
-class CUDAFrameHandler : public FrameHandler
+class CudaFrameHandler : public FrameHandler
 {
 public:
-    CUDAFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
+    CudaFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
+
+    // A (height, width, 3) uint8 CuPy array, suitable as `out` for get_frame() of this size.
+    static py::object empty_frame(int width, int height);
 };
 
-class GPUFrameHandler : public FrameHandler
+class VulkanFrameHandler : public FrameHandler
 {
 public:
-    GPUFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
+    VulkanFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
+
+    // An empty VulkanFrame holding no decoded frame yet, suitable as `out` for get_frame(); width
+    // and height are accepted for a uniform empty_frame(width, height) call but otherwise unused,
+    // since a VulkanFrame takes on whatever size the next decoded frame actually has.
+    static std::unique_ptr<VulkanFrame> empty_frame(int width = 0, int height = 0);
 };
 
 #endif // CHIAKI_PY_FRAME_HANDLER_H

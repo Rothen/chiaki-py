@@ -26,7 +26,7 @@ import torch
 import typer
 
 from chiaki_py import Session, Serializer
-from chiaki_py.lib import Settings, CUDAFrameHandler
+from chiaki_py.lib import Settings, CudaFrameHandler
 from chiaki_py.registration import Registration
 from glfw_video import GLVideoSurface
 from helpers import setup_controller
@@ -51,7 +51,7 @@ def main() -> None:
     session = Session.connect(
         settings,
         registration,
-        CUDAFrameHandler
+        CudaFrameHandler
     )
 
     session.stream_session.on_session_quit().subscribe(lambda reason: print("Session Quit:", reason))

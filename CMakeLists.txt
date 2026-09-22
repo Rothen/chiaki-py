@@ -120,6 +120,12 @@ if(WIN32)
             message(FATAL_ERROR "FFmpeg archive ${CHIAKI_PY_FFMPEG_URL} did not contain lib/avcodec.lib")
         endif()
     endif()
+
+    # Unless a build is pointed at with PLACEBO_ROOT (see pybind/CMakeLists.txt), build libplacebo, for VulkanRenderer
+    if(NOT PLACEBO_ROOT)
+        include(cmake/BuildLibplacebo.cmake)
+        chiaki_py_build_libplacebo("${CHIAKI_PY_DEPS_DIR}")
+    endif()
 endif()
 
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps")

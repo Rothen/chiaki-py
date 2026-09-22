@@ -131,84 +131,77 @@ PYBIND11_MODULE(chiaki_py, m)
         .def_readwrite("bitrate", &ChiakiConnectVideoProfile::bitrate)
         .def_readwrite("codec", &ChiakiConnectVideoProfile::codec);
 
-    py::class_<GpuFrame>(m, "GpuFrame",
+    py::class_<VulkanFrame>(m, "VulkanFrame",
                          "A decoded video frame still resident in GPU memory. Keeps the decoder's frame "
                          "pool slot and device alive until dropped, so release it promptly. The integers "
                          "are raw handles for interop; what they point to depends on hw_type "
                          "('vulkan': data[0] is an AVVkFrame*, 'cuda': one device pointer per plane, "
                          "'d3d11va': data[0] is an ID3D11Texture2D* and data[1] its array slice).")
-        .def_property_readonly("hw_type", &GpuFrame::hw_type, "Hardware decoder type, e.g. 'vulkan', 'cuda', 'd3d11va'.")
-        .def_property_readonly("format", &GpuFrame::format, "Pixel format of the frame itself, e.g. 'vulkan', 'cuda', 'd3d11'.")
-        .def_property_readonly("sw_format", &GpuFrame::sw_format, "Underlying pixel layout on the GPU, e.g. 'nv12' or 'p010le'.")
-        .def_property_readonly("width", [](const GpuFrame &f) { return f.frame->width; })
-        .def_property_readonly("height", [](const GpuFrame &f) { return f.frame->height; })
-        .def_property_readonly("pts", [](const GpuFrame &f) { return f.pts; }, "Presentation time in seconds.")
-        .def_property_readonly("duration", [](const GpuFrame &f) { return f.duration; }, "Frame duration in seconds.")
-        .def_property_readonly("data", &GpuFrame::data, "Raw per-plane pointers / handles (integers).")
-        .def_property_readonly("linesize", &GpuFrame::linesize, "Row stride in bytes for each entry of `data`.")
-        .def_property_readonly("device_hwctx", &GpuFrame::device_hwctx,
+        .def_property_readonly("hw_type", &VulkanFrame::hw_type, "Hardware decoder type, e.g. 'vulkan', 'cuda', 'd3d11va'.")
+        .def_property_readonly("format", &VulkanFrame::format, "Pixel format of the frame itself, e.g. 'vulkan', 'cuda', 'd3d11'.")
+        .def_property_readonly("sw_format", &VulkanFrame::sw_format, "Underlying pixel layout on the GPU, e.g. 'nv12' or 'p010le'.")
+        .def_property_readonly("width", [](const VulkanFrame &f) { return f.frame->width; })
+        .def_property_readonly("height", [](const VulkanFrame &f) { return f.frame->height; })
+        .def_property_readonly("pts", [](const VulkanFrame &f) { return f.pts; }, "Presentation time in seconds.")
+        .def_property_readonly("duration", [](const VulkanFrame &f) { return f.duration; }, "Frame duration in seconds.")
+        .def_property_readonly("data", &VulkanFrame::data, "Raw per-plane pointers / handles (integers).")
+        .def_property_readonly("linesize", &VulkanFrame::linesize, "Row stride in bytes for each entry of `data`.")
+        .def_property_readonly("device_hwctx", &VulkanFrame::device_hwctx,
                                "Address of the hardware device context struct (AVVulkanDeviceContext*, "
                                "AVCUDADeviceContext*, ...) the frame lives on.");
 
-    py::class_<CudaPlane, std::shared_ptr<CudaPlane>>(m, "CudaPlane",
-                                                      "One plane of a CUDA frame. Implements __cuda_array_interface__, so "
-                                                      "torch.as_tensor(plane, device='cuda') and cupy.asarray(plane) wrap it "
-                                                      "without copying. It keeps the frame's device memory alive (and its slot in "
-                                                      "the decoder's frame pool occupied) for as long as it, or anything made "
-                                                      "from it, exists.")
-        .def_property_readonly("__cuda_array_interface__", &CudaPlane::cuda_array_interface);
-
-    py::class_<CudaFrame>(m, "CudaFrame",
-                          "A decoded frame in CUDA device memory (device 0's primary context, shared with "
-                          "PyTorch/CuPy), as NV12 or P010/P016 planes: `y` is (H, W) and `uv` is (H/2, W/2, 2) "
-                          "with U and V interleaved. 8-bit samples are uint8; 10/16-bit ones are uint16 with the "
-                          "value in the high bits. Colour conversion to RGB is left to the caller.")
-        .def_readonly("width", &CudaFrame::width)
-        .def_readonly("height", &CudaFrame::height)
-        .def_readonly("pts", &CudaFrame::pts, "Presentation time in seconds.")
-        .def_readonly("duration", &CudaFrame::duration, "Frame duration in seconds.")
-        .def_readonly("sw_format", &CudaFrame::sw_format, "'nv12', 'p010le' or 'p016le'.")
-        .def_readonly("y", &CudaFrame::y, "Luma plane, shape (height, width).")
-        .def_readonly("uv", &CudaFrame::uv, "Interleaved chroma plane, shape (ceil(height/2), ceil(width/2), 2).");
-
     py::class_<FrameHandler>(m, "FrameHandler",
                              "Base class of the frame handlers, which pull decoded frames out of a StreamSession "
-                             "in different forms (CPUFrameHandler, CUDAFrameHandler, GPUFrameHandler). Not "
+                             "in different forms (CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler). Not "
                              "instantiable itself.")
         .def("get_frame", &FrameHandler::get_frame,
              py::arg("out") = py::none(),
              "Pull the next decoded video frame, or None if none was available yet. What is returned, and "
-             "what `out` may be, depends on the subclass. Raises RuntimeError on decoding failure.");
+             "what `out` may be, depends on the subclass. Raises RuntimeError on decoding failure.")
+        .def_static("empty_frame", &FrameHandler::empty_frame,
+             py::arg("width") = 0, py::arg("height") = 0,
+             "Not implemented on the base class; call empty_frame() on a concrete subclass instead.");
 
-    py::class_<CPUFrameHandler, FrameHandler>(m, "CPUFrameHandler")
+    py::class_<CpuFrameHandler, FrameHandler>(m, "CpuFrameHandler")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
-        .def("get_frame", &CPUFrameHandler::get_frame,
+        .def("get_frame", &CpuFrameHandler::get_frame,
              py::arg("out") = py::none(),
              "Pull the next decoded video frame as a (height, width, 3) uint8 RGB array, or None if "
              "none was available yet. If `out` is given it must already have the frame's exact shape "
              "(C-contiguous, uint8, writable); the frame is written into it and `out` is returned, "
              "otherwise a new array is allocated. Raises RuntimeError on decoding failure and "
-             "TypeError/ValueError for an unusable `out`.");
+             "TypeError/ValueError for an unusable `out`.")
+        .def_static("empty_frame", &CpuFrameHandler::empty_frame, py::arg("width"), py::arg("height"),
+             "A (height, width, 3) uint8 numpy array, ready to be reused as `out` for get_frame() of frames "
+             "of this size.");
 
-    py::class_<CUDAFrameHandler, FrameHandler>(m, "CUDAFrameHandler")
+    py::class_<CudaFrameHandler, FrameHandler>(m, "CudaFrameHandler")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
-        .def("get_frame", &CUDAFrameHandler::get_frame,
+        .def("get_frame", &CudaFrameHandler::get_frame,
              py::arg("out") = py::none(),
-             "Pull the next decoded video frame on the GPU, or None if none was available yet. Returns a "
-             "CudaFrame whose NV12 planes torch and cupy can wrap without copying. If `out` is given - a "
-             "writable, C-contiguous uint8 CUDA array such as a torch tensor or cupy array, shaped "
-             "(height, width, 3) - the frame is instead converted to RGB on the GPU into it, `out` is "
-             "returned, and the conversion has finished when this returns. Requires hardware_decoder='cuda' "
-             "(RuntimeError otherwise); a bad `out` raises TypeError/ValueError.");
+             "Pull the next decoded video frame on the GPU as a (height, width, 3) uint8 RGB CuPy array, "
+             "converted on the GPU, or None if none was available yet. If `out` is given - a writable, "
+             "C-contiguous uint8 CUDA array such as a torch tensor or cupy array, shaped (height, width, 3) "
+             "- the frame is converted into it instead and `out` is returned; otherwise a new CuPy array is "
+             "allocated. The conversion has finished when this returns. Requires hardware_decoder='cuda' "
+             "(RuntimeError otherwise); a bad `out` raises TypeError/ValueError.")
+        .def_static("empty_frame", &CudaFrameHandler::empty_frame, py::arg("width"), py::arg("height"),
+             "A (height, width, 3) uint8 CuPy array, ready to be reused as `out` for get_frame() of frames "
+             "of this size.");
 
-    py::class_<GPUFrameHandler, FrameHandler>(m, "GPUFrameHandler")
+    py::class_<VulkanFrameHandler, FrameHandler>(m, "VulkanFrameHandler")
         .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
-        .def("get_frame", &GPUFrameHandler::get_frame,
+        .def("get_frame", &VulkanFrameHandler::get_frame,
              py::arg("out") = py::none(),
-             "Pull the next decoded video frame without leaving GPU memory. Returns a GpuFrame, or None "
-             "if none was available yet. If `out` is a GpuFrame it takes over the new frame (releasing "
-             "the one it held) and is returned instead of a new GpuFrame being created. Raises "
-             "RuntimeError if the session doesn't use a hardware decoder and TypeError if `out` isn't a GpuFrame.");
+             "Pull the next decoded video frame without leaving GPU memory. Returns a VulcanFrame, or None "
+             "if none was available yet. If `out` is a VulcanFrame it takes over the new frame (releasing "
+             "the one it held) and is returned instead of a new VulcanFrame being created. Raises "
+             "RuntimeError if the session doesn't use a hardware decoder and TypeError if `out` isn't a VulcanFrame.")
+        .def_static("empty_frame", &VulkanFrameHandler::empty_frame,
+             py::arg("width") = 0, py::arg("height") = 0,
+             "An empty VulkanFrame holding no decoded frame yet, ready to be reused as `out` for get_frame(). "
+             "`width`/`height` are accepted for a uniform empty_frame(width, height) signature but otherwise "
+             "unused, since a VulkanFrame takes on whatever size the next decoded frame actually has.");
 
     py::class_<Settings>(m, "Settings")
         .def(py::init<>())
@@ -452,30 +445,41 @@ PYBIND11_MODULE(chiaki_py, m)
 
         .def("send_feedback_state", &StreamSession::SendFeedbackState, "Send the feedback state.");
 
-    // Bound here rather than with GpuFrame because it takes a StreamSession, which has to be known by then.
-    py::reinterpret_borrow<py::class_<GpuFrame>>(m.attr("GpuFrame"))
-        .def_static("upload_nv12", &GpuFrame::upload_nv12, py::arg("stream_session"), py::arg("nv12"),
+    py::reinterpret_borrow<py::class_<VulkanFrame>>(m.attr("VulkanFrame"))
+        .def_static("upload_nv12", &VulkanFrame::upload_nv12, py::arg("stream_session"), py::arg("nv12"),
                     py::arg("visible_width") = py::none(), py::arg("visible_height") = py::none(),
                     "Upload an NV12 picture from system memory - a C-contiguous uint8 array of shape "
                     "(height * 3 / 2, width): the luma rows, then the interleaved chroma rows - into a new "
-                    "GpuFrame on the session's Vulkan hardware device (RuntimeError if it does not use one), "
+                    "VulkanFrame on the session's Vulkan hardware device (RuntimeError if it does not use one), "
                     "as the decoder would have produced it. The frame shows only the top left "
                     "visible_width x visible_height pixels if given, like a decoded picture that is smaller "
-                    "than the image it is stored in. For trying out consumers of GpuFrames, such as "
+                    "than the image it is stored in. For trying out consumers of VulkanFrames, such as "
                     "VulkanRenderer, without a console.");
 
     py::class_<VulkanRenderer>(m, "VulkanRenderer",
-                               "Draws GpuFrames of the Vulkan hardware decoder into a native window without them "
-                               "leaving the GPU: the frames' NV12/P010 planes are converted to RGB by a shader "
-                               "and presented on the same Vulkan device the decoder decodes on. Windows only so "
-                               "far. Call from one thread (the GUI thread), and close() before the window is destroyed.")
+                               "Draws VulkanFrames of the Vulkan hardware decoder into a native window without them "
+                               "leaving the GPU: libplacebo converts the frames' NV12/P010 planes to RGB (SDR or "
+                               "HDR), scales them and presents them on the same Vulkan device the decoder decodes "
+                               "on. Windows only so far. Call from one thread (the GUI thread), and close() before "
+                               "the window is destroyed.")
         .def(py::init<StreamSession &, uintptr_t>(), py::arg("stream_session"), py::arg("window"), py::keep_alive<1, 2>(),
              "Draw into the native window `window` (an HWND). The session must use the Vulkan hardware decoder "
              "(Settings.set_hardware_decoder(\"vulkan\")); raises RuntimeError otherwise, or if the window can't be drawn into.")
         .def("render", &VulkanRenderer::render, py::arg("frame"), py::call_guard<py::gil_scoped_release>(),
-             "Draw `frame`, a GpuFrame from the Vulkan decoder, scaled to fit the window with its aspect "
+             "Draw `frame`, a VulkanFrame from the Vulkan decoder, scaled to fit the window with its aspect "
              "ratio kept, and present it. Does nothing while the window has no area (is minimised). Returns "
              "once the drawing is submitted, not finished; the GPU is waited for when the next frame needs it.")
+        .def("set_overlay", [](VulkanRenderer &renderer, const py::array_t<uint8_t, py::array::c_style | py::array::forcecast> &rgba, int margin) {
+                 if (rgba.ndim() != 3 || rgba.shape(2) != 4)
+                     throw py::value_error("The overlay must be an array of shape (height, width, 4)");
+                 renderer.set_overlay(rgba.data(), static_cast<int>(rgba.shape(1)), static_cast<int>(rgba.shape(0)), margin);
+             },
+             py::arg("rgba"), py::arg("margin") = 12,
+             "Show `rgba`, a uint8 array of shape (height, width, 4) with premultiplied alpha, on top of the video "
+             "in the top-right corner of the window, `margin` pixels from its edges, until it is replaced or cleared. "
+             "The pixels are copied. libplacebo composites it in the same pass that draws the video, so it is not "
+             "part of the frames, and it stays where it is while the window is resized.")
+        .def("clear_overlay", &VulkanRenderer::clear_overlay, "Remove the overlay, if there is one.")
         .def("close", &VulkanRenderer::close, py::call_guard<py::gil_scoped_release>(),
              "Wait for the GPU to be done and free everything. Call before the window is destroyed.")
         .def_static("is_supported", &VulkanRenderer::is_supported, "Whether windows of this platform can be drawn into (only Windows so far).");

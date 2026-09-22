@@ -9,17 +9,17 @@ from types import TracebackType
 import numpy as np
 import numpy.typing as npt
 
-from .lib import GpuFrame, Settings, StreamSession, StreamSessionConnectInfo, CPUFrameHandler, CUDAFrameHandler, GPUFrameHandler
+from .lib import VulkanFrame, Settings, StreamSession, StreamSessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from .registration import Registration
 
 _logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
-FrameHandler = CPUFrameHandler | CUDAFrameHandler | GPUFrameHandler
+FrameHandler = CpuFrameHandler | CudaFrameHandler | VulkanFrameHandler
 
 class Session:
-    def __init__(self, connect_info: StreamSessionConnectInfo, frame_handler_cls: type[FrameHandler] = CPUFrameHandler):
+    def __init__(self, connect_info: StreamSessionConnectInfo, frame_handler_cls: type[FrameHandler] = CpuFrameHandler):
         self.__stream_session = StreamSession(connect_info)
         self.__frame_handler: FrameHandler = frame_handler_cls(self.__stream_session)
         self.__last_get_time = 0.0
@@ -42,7 +42,7 @@ class Session:
         cls,
         settings: Settings,
         registration: Registration,
-        frame_handler_cls: type[FrameHandler] = CPUFrameHandler
+        frame_handler_cls: type[FrameHandler] = CpuFrameHandler
     ) -> "Session":
         connect_info = StreamSessionConnectInfo(
             settings=settings,
@@ -63,14 +63,14 @@ class Session:
     def __enter__(self) -> "Session":        
         hw_type = self.__stream_session.hardware_decoder_type()
         
-        if isinstance(self.__frame_handler, GPUFrameHandler) and not self.__stream_session.has_hardware_decoder():
+        if isinstance(self.__frame_handler, VulkanFrameHandler) and not self.__stream_session.has_hardware_decoder():
             raise RuntimeError(
-                "GPUFrameHandler needs a hardware decoder; set one with "
+                "VulkanFrameHandler needs a hardware decoder; set one with "
                 "Settings.set_hardware_decoder() (e.g. 'vulkan', 'cuda', 'd3d11va') before connecting"
             )
-        elif isinstance(self.__frame_handler, CUDAFrameHandler) and hw_type != "cuda":
+        elif isinstance(self.__frame_handler, CudaFrameHandler) and hw_type != "cuda":
             raise RuntimeError(
-                "CUDAFrameHandler needs the CUDA hardware decoder; set it with "
+                "CudaFrameHandler needs the CUDA hardware decoder; set it with "
                 f"Settings.set_hardware_decoder('cuda') before connecting (currently: {hw_type or 'none'})"
             )
 
@@ -88,7 +88,7 @@ class Session:
     def frames(
         self,
         max_fps: float = 60.0,
-        out: npt.NDArray[np.uint8] | GpuFrame | Any | None = None,
+        out: npt.NDArray[np.uint8] | VulkanFrame | Any | None = None,
     ) -> Iterator[npt.NDArray[np.uint8]]:
         """Yield decoded frames as (H, W, 3) uint8 RGB arrays, downloaded to system memory.
 

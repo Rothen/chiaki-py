@@ -26,18 +26,18 @@ with Session.connect(settings, registration) as session:
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
-What `session.frames()` yields depends on the frame handler class you pass as the third argument to `Session.connect`. The default, `CPUFrameHandler`, downloads every frame to system memory as the numpy array above. The other two keep frames in GPU memory and need a hardware decoder, set with `settings.set_hardware_decoder(...)` before connecting:
+What `session.frames()` yields depends on the frame handler class you pass as the third argument to `Session.connect`. The default, `CpuFrameHandler`, downloads every frame to system memory as the numpy array above. The other two keep frames in GPU memory and need a hardware decoder, set with `settings.set_hardware_decoder(...)` before connecting:
 
-- **`GPUFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`) yields `GpuFrame` handles: raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp. Frames are NV12/P010, not RGB, and each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
-- **`CUDAFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`) yields `CudaFrame`s whose planes torch and cupy can wrap without a copy: `torch.as_tensor(frame.y, device="cuda")` or `cupy.asarray(frame.uv)`. `frame.y` is the (H, W) luma plane and `frame.uv` the (H/2, W/2, 2) interleaved chroma plane, so colour conversion to RGB is up to you. To get RGB instead, pass a uint8 CUDA tensor or array of shape (H, W, 3) as `out`, e.g. `session.frames(out=torch.empty((1080, 1920, 3), dtype=torch.uint8, device="cuda"))`: each frame is converted to RGB on the GPU into it and released right away.
+- **`VulkanFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`) yields `VulkanFrame` handles: raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp. Frames are NV12/P010, not RGB, and each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
+- **`CudaFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`) converts every frame to RGB on the GPU and yields a (H, W, 3) uint8 CuPy array. Pass a uint8 CUDA tensor or array of that shape as `out` to have the frame converted into it instead (e.g. a PyTorch tensor), e.g. `session.frames(out=torch.empty((1080, 1920, 3), dtype=torch.uint8, device="cuda"))`: `out` is then returned and released right away.
 
 ```python
-from chiaki_py.lib import CUDAFrameHandler
+from chiaki_py.lib import CudaFrameHandler
 
 settings.set_hardware_decoder("cuda")
-with Session.connect(settings, registration, CUDAFrameHandler) as session:
+with Session.connect(settings, registration, CudaFrameHandler) as session:
     for frame in session.frames():
-        ...  # frame is a CudaFrame
+        ...  # frame is a (H, W, 3) uint8 CuPy array on the GPU
 ```
 
 ## Examples
@@ -53,12 +53,12 @@ The `1.x` scripts are the step-by-step path; `2_...` does the same in one script
 3. **`examples/1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]`**: pairs with the console at `<host>` using the PIN from its Link Device screen (PS5: Settings > System > Remote Play > Link Device; PS4: Settings > Remote Play Connection Settings > Add Device) and saves `cache/registration.json`. It needs the account from step 1 and exits if `cache/psn_account.json` isn't there. Defaults to a PS5; pass `--ps4` for a PS4.
 4. **Stream.** Each of these loads `cache/registration.json` from step 3, attaches a DualSense if one is connected, and differs in how the frames get on screen:
    - **`examples/1.4.1_stream_qt.py`**: the built-in PyQt6 `StreamDisplay`, with frames decoded to system memory. Works everywhere, no GPU needed.
-   - **`examples/1.4.2_stream_gpu_qt.py`**: the same `StreamDisplay`, but with the `CUDAFrameHandler`: frames are converted to RGB on the GPU and drawn by an OpenGL widget straight from GPU memory, never downloaded to the CPU. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
+   - **`examples/1.4.2_stream_gpu_qt.py`**: the same `StreamDisplay`, but with the `CudaFrameHandler`: frames are converted to RGB on the GPU and drawn by an OpenGL widget straight from GPU memory, never downloaded to the CPU. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
    - **`examples/1.4.3_stream_cuda_glfw.py`**: the same idea without Qt, in a plain GLFW window. Each frame lands in a CuPy array and CUDA-OpenGL interop hands it to OpenGL. NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
    - **`examples/1.4.4_stream_tensor.py`**: like 1.4.3 but the frame is a PyTorch tensor on the GPU, so it can be fed to a model without leaving the GPU. The example computes the per-channel mean colour on the GPU and shows it in the window title. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
-   - **`examples/1.4.5_stream_vulkan_qt.py`**: the same `StreamDisplay`, with the `GPUFrameHandler` and the Vulkan hardware decoder (`settings.set_hardware_decoder("vulkan")`). The window is drawn by a shader on the very Vulkan device that decoded the frames, so they are not copied at all, not even within the GPU. No CUDA or OpenGL, so it isn't tied to NVIDIA and needs no extra packages, only a GPU and driver with Vulkan video decoding. Windows only so far.
+   - **`examples/1.4.5_stream_vulkan_qt.py`**: the same `StreamDisplay`, with the `VulkanFrameHandler` and the Vulkan hardware decoder (`settings.set_hardware_decoder("vulkan")`). The window is drawn by [libplacebo](https://code.videolan.org/videolan/libplacebo) on the very Vulkan device that decoded the frames, so they are not copied at all, not even within the GPU. No CUDA or OpenGL, so it isn't tied to NVIDIA and needs no extra packages, only a GPU and driver with Vulkan video decoding. Windows only so far.
 
-   The GLFW examples draw the frame rate in the top-right corner (`q` or Esc quits). In the Qt viewers it starts hidden: press `F` to show it, together with the time spent per frame (in the title bar for 1.4.5, where Vulkan draws over anything Qt puts on the window).
+   The GLFW examples draw the frame rate in the top-right corner (`q` or Esc quits). In the Qt viewers it starts hidden: press `F` to show it, together with the time spent per frame (for 1.4.5 libplacebo draws it over the video, as Vulkan draws over anything Qt puts on the window).
 
 ### All in one
 
@@ -72,11 +72,11 @@ The `1.x` scripts are the step-by-step path; `2_...` does the same in one script
 
 ## Building from source
 
-Only needed for development, or for platforms/Python versions without a wheel. CMake fetches [chiaki-ng](https://github.com/streetpea/chiaki-ng) into `libs/` automatically on first configure; on Windows it also downloads FFmpeg into `deps/`, and the first build is slow.
+Only needed for development, or for platforms/Python versions without a wheel. CMake fetches [chiaki-ng](https://github.com/streetpea/chiaki-ng) into `libs/` automatically on first configure; on Windows it also downloads FFmpeg into `deps/` and builds [libplacebo](https://code.videolan.org/videolan/libplacebo) (which draws the Vulkan viewer's frames) there, from source with shaderc as its shader compiler, and the first build is slow.
 
 ### Windows
 
-Install [Git](https://git-scm.com/), [Python 3.11](https://www.python.org/downloads/), [Visual Studio](https://visualstudio.microsoft.com/) 2022 or newer (or Build Tools) with the *Desktop development with C++* workload, LLVM (for `clang-cl`), CMake and Ninja (e.g. `choco install llvm cmake ninja`), and [vcpkg](https://github.com/microsoft/vcpkg):
+Install [Git](https://git-scm.com/), [Python 3.11](https://www.python.org/downloads/), [Visual Studio](https://visualstudio.microsoft.com/) 2022 or newer (or Build Tools) with the *Desktop development with C++* workload, LLVM (for `clang-cl`), CMake and Ninja (e.g. `choco install llvm cmake ninja`), [Meson](https://mesonbuild.com/) (`pip install meson`, to build libplacebo), and [vcpkg](https://github.com/microsoft/vcpkg):
 
 ```powershell
 git clone https://github.com/microsoft/vcpkg C:\vcpkg

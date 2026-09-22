@@ -38,6 +38,8 @@ extern "C"
     #define CP_UTF8 65001
 #endif
 
+#include "placebo_vulkan.h"
+
 #define SETSU_UPDATE_INTERVAL_MS 4
 #define STEAMDECK_UPDATE_INTERVAL_MS 4
 #define STEAMDECK_HAPTIC_INTERVAL_MS 10 // check every interval
@@ -206,19 +208,18 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
         }
     }
 
-    if (!device_ctx && connect_info.hw_decoder == "vulkan")
+    if (!device_ctx && connect_info.hw_decoder == "vulkan" && PlaceboVulkan::is_supported())
     {
-        // Create the decoder's Vulkan device here, rather than letting the decoder do it, to have it enable
-        // what VulkanRenderer needs to draw into a window on that same device instead of copying the frames.
-        AVDictionary *options = nullptr;
-#ifdef _WIN32
-        av_dict_set(&options, "instance_extensions", "VK_KHR_surface+VK_KHR_win32_surface", 0);
-        av_dict_set(&options, "device_extensions", "VK_KHR_swapchain", 0);
-#endif
-        // If that does not work the decoder makes a plain device of its own, which decodes just as well
-        if (options && av_hwdevice_ctx_create(&owned_device_ctx, AV_HWDEVICE_TYPE_VULKAN, nullptr, options, 0) == 0)
+        // Have libplacebo create the decoder's Vulkan device, rather than letting the decoder do it, for
+        // VulkanRenderer to draw with libplacebo on that same device instead of copying the frames.
+        std::string error;
+        owned_device_ctx = PlaceboVulkan::create_device(error);
+        if (owned_device_ctx)
             device_ctx = owned_device_ctx;
-        av_dict_free(&options);
+        else
+            // The decoder makes a plain device of its own, which decodes just as well, but can't be drawn on
+            CHIAKI_LOGE(GetChiakiLog(), "Could not create the Vulkan device with libplacebo, so frames can't be rendered "
+                                        "with VulkanRenderer: %s", error.c_str());
     }
 
     err = chiaki_ffmpeg_decoder_init(ffmpeg_decoder,

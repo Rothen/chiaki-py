@@ -28,7 +28,7 @@ import cv2
 import typer
 
 from chiaki_py import Session, discover_hosts, Serializer
-from chiaki_py.lib import Settings, DiscoveryHost, CPUFrameHandler
+from chiaki_py.lib import Settings, DiscoveryHost, CpuFrameHandler
 from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
 from chiaki_py.registration import register, Registration
 import numpy as np
@@ -109,7 +109,7 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
     registration = get_registration(settings, host, dir, force_pair, headless)
     print(f"Connecting to '{registration.nickname}'.")
 
-    session = Session.connect(settings, registration, CPUFrameHandler)
+    session = Session.connect(settings, registration, CpuFrameHandler)
     session.stream_session.on_session_quit().subscribe(lambda reason: print("Session quit:", reason))
     session.stream_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login PIN requested, incorrect:", incorrect))
 

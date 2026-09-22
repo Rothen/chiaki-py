@@ -4,10 +4,11 @@ namespace py = pybind11;
 
 ThreadSwsContext ::~ThreadSwsContext() { sws_freeContext(ctx); }
 
-GpuFrame::GpuFrame(AVFrame *frame, double pts, double duration) : frame(frame), pts(pts), duration(duration) {}
-GpuFrame::~GpuFrame() { av_frame_free(&frame); }
+VulkanFrame::VulkanFrame() {}
+VulkanFrame::VulkanFrame(AVFrame *frame, double pts, double duration) : frame(frame), pts(pts), duration(duration) {}
+VulkanFrame::~VulkanFrame() { av_frame_free(&frame); }
 
-void GpuFrame::reset(AVFrame *new_frame, double new_pts, double new_duration)
+void VulkanFrame::reset(AVFrame *new_frame, double new_pts, double new_duration)
 {
     av_frame_free(&frame);
     frame = new_frame;
@@ -15,22 +16,22 @@ void GpuFrame::reset(AVFrame *new_frame, double new_pts, double new_duration)
     duration = new_duration;
 }
 
-const AVHWFramesContext *GpuFrame::frames_ctx() const
+const AVHWFramesContext *VulkanFrame::frames_ctx() const
 {
     return reinterpret_cast<const AVHWFramesContext *>(frame->hw_frames_ctx->data);
 }
 
-std::string GpuFrame::format_name(int format)
+std::string VulkanFrame::format_name(int format)
 {
     const char *name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(format));
     return name ? name : "unknown";
 }
 
-std::string GpuFrame::hw_type() const { return av_hwdevice_get_type_name(frames_ctx()->device_ctx->type); }
-std::string GpuFrame::format() const { return format_name(frame->format); }
-std::string GpuFrame::sw_format() const { return format_name(frames_ctx()->sw_format); }
+std::string VulkanFrame::hw_type() const { return av_hwdevice_get_type_name(frames_ctx()->device_ctx->type); }
+std::string VulkanFrame::format() const { return format_name(frame->format); }
+std::string VulkanFrame::sw_format() const { return format_name(frames_ctx()->sw_format); }
 
-std::vector<uintptr_t> GpuFrame::data() const
+std::vector<uintptr_t> VulkanFrame::data() const
 {
     std::vector<uintptr_t> out;
     for (int i = 0; i < AV_NUM_DATA_POINTERS && frame->data[i]; i++)
@@ -38,14 +39,14 @@ std::vector<uintptr_t> GpuFrame::data() const
     return out;
 }
 
-std::vector<int> GpuFrame::linesize() const
+std::vector<int> VulkanFrame::linesize() const
 {
     return std::vector<int>(frame->linesize, frame->linesize + data().size());
 }
 
-uintptr_t GpuFrame::device_hwctx() const { return reinterpret_cast<uintptr_t>(frames_ctx()->device_ctx->hwctx); }
+uintptr_t VulkanFrame::device_hwctx() const { return reinterpret_cast<uintptr_t>(frames_ctx()->device_ctx->hwctx); }
 
-std::unique_ptr<GpuFrame> GpuFrame::upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
+std::unique_ptr<VulkanFrame> VulkanFrame::upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
                                                 std::optional<int> visible_width, std::optional<int> visible_height)
 {
     ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
@@ -112,28 +113,7 @@ std::unique_ptr<GpuFrame> GpuFrame::upload_nv12(StreamSession &session, const py
 
     av_frame_free(&sw);
     av_buffer_unref(&frames_ref); // the frame holds its own reference
-    return std::make_unique<GpuFrame>(hw, 0.0, 0.0);
-}
-
-CudaPlane::CudaPlane(const AVFrame *source, uintptr_t ptr, std::vector<py::ssize_t> shape,
-                   std::vector<py::ssize_t> strides, std::string typestr)
-    : frame(av_frame_clone(source)), ptr(ptr), shape(std::move(shape)),
-      strides(std::move(strides)), typestr(std::move(typestr))
-{
-    if (!frame)
-        throw std::runtime_error("Failed to reference frame");
-}
-CudaPlane::~CudaPlane() { av_frame_free(&frame); }
-
-py::dict CudaPlane::cuda_array_interface() const
-{
-    py::dict interface;
-    interface["version"] = 3;
-    interface["shape"] = py::tuple(py::cast(shape));
-    interface["strides"] = py::tuple(py::cast(strides));
-    interface["typestr"] = typestr;
-    interface["data"] = py::make_tuple(ptr, false);
-    return interface;
+    return std::make_unique<VulkanFrame>(hw, 0.0, 0.0);
 }
 
 CudaFrameLayout CudaFrameLayout::of(const AVFrame *frame)
@@ -155,39 +135,17 @@ CudaFrameLayout CudaFrameLayout::of(const AVFrame *frame)
         layout.typestr = "<u2";
         break;
     default:
-        throw std::runtime_error("Unsupported CUDA frame format: " + GpuFrame::format_name(frames_ctx->sw_format));
+        throw std::runtime_error("Unsupported CUDA frame format: " + VulkanFrame::format_name(frames_ctx->sw_format));
     }
     if (!frame->data[0] || !frame->data[1])
         throw std::runtime_error("CUDA frame is missing a plane");
 
-    layout.sw_format = GpuFrame::format_name(frames_ctx->sw_format);
+    layout.sw_format = VulkanFrame::format_name(frames_ctx->sw_format);
     layout.width = frame->width;
     layout.height = frame->height;
     layout.uv_width = (layout.width + 1) / 2;
     layout.uv_height = (layout.height + 1) / 2;
     return layout;
-}
-
-std::unique_ptr<CudaFrame> CudaFrame::from_frame(const AVFrame *frame, double pts, double duration)
-{
-    const CudaFrameLayout layout = CudaFrameLayout::of(frame);
-
-    auto result = std::make_unique<CudaFrame>();
-    result->width = frame->width;
-    result->height = frame->height;
-    result->pts = pts;
-    result->duration = duration;
-    result->sw_format = layout.sw_format;
-    result->y = std::make_shared<CudaPlane>(
-        frame, reinterpret_cast<uintptr_t>(frame->data[0]),
-        std::vector<py::ssize_t>{layout.height, layout.width},
-        std::vector<py::ssize_t>{frame->linesize[0], layout.bytes_per_sample}, layout.typestr);
-    result->uv = std::make_shared<CudaPlane>(
-        frame, reinterpret_cast<uintptr_t>(frame->data[1]),
-        std::vector<py::ssize_t>{layout.uv_height, layout.uv_width, 2},
-        std::vector<py::ssize_t>{frame->linesize[1], 2 * layout.bytes_per_sample, layout.bytes_per_sample},
-        layout.typestr);
-    return result;
 }
 
 static YuvToRgbParams yuv_to_rgb_params(const AVFrame *frame, const CudaFrameLayout &layout)
@@ -263,6 +221,12 @@ void CudaArrayDestination::check_fits(const CudaFrameLayout &layout) const
 
 FrameHandler::FrameHandler(StreamSession *streamSession) : streamSession(streamSession) {}
 
+py::object FrameHandler::empty_frame(int width, int height)
+{
+    throw std::runtime_error("FrameHandler has no frame representation of its own; call empty_frame() on "
+                             "a concrete subclass (CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler)");
+}
+
 ChiakiFfmpegFrame FrameHandler::pull_decoded_frame()
 {
     ChiakiFfmpegDecoder *decoder = streamSession->GetFfmpegDecoder();
@@ -273,7 +237,7 @@ ChiakiFfmpegFrame FrameHandler::pull_decoded_frame()
     return chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
 }
 
-py::object CPUFrameHandler::get_frame(const py::object &out = py::none())
+py::object CpuFrameHandler::get_frame(const py::object &out = py::none())
 {
     frame = pull_decoded_frame().frame;
     if (!frame)
@@ -327,7 +291,7 @@ py::object CPUFrameHandler::get_frame(const py::object &out = py::none())
     return std::move(result);
 }
 
-py::object CUDAFrameHandler::get_frame(const py::object &out = py::none())
+py::object CudaFrameHandler::get_frame(const py::object &out = py::none())
 {
     ChiakiFfmpegDecoder *decoder = streamSession->GetFfmpegDecoder();
     if (!decoder)
@@ -335,10 +299,6 @@ py::object CUDAFrameHandler::get_frame(const py::object &out = py::none())
     if (!decoder->hw_device_ctx ||
         reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type != AV_HWDEVICE_TYPE_CUDA)
         throw std::runtime_error("Session is not using the CUDA hardware decoder; use Settings.set_hardware_decoder(\"cuda\")");
-
-    std::optional<CudaArrayDestination> destination;
-    if (!out.is_none())
-        destination = CudaArrayDestination::parse(out);
 
     ChiakiFfmpegFrame pulled = pull_decoded_frame();
     if (!pulled.frame)
@@ -351,13 +311,15 @@ py::object CUDAFrameHandler::get_frame(const py::object &out = py::none())
         throw std::runtime_error("Decoded frame is not GPU-resident");
     }
 
-    if (!destination)
-    {
-        return py::cast(CudaFrame::from_frame(pulled.frame, pulled.pts, pulled.duration));
-    }
-
     const CudaFrameLayout layout = CudaFrameLayout::of(pulled.frame);
-    destination->check_fits(layout);
+
+    // No out given: allocate the RGB destination ourselves, as a CuPy array.
+    py::object result = out.is_none()
+        ? empty_frame(static_cast<int>(layout.width), static_cast<int>(layout.height))
+        : out;
+
+    const CudaArrayDestination destination = CudaArrayDestination::parse(result);
+    destination.check_fits(layout);
 
     // The first member of AVCUDADeviceContext is the CUcontext (its header needs
     // cuda.h, so it is read by hand): the device's primary one, as torch/cupy use.
@@ -370,13 +332,18 @@ py::object CUDAFrameHandler::get_frame(const py::object &out = py::none())
             cuda_context,
             reinterpret_cast<uintptr_t>(pulled.frame->data[0]), pulled.frame->linesize[0],
             reinterpret_cast<uintptr_t>(pulled.frame->data[1]), pulled.frame->linesize[1],
-            destination->ptr, static_cast<unsigned>(layout.width), static_cast<unsigned>(layout.height),
+            destination.ptr, static_cast<unsigned>(layout.width), static_cast<unsigned>(layout.height),
             static_cast<unsigned>(layout.bytes_per_sample), color);
     }
-    return out;
+    return result;
 }
 
-py::object GPUFrameHandler::get_frame(const py::object &out = py::none())
+py::object CudaFrameHandler::empty_frame(int width, int height)
+{
+    return py::module_::import("cupy").attr("empty")(py::make_tuple(height, width, 3), "uint8");
+}
+
+py::object VulkanFrameHandler::get_frame(const py::object &out = py::none())
 {
     ChiakiFfmpegDecoder *decoder = streamSession->GetFfmpegDecoder();
     if (!decoder)
@@ -384,12 +351,12 @@ py::object GPUFrameHandler::get_frame(const py::object &out = py::none())
     if (!decoder->hw_device_ctx)
         throw std::runtime_error("Session is not using a hardware decoder, there are no GPU frames");
 
-    GpuFrame *reuse = nullptr;
+    VulkanFrame *reuse = nullptr;
     if (!out.is_none())
     {
-        if (!py::isinstance<GpuFrame>(out))
-            throw py::type_error("out must be a GpuFrame");
-        reuse = out.cast<GpuFrame *>();
+        if (!py::isinstance<VulkanFrame>(out))
+            throw py::type_error("out must be a VulkanFrame");
+        reuse = out.cast<VulkanFrame *>();
     }
 
     ChiakiFfmpegFrame pulled = pull_decoded_frame();
@@ -407,13 +374,23 @@ py::object GPUFrameHandler::get_frame(const py::object &out = py::none())
         reuse->reset(pulled.frame, pulled.pts, pulled.duration);
         return out;
     }
-    return py::cast(std::make_unique<GpuFrame>(pulled.frame, pulled.pts, pulled.duration));
+    return py::cast(std::make_unique<VulkanFrame>(pulled.frame, pulled.pts, pulled.duration));
 }
 
-py::array_t<uint8_t> CPUFrameHandler::output_array(const py::object &out, int height, int width)
+std::unique_ptr<VulkanFrame> VulkanFrameHandler::empty_frame(int width, int height)
+{
+    return std::make_unique<VulkanFrame>();
+}
+
+py::array_t<uint8_t> CpuFrameHandler::empty_frame(int width, int height)
+{
+    return py::array_t<uint8_t>(std::vector<py::ssize_t>{height, width, 3});
+}
+
+py::array_t<uint8_t> CpuFrameHandler::output_array(const py::object &out, int height, int width)
 {
     if (out.is_none())
-        return py::array_t<uint8_t>(std::vector<py::ssize_t>{height, width, 3});
+        return empty_frame(width, height);
 
     if (!py::isinstance<py::array_t<uint8_t, py::array::c_style>>(out))
         throw py::type_error("out must be a C-contiguous numpy array of dtype uint8");

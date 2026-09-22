@@ -8,14 +8,14 @@ find_package(OpenSSL REQUIRED)
 
 if(MSVC)
     add_compile_options(
-        /std:c++17
+        $<$<COMPILE_LANGUAGE:CXX>:/std:c++17>
         $<$<CONFIG:RELEASE>:/O2>
         $<$<CONFIG:RELWITHDEBINFO>:/O2>
         $<$<CONFIG:DEBUG>:/Od>
     )
 else()
     add_compile_options(
-        -std=c++17
+        $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
         $<$<CONFIG:RELEASE>:-Ofast>
         $<$<CONFIG:RELWITHDEBINFO>:-Ofast>
         $<$<CONFIG:DEBUG>:-O0>
@@ -58,8 +58,8 @@ set(SOURCES
     include/streamsession.h
     include/discovery_manager.h
     include/frame_handler.h
+    include/placebo_vulkan.h
     include/vulkan_renderer.h
-    include/vulkan_shaders.h
     include/timer.h
     include/utils.h
     src/core/audio.cpp
@@ -80,12 +80,18 @@ set(SOURCES
     src/streamsession.cpp
     src/discovery_manager.cpp
     src/frame_handler.cpp
+    src/placebo_vulkan.cpp
     src/vulkan_renderer.cpp
     src/utils.cpp
     src/bindings.cpp
 )
 
 pybind11_add_module(chiaki-py ${SOURCES})
+
+if(WIN32)
+    # libplacebo's helper for its libav frames has to be compiled as C, see the file.
+    target_sources(chiaki-py PRIVATE src/libav_impl.c)
+endif()
 set_target_properties(chiaki-py PROPERTIES OUTPUT_NAME "chiaki_py")
 
 set_target_properties(chiaki-py PROPERTIES
@@ -144,6 +150,17 @@ else()
     find_package(Vulkan REQUIRED)
     set(VULKAN_LIB Vulkan::Vulkan)
 endif()
+if(WIN32)
+    # libplacebo draws the Vulkan decoder's frames (VulkanRenderer) and creates the device they are decoded on.
+    # It is built into the dependency folder by cmake/BuildLibplacebo.cmake, or taken from PLACEBO_ROOT if that is set:
+    # a build with shaderc or glslang, without one it can't compile its shaders.
+    find_path(PLACEBO_INCLUDE_DIR libplacebo/vulkan.h HINTS "${PLACEBO_ROOT}/include" "${DEPS_FOLDER}/include" REQUIRED)
+    find_library(PLACEBO_LIB NAMES libplacebo placebo HINTS "${PLACEBO_ROOT}/lib" "${DEPS_FOLDER}/lib" REQUIRED)
+    get_filename_component(PLACEBO_LIB_DIR "${PLACEBO_LIB}" DIRECTORY)
+    get_filename_component(PLACEBO_BIN_DIR "${PLACEBO_LIB_DIR}/../bin" ABSOLUTE)
+    target_include_directories(chiaki-py PRIVATE ${PLACEBO_INCLUDE_DIR})
+    target_link_libraries(chiaki-py PRIVATE ${PLACEBO_LIB})
+endif()
 find_library(ZLIB_LIB NAMES z zlib REQUIRED)
 find_library(HIDAPI_LIB NAMES hidapi hidapi-hidraw hidapi-libusb REQUIRED)
 
@@ -194,6 +211,16 @@ if(WIN32)
     add_custom_command(TARGET chiaki-py POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_RUNTIME_DLLS} "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
         COMMENT " Copying FFmpeg runtime DLLs into chiaki_py/lib/ "
+    )
+
+    file(GLOB PLACEBO_RUNTIME_DLLS
+        "${PLACEBO_BIN_DIR}/libplacebo-*.dll"
+        "${PLACEBO_BIN_DIR}/shaderc_shared.dll"
+        "${DEPS_FOLDER}/bin/shaderc_shared.dll"
+    )
+    add_custom_command(TARGET chiaki-py POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PLACEBO_RUNTIME_DLLS} "${CMAKE_SOURCE_DIR}/chiaki_py/lib"
+        COMMENT " Copying libplacebo runtime DLLs into chiaki_py/lib/ "
     )
 
     set(LIBEVENT_RUNTIME_DLL "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/event_core.dll")

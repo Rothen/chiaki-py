@@ -1,20 +1,17 @@
-"""PyQt6 remote-play viewer that renders with Vulkan - the pixels are never copied.
+"""PyQt6 remote-play viewer that renders on the GPU - the pixels never touch the CPU.
 
-The Vulkan hardware decoder decodes on the GPU and, with the GPUFrameHandler, the
-frames stay right where it put them: the window is drawn on that same Vulkan device
-by a shader that converts the NV12 frames to RGB (see chiaki_py/gui/stream/vulkan_view.py).
-Unlike 1.4.2_stream_gpu_qt.py there is no CUDA or OpenGL involved, so it is not tied to
-NVIDIA and needs nothing beyond chiaki-py itself. Compare 1.4.1_stream_qt.py, which
-decodes to system memory.
+With the CudaFrameHandler every frame is converted to RGB on the GPU and drawn
+straight from GPU memory by an OpenGL widget (see chiaki_py/gui/stream/gpu_view.py).
+Compare 1.4.1_stream_qt.py, which decodes to system memory.
 
 Usage:
-    python examples/1.4.5_stream_vulkan_qt.py
+    python examples/1.4.2_stream_gpu_qt.py
 
 The registration is the one written by 1.3_register_console.py. Press F in the
-window to show the frame rate (in the title bar), A to lock its aspect ratio.
+window to show the frame rate.
 
-Needs: a GPU and driver with Vulkan video decoding (H.264 for a PS4, H.264 or HEVC
-for a PS5). Windows only so far.
+Needs: an NVIDIA GPU that also renders the window, and
+    pip install cupy-cuda12x cuda-python PyOpenGL
 """
 
 import sys
@@ -23,8 +20,9 @@ from pathlib import Path
 from chiaki_py import Session, Serializer
 from chiaki_py.gui import StreamDisplay
 from chiaki_py.registration import Registration
-from chiaki_py.lib import Settings, GPUFrameHandler
+from chiaki_py.lib import Settings
 from chiaki_py.lib.core.log import LogLevel
+from chiaki_py.session import CudaFrameHandler
 
 from helpers import setup_controller
 
@@ -32,7 +30,7 @@ from helpers import setup_controller
 def main() -> None:
     cache_dir = Path("./cache")
     registration_file = Path(cache_dir, "registration.json")
-
+    
     if not cache_dir.exists() or not registration_file.exists():
         print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
@@ -41,29 +39,33 @@ def main() -> None:
 
     settings = Settings()
     settings.set_log_level(LogLevel.ERROR)
-    settings.set_hardware_decoder("vulkan")
+    settings.set_hardware_decoder("cuda")
 
     session = Session.connect(
         settings,
         registration,
-        GPUFrameHandler
+        CudaFrameHandler
     )
 
     session.stream_session.on_session_quit().subscribe(lambda reason: print("Session Quit:", reason))
     session.stream_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login Pin Requested:", incorrect))
     session.stream_session.on_connected_changed().subscribe(lambda connected: print("Connected Changed:", connected))
-
+    
     with session:
         controller_attached = setup_controller(session.stream_session)
-
-        res = StreamDisplay.start(session, sys.argv)
-
-        if controller_attached:
-            session.stream_session.release_right()
-            session.stream_session.release_left()
-            session.stream_session.send_feedback_state()
-
-        sys.exit(res)
+        res = -1
+        try:
+            res = StreamDisplay.start(session, sys.argv)
+        except Exception as e:
+            print(e)
+        finally:
+            if controller_attached:
+                session.stream_session.release_right()
+                session.stream_session.release_left()
+                session.stream_session.send_feedback_state()
+            
+            sys.exit(res)
+        
 
 
 if __name__ == "__main__":
