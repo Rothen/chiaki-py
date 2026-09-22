@@ -1,92 +1,95 @@
 name: Build (Windows)
+# on:
+#     push:
+#         branches: [main]
+#         tags-ignore:
+#             - "**"
+#     pull_request:
+#     workflow_dispatch:
+#     workflow_call:
+
 on:
-  push:
-    branches: [main]
-    tags-ignore:
-      - "**"
-  pull_request:
   workflow_dispatch:
-  workflow_call:
 
 jobs:
-  build:
-    name: Build wheel (win_amd64, cp311)
-    runs-on: windows-latest
-    env:
-      PYTHON_VERSION: "3.11"
-      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
-      VCPKG_TAG: "2026.07.29"
+    build:
+        name: Build wheel (win_amd64, cp311)
+        runs-on: windows-latest
+        env:
+            PYTHON_VERSION: "3.11"
+            VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+            VCPKG_TAG: "2026.07.29"
 
-    defaults:
-      run:
-        shell: powershell
+        defaults:
+            run:
+                shell: powershell
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: "x64"
+            - name: Set up Python ${{ env.PYTHON_VERSION }}
+              uses: actions/setup-python@v5
+              with:
+                  python-version: ${{ env.PYTHON_VERSION }}
+                  architecture: "x64"
 
-      - name: Install Python build/CI tooling
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade "protobuf==5.29.3" "grpcio-tools==1.71.0" build twine pybind11_stubgen meson
+            - name: Install Python build/CI tooling
+              run: |
+                  python -m pip install --upgrade pip
+                  python -m pip install --upgrade "protobuf==5.29.3" "grpcio-tools==1.71.0" build twine pybind11_stubgen meson
 
-      - name: Set up Ninja
-        run: choco install ninja --no-progress -y
+            - name: Set up Ninja
+              run: choco install ninja --no-progress -y
 
-      - name: Set up CMake
-        run: |
-          choco install cmake --version=4.4.3 --installargs "ADD_CMAKE_TO_PATH=System" --no-progress -y --allow-downgrade --force
-          echo "$env:ProgramFiles\CMake\bin" >> $env:GITHUB_PATH
+            - name: Set up CMake
+              run: |
+                  choco install cmake --version=4.4.3 --installargs "ADD_CMAKE_TO_PATH=System" --no-progress -y --allow-downgrade --force
+                  echo "$env:ProgramFiles\CMake\bin" >> $env:GITHUB_PATH
 
-      - name: Set up Clang
-        run: |
-          choco install llvm --version=20.1.8 --no-progress -y --allow-downgrade
-          echo "$env:ProgramFiles\LLVM\bin" >> $env:GITHUB_PATH
+            - name: Set up Clang
+              run: |
+                  choco install llvm --version=20.1.8 --no-progress -y --allow-downgrade
+                  echo "$env:ProgramFiles\LLVM\bin" >> $env:GITHUB_PATH
 
-      - name: Set up MSVC dev environment
-        uses: ilammy/msvc-dev-cmd@v1
+            - name: Set up MSVC dev environment
+              uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Reset VCPKG_ROOT
-        run: echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
+            - name: Reset VCPKG_ROOT
+              run: echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
 
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: ~\AppData\Local\vcpkg\archives
-          key: vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-
+            - name: Cache vcpkg binary cache
+              uses: actions/cache@v4
+              with:
+                  path: ~\AppData\Local\vcpkg\archives
+                  key: vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg.json') }}
+                  restore-keys: |
+                      vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-
 
-      - name: Set up vcpkg
-        run: |
-          git clone --branch "$env:VCPKG_TAG" --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
-          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
+            - name: Set up vcpkg
+              run: |
+                  git clone --branch "$env:VCPKG_TAG" --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
+                  & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
 
-      - name: Configure
-        run: |
-          cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM="3.5" `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
-            -DCMAKE_BUILD_TYPE=Release
+            - name: Configure
+              run: |
+                  cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM="3.5" `
+                    -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+                    -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+                    -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build chiaki-py
-        run: cmake --build build-release --config Release --target chiaki-py -- -j4
+            - name: Build chiaki-py
+              run: cmake --build build-release --config Release --target chiaki-py -- -j4
 
-      - name: Build wheel + sdist
-        run: python -m build
+            - name: Build wheel + sdist
+              run: python -m build
 
-      - name: Check distributions
-        run: python -m twine check dist/*
+            - name: Check distributions
+              run: python -m twine check dist/*
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-windows
-          path: dist/
-          if-no-files-found: error
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: dist-windows
+                  path: dist/
+                  if-no-files-found: error
