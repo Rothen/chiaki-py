@@ -77,7 +77,7 @@ class StreamDisplay(QObject):
         self.session = session
         self.aspect_lock: AspectRatioLock | None = None
         self.frame_thread = FrameThread(session)
-        self.fps_thread = FpsThread(self.frame_thread, render_async=isinstance(self.session.frame_handler, CudaFrameHandler))
+        self.fps_thread = FpsThread(self.frame_thread, render_async=isinstance(self.session.frame_handler, (CudaFrameHandler, VulkanFrameHandler)))
         self.controller_thread = ControllerThread(session)
  
         try:

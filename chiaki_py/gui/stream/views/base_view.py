@@ -1,20 +1,19 @@
 import logging
 from typing import TYPE_CHECKING, TypeVar, Generic
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent, QShowEvent, QCloseEvent
+from PyQt6.QtGui import QKeyEvent, QShowEvent, QCloseEvent, QIcon
 from PyQt6.QtWidgets import QWidget, QMainWindow
 
+import chiaki_py.gui
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.gui.stream.stats_overlay import StatsOverlay
 from ..threads.frame_thread import FrameThread
 from ..threads.fps_thread import FpsThread
 
 _logger = logging.getLogger(__name__)
-
-class Renderer(ABC):
-    ...
 
 
 F = TypeVar("F")
@@ -110,6 +109,8 @@ class BaseView(QMainWindow, Generic[T]):
 
         self._fps_thread = fps_thread
         self._stats_box = StatsOverlay(self.video, fps_thread, show_stats)
+        icon_path = Path(chiaki_py.gui.__file__).resolve().parent / "favicon" / "favicon.ico"
+        self.setWindowIcon(QIcon(icon_path.as_posix()))
 
     def showEvent(self, a0: QShowEvent | None) -> None:
         super().showEvent(a0)

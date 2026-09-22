@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2433"/>
+      <stop offset="1" stop-color="#0d1219"/>
+    </linearGradient>
+    <clipPath id="tri">
+      <path d="M30.3 25 Q32 23 33.7 25 L52 54 Q53.5 57 50 57 L14 57 Q10.5 57 12 54 Z"/>
+    </clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- signal arcs above the tip -->
+  <path d="M19.3 13.7 A18 18 0 0 1 44.7 13.7" fill="none" stroke="#4b8bd0" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M25.6 19 A9 9 0 0 1 38.4 19" fill="none" stroke="#ffd43b" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- split play triangle -->
+  <g clip-path="url(#tri)">
+    <rect width="64" height="64" fill="#ffd43b"/>
+    <path d="M0 0 H64 V26 L0 62 Z" fill="#4b8bd0"/>
+    <path d="M0 61.5 L64 25.5" stroke="#0d1219" stroke-width="2.5"/>
+  </g>
+</svg>
