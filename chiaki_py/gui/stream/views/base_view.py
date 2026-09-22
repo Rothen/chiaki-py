@@ -20,8 +20,8 @@ with warnings.catch_warnings():
 
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.gui.stream.stats_overlay import StatsOverlay
-from ..frame_thread import FrameThread
-from ..fps_thread import FpsThread
+from ..threads.frame_thread import FrameThread
+from ..threads.fps_thread import FpsThread
 
 _logger = logging.getLogger(__name__)
 
@@ -35,12 +35,6 @@ F = TypeVar("F")
 if TYPE_CHECKING:
     _QWidgetBase = QWidget
 else:
-    # No real Qt/sip ancestry at runtime: PyQt/sip requires the *first* base among several wrapped
-    # C++ classes to be the concrete type actually constructed (e.g. QOpenGLWidget), which VideoMixin
-    # would otherwise contend with as a second, different QWidget-derived class. Staying a plain
-    # Python class sidesteps that conflict entirely, so concrete subclasses are free to list VideoMixin
-    # first - which they must, for its resizeEvent/eventFilter overrides and cooperative __init__ to
-    # take priority over the concrete Qt widget's own (see e.g. CudaVideoWidget).
     _QWidgetBase = object
 
 
@@ -84,7 +78,7 @@ class VideoMixin(Generic[F], _QWidgetBase):
         self._overlay_text = summary
 
     @abstractmethod
-    def _frame_pulled(self) -> None:
+    def _render(self) -> None:
         ...
 
     @abstractmethod
@@ -109,12 +103,15 @@ class VideoMixin(Generic[F], _QWidgetBase):
         return super().eventFilter(a0, a1)
             
     def _on_frame(self, frame: F) -> None:
+        self._fps_thread.tick_total()
         """Slot for FrameProducer.new_frame: `frame` replaces the one currently shown. `get_time` is how
         long the producer took to get/convert it (seconds); added to how long painting it takes here for
         the combined per-frame time shown in the stats overlay."""
         self._frame = frame
         try:
-            self._frame_pulled()
+            self._fps_thread.tick_render()
+            self._render()
+            self._fps_thread.tock_render()
         except (ValueError, RuntimeError):
             _logger.warning("Dropping unusable frame", exc_info=True)
             return
@@ -123,9 +120,10 @@ class VideoMixin(Generic[F], _QWidgetBase):
         if size != self._size:
             self._size = size
             self.stream_size_changed.emit(*size)   # a PS4 asked for 1080p downgrades to 720p once connected
+        self._fps_thread.tock_total()
     
-    def _on_fps(self, fps: float) -> None:
-        self._show_stats(f"FPS: {fps:.2f}")
+    def _on_fps(self, fps: float, pull_time: float, render_time: float, total_time: float) -> None:
+        self._show_stats(f"FPS: {fps:.2f}\nPull Time: {pull_time:.2f} ms\nRender Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")
 
     def start(self) -> None:
         """Start drawing the session's frames. The widget must be shown already, for its native window to be there;
@@ -151,8 +149,7 @@ class VideoMixin(Generic[F], _QWidgetBase):
             if (window := self.window()) is not None:
                 window.removeEventFilter(self)
             self._stats_box.deleteLater()
-        del self._frame # gives the decoder's frame back
-
+        del self._frame
 
 
 T = TypeVar("T", bound=VideoMixin)

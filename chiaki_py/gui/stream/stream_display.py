@@ -8,14 +8,14 @@ from chiaki_py.controller import attach_controller
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
-from .frame_thread import FrameThread
+from .threads.frame_thread import FrameThread
 from .views.cpu_view import CpuVideoWidget
 from .views.cuda_view import CudaVideoWidget
 from .views.vulkan_view import VulkanVideoWidget
 from chiaki_py.gui.stream.views.cpu_view import CpuVideoWidget
 from chiaki_py.gui.stream.views.cuda_view import CudaVideoWidget
 from chiaki_py.gui.stream.views.vulkan_view import VulkanVideoWidget
-from .fps_thread import FpsThread
+from .threads.fps_thread import FpsThread
 
 
 class ControllerThread(QThread):

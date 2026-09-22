@@ -13,8 +13,8 @@ from PyQt6.QtWidgets import QWidget
 from chiaki_py import Session
 from chiaki_py.lib import VulkanFrame, VulkanRenderer, StreamSession
 from .base_view import VideoMixin
-from ..frame_thread import FrameThread
-from ..fps_thread import FpsThread
+from ..threads.frame_thread import FrameThread
+from ..threads.fps_thread import FpsThread
 
 
 class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
@@ -42,7 +42,7 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
     def paintEngine(self):
         return None   # required with WA_PaintOnScreen: Qt must not try to paint into a window Vulkan draws in
 
-    def _frame_pulled(self) -> None:
+    def _render(self) -> None:
         if self._renderer is None or self._frame is None:
             return
         self._renderer.render(self._frame)

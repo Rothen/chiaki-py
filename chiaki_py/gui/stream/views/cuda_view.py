@@ -19,8 +19,8 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 import numpy as np
 import numpy.typing as npt
 from .base_view import VideoMixin
-from ..frame_thread import FrameThread
-from ..fps_thread import FpsThread
+from ..threads.frame_thread import FrameThread
+from ..threads.fps_thread import FpsThread
 
 
 def check(result):
@@ -157,7 +157,7 @@ class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[
     def initializeGL(self) -> None:
         self._texture = CudaGLTexture(*self._size)
 
-    def _frame_pulled(self) -> None:
+    def _render(self) -> None:
         """Called off of paintGL, with no current GL context: just mark the frame ready and ask Qt
         to repaint, so the actual GL work in paintGL() below runs with a valid context."""
         self._new_frame = self._has_frame = True

@@ -11,8 +11,8 @@ from PyQt6.QtGui import QImage, QPainter, QPaintEvent
 from PyQt6.QtWidgets import QWidget
 
 from chiaki_py.gui.stream.views.base_view import VideoMixin
-from ..frame_thread import FrameThread
-from ..fps_thread import FpsThread
+from ..threads.frame_thread import FrameThread
+from ..threads.fps_thread import FpsThread
 
 
 class CpuVideoWidget(VideoMixin[npt.NDArray[np.uint8]], QWidget):
@@ -24,7 +24,7 @@ class CpuVideoWidget(VideoMixin[npt.NDArray[np.uint8]], QWidget):
         self._image: QImage | None = None
         self._data = b""
 
-    def _frame_pulled(self) -> None:
+    def _render(self) -> None:
         height, width, channels = self._frame.shape
         self._data = self._frame.tobytes()
         self._image = QImage(self._data, width, height, channels * width, QImage.Format.Format_RGB888)
