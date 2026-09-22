@@ -10,6 +10,7 @@ name: Build (Windows)
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
     build:
