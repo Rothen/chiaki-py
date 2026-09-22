@@ -25,10 +25,12 @@ class CpuVideoWidget(VideoMixin[npt.NDArray[np.uint8]], QWidget):
         self._data = b""
 
     def _render(self) -> None:
+        self._fps_thread.tick_render()
         height, width, channels = self._frame.shape
         self._data = self._frame.tobytes()
         self._image = QImage(self._data, width, height, channels * width, QImage.Format.Format_RGB888)
         self.update()
+        self._fps_thread.tock_render()
 
     def _get_frame_size(self) -> tuple[int, int]:
         return (self._frame.shape[1], self._frame.shape[0])

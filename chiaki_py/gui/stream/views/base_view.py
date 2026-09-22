@@ -8,8 +8,7 @@ import traceback
 from OpenGL import GL
 from OpenGL.GL.shaders import compileProgram, compileShader
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import (QSurfaceFormat, QKeyEvent, QShowEvent, QHideEvent, QCloseEvent,
-                          QResizeEvent, QMoveEvent)
+from PyQt6.QtGui import QSurfaceFormat, QKeyEvent, QShowEvent, QCloseEvent
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtWidgets import QWidget, QLabel, QMainWindow
 
@@ -75,9 +74,7 @@ class VideoMixin(Generic[F], _QWidgetBase):
         the combined per-frame time shown in the stats overlay."""
         self._frame = frame
         try:
-            self._fps_thread.tick_render()
             self._render()
-            self._fps_thread.tock_render()
         except (ValueError, RuntimeError):
             _logger.warning("Dropping unusable frame", exc_info=True)
             return
@@ -113,8 +110,7 @@ class BaseView(QMainWindow, Generic[T]):
 
     closeRequested = pyqtSignal()
 
-    def __init__(self, video_mixin: T, frame_producer, fps_thread: FpsThread, show_stats: bool = False,
-                 keep_aspect_ratio: bool = False):
+    def __init__(self, video_mixin: T, frame_producer, fps_thread: FpsThread, show_stats: bool = False, keep_aspect_ratio: bool = False):
         super().__init__()
         self.setWindowTitle("Live Image Stream")
         self.video: T = video_mixin
@@ -125,42 +121,20 @@ class BaseView(QMainWindow, Generic[T]):
         self.resize(frame_producer.width, frame_producer.height)
 
         self._fps_thread = fps_thread
-        self.stats_visible = show_stats
-        self._overlay_text: str | None = None
         self._stats_box = StatsOverlay(self.video)
+        self._stats_box.set_visible(show_stats)
 
     def set_stats_visible(self, visible: bool) -> None:
-        self.stats_visible = visible
-        if visible and self._overlay_text is not None:
-            self._stats_box.set_text(self._overlay_text)
-        else:
-            self._stats_box.hide()
+        self._stats_box.set_visible(visible)
 
     def _on_fps(self, fps: float, pull_time: float, render_time: float, total_time: float) -> None:
-        self._overlay_text = (f"FPS: {fps:.2f}\nPull Time: {pull_time:.2f} ms\n"
-                               f"Render Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")
-        if self.stats_visible:
-            self._stats_box.set_text(self._overlay_text)
+        self._stats_box.set_text(f"FPS: {fps:.2f}\nPull Time: {pull_time:.2f} ms\n"
+                                  f"Render Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")
 
     def showEvent(self, a0: QShowEvent | None) -> None:
         super().showEvent(a0)
         if self._aspect_lock is not None:
             self._aspect_lock.attach(int(self.winId()))
-        if self.stats_visible and self._overlay_text is not None:
-            self._stats_box.reposition()
-            self._stats_box.show()
-
-    def hideEvent(self, a0: QHideEvent | None) -> None:
-        super().hideEvent(a0)
-        self._stats_box.hide()
-
-    def resizeEvent(self, a0: QResizeEvent | None) -> None:
-        super().resizeEvent(a0)
-        self._stats_box.reposition()
-
-    def moveEvent(self, a0: QMoveEvent | None) -> None:
-        super().moveEvent(a0)
-        self._stats_box.reposition()
 
     def _set_video_size(self, width: int, height: int) -> None:
         self._aspect = width / height
@@ -173,7 +147,7 @@ class BaseView(QMainWindow, Generic[T]):
             return
 
         if a0.key() == Qt.Key.Key_F:
-            self.set_stats_visible(not self.stats_visible)
+            self.set_stats_visible(not self._stats_box.visible)
         elif a0.key() == Qt.Key.Key_A:
             if self._aspect_lock is None:
                 self._aspect_lock = AspectRatioLock(lambda: self._aspect)
@@ -206,7 +180,7 @@ class BaseView(QMainWindow, Generic[T]):
             self._fps_thread.new_fps.disconnect(self._on_fps)
         except TypeError:
             pass
-        self._stats_box.deleteLater()
+        self._stats_box.release()
         self.video.release()
         self.closeRequested.emit()
         super().closeEvent(a0)

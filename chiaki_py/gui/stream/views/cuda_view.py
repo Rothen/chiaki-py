@@ -171,13 +171,19 @@ class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[
         if (self._texture.width, self._texture.height) != self._size:
             self._texture.close()                       # the stream changed size
             self._texture = CudaGLTexture(*self._size)
-        new_frame = self._new_frame
+        new_frame, self._new_frame = self._new_frame, False
+
+        # Timed only for an actual new frame, not an incidental repaint (e.g. from a resize), and includes
+        # glFinish() so the reported time is the real GPU-side cost, not just how long submitting it took.
         if new_frame:
+            self._fps_thread.tick_render()
             self._texture.upload(self._frame.data.ptr)
-            self._new_frame = False
         ratio = self.devicePixelRatioF()
         self._texture.render(round(self.width() * ratio),
                              round(self.height() * ratio))
+        if new_frame:
+            GL.glFinish()
+            self._fps_thread.tock_render()
 
     def _get_frame_size(self) -> tuple[int, int]:
         return (self._frame.shape[1], self._frame.shape[0])

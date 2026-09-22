@@ -45,7 +45,9 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
     def _render(self) -> None:
         if self._renderer is None or self._frame is None:
             return
+        self._fps_thread.tick_render()
         self._renderer.render(self._frame)
+        self._fps_thread.tock_render()
 
     def _get_frame_size(self) -> tuple[int, int]:
         return (self._frame.width, self._frame.height)

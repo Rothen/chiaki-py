@@ -18,7 +18,7 @@ class FpsThread(QThread):
     """
     new_fps = pyqtSignal(float, float, float, float)
 
-    def __init__(self, frame_thread: FrameThread, update_time: float = 0.5):
+    def __init__(self, frame_thread: FrameThread, update_time: float = 0.5, render_async: bool = False):
         super().__init__()
         self.update_time = update_time
         self._frame_count = 0
@@ -27,6 +27,7 @@ class FpsThread(QThread):
         self._sleep_time = int(self.update_time * 1000)
         self._frame_thread = frame_thread
         self._frame_thread.new_frame.connect(self._on_frame)
+        self._render_async = render_async
         
         self.__tick_render_start: float = 0.0
         self.__tick_total_start: float = 0.0
@@ -34,6 +35,7 @@ class FpsThread(QThread):
         self.__total_pull_time: float = 0.0
         self.__total_render_time: float = 0.0
         self.__total_time: float = 0.0
+        
 
     def tick_render(self) -> None:
         self.__tick_render_start = time.perf_counter()
@@ -64,7 +66,7 @@ class FpsThread(QThread):
             dt = time.perf_counter() - self._last_time
             pull_time = (self.__total_pull_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000
             render_time = (self.__total_render_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000
-            total_time = (self.__total_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000 + pull_time
+            total_time = (self.__total_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000 + pull_time + self._render_async * render_time
 
             self.new_fps.emit(
                 self._frame_count / dt,
