@@ -36,14 +36,14 @@ jobs:
             - name: Install Python build/CI tooling
               run: |
                   python -m pip install --upgrade pip
-                  python -m pip install --upgrade "protobuf==5.29.3" "grpcio-tools==1.71.0" build twine pybind11_stubgen "delocate>=0.11"
+                  python -m pip install --upgrade "protobuf==7.36.2" "grpcio-tools==1.84.0" build twine pybind11_stubgen "delocate>=0.11"
 
             - name: Install native dependencies
               run: |
                   brew update
                   brew install \
                       cmake ninja nasm pkgconf \
-                      protobuf@29 openssl@3 fmt \
+                      protobuf openssl@3 fmt \
                       opus json-c miniupnpc libevent speexdsp \
                       ffmpeg hidapi fftw lcms2 \
                       vulkan-headers vulkan-loader
@@ -71,8 +71,8 @@ jobs:
               run: |
                   echo "CPATH=$(brew --prefix)/include" >> "$GITHUB_ENV"
                   echo "LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
-                  echo "PKG_CONFIG_PATH=$SDL2_PREFIX/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf@29)/lib/pkgconfig" >> "$GITHUB_ENV"
-                  echo "$(brew --prefix protobuf@29)/bin" >> "$GITHUB_PATH"
+                  echo "PKG_CONFIG_PATH=$SDL2_PREFIX/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix protobuf)/lib/pkgconfig" >> "$GITHUB_ENV"
+                  echo "$(brew --prefix protobuf)/bin" >> "$GITHUB_PATH"
 
             - name: Configure
               run: |
@@ -90,7 +90,7 @@ jobs:
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
                     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
                     -DPython3_EXECUTABLE="$(which python)" -DPython_EXECUTABLE="$(which python)" -DPYTHON_EXECUTABLE="$(which python)" \
-                    -DCMAKE_PREFIX_PATH="$SDL2_PREFIX;$(brew --prefix);$(brew --prefix openssl@3);$(brew --prefix protobuf@29)" \
+                    -DCMAKE_PREFIX_PATH="$SDL2_PREFIX;$(brew --prefix);$(brew --prefix openssl@3);$(brew --prefix protobuf)" \
                     -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib -Wl,-rpath,$SDL2_PREFIX/lib" \
                     -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,$(brew --prefix)/lib -Wl,-rpath,$SDL2_PREFIX/lib"
 
