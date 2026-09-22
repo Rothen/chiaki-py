@@ -20,6 +20,7 @@ from pathlib import Path
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.gui import StreamDisplay
 from chiaki_py.lib import Settings, LogLevel, CudaFrameHandler
+from chiaki_py.controller import detach_controller
 
 from helpers import setup_controller
 
@@ -48,19 +49,14 @@ def main() -> None:
     session.stream_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
     
     with session:
-        controller_attached = setup_controller(session.stream_session)
-        res = -1
-        try:
-            res = StreamDisplay.start(session, sys.argv)
-        except Exception as e:
-            print(e)
-        finally:
-            if controller_attached:
-                session.stream_session.release_right()
-                session.stream_session.release_left()
-                session.stream_session.send_feedback_state()
-            
-            sys.exit(res)
+        controller, subscriptions = setup_controller(session.stream_session)
+        
+        res = StreamDisplay.start(session, sys.argv)
+        
+        if controller is not None and subscriptions is not None:
+            detach_controller(controller, session.stream_session, subscriptions)
+        
+        sys.exit(res)
         
 
 

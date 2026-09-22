@@ -24,6 +24,7 @@ import typer
 import cupy as cp
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.lib import Settings, CudaFrameHandler
+from chiaki_py.controller import detach_controller
 
 from glfw_video import GLVideoSurface
 from helpers import setup_controller
@@ -54,7 +55,7 @@ def main() -> None:
     
     try:
         with session:
-            controller_attached = setup_controller(session.stream_session)
+            controller, subscriptions = setup_controller(session.stream_session)
 
             try:
                 profile = session.stream_session.get_video_profile()
@@ -71,10 +72,8 @@ def main() -> None:
                         if surface.should_close:
                             break
             finally:
-                if controller_attached:
-                    session.stream_session.release_right()
-                    session.stream_session.release_left()
-                    session.stream_session.send_feedback_state()
+                if controller is not None and subscriptions is not None:
+                    detach_controller(controller, session.stream_session, subscriptions)
     except KeyboardInterrupt:
         print("\nInterrupted, shutting down.")
 

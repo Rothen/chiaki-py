@@ -27,6 +27,7 @@ import typer
 
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.lib import Settings, CudaFrameHandler
+from chiaki_py.controller import detach_controller
 
 from glfw_video import GLVideoSurface
 from helpers import setup_controller
@@ -54,12 +55,12 @@ def main() -> None:
         CudaFrameHandler
     )
 
-    session.stream_session.on_session_quit().subscribe(lambda reason: _logger.info(f"session quit ({reason})"))
-    session.stream_session.on_connected_changed().subscribe(lambda connected: _logger.info(f"connected to {registration.nickname}" if connected else "connection closed"))
+    session.stream_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.stream_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
 
     try:
         with session:
-            controller_attached = setup_controller(session.stream_session)
+            controller, subscriptions = setup_controller(session.stream_session)
 
             try:
                 profile = session.stream_session.get_video_profile()
@@ -69,7 +70,7 @@ def main() -> None:
                     # asked for 1080p downgrades to 720p once connected, which would not fit).
                     frame = torch.empty((profile.height, profile.width, 3), dtype=torch.uint8, device="cuda")
 
-                    _logger.info("Streaming - press 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.")
+                    print("Streaming - press 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.")
                     title_updated = 0.0
                     # max_fps=0: no limit, the stream already has its own frame rate.
                     for _ in session.frames(max_fps=0, out=frame):
@@ -86,10 +87,8 @@ def main() -> None:
                         if surface.should_close:
                             break
             finally:
-                if controller_attached:
-                    session.stream_session.release_right()
-                    session.stream_session.release_left()
-                    session.stream_session.send_feedback_state()
+                if controller is not None and subscriptions is not None:
+                    detach_controller(controller, session.stream_session, subscriptions)
     except KeyboardInterrupt:
         print("\nInterrupted, shutting down.")
 

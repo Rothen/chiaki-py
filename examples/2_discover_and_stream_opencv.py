@@ -31,6 +31,7 @@ import numpy as np
 from chiaki_py import Session, discover_hosts, Serializer, HostRegistration, register_host
 from chiaki_py.lib import Settings, DiscoveryHost, CpuFrameHandler
 from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
+from chiaki_py.controller import detach_controller
 from fps_overlay import FpsCounter, draw_text_top_right
 from helpers import setup_controller
 
@@ -114,7 +115,7 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
 
     try:
         with session:
-            controller_attached = setup_controller(session.stream_session)
+            controller, subscriptions = setup_controller(session.stream_session)
             
             print("Streaming - press 'q' in the video window, or Ctrl+C in the terminal, to quit.")
             try:
@@ -132,10 +133,8 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
             finally:
-                if controller_attached:
-                    session.stream_session.release_right()
-                    session.stream_session.release_left()
-                    session.stream_session.send_feedback_state()
+                if controller is not None and subscriptions is not None:
+                    detach_controller(controller, session.stream_session, subscriptions)
     except KeyboardInterrupt:
         print("\nInterrupted, shutting down.")
     finally:
