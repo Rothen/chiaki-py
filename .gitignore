@@ -1,5 +1,6 @@
 build*/
 deps/
+deps.bak/
 libs/
 old/
 vcpkg_installed/
