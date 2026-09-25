@@ -43,7 +43,8 @@ class Session:
         self,
         connect_info: ChiakiPySessionConnectInfo,
         frame_handler_cls: type[FrameHandler] = CpuFrameHandler,
-        retry_seconds: float = SESSION_RETRY_SECONDS
+        retry_seconds: float = SESSION_RETRY_SECONDS,
+        play_audio: bool = True,
     ):
         self.__chiaki_py_session = ChiakiPySession(connect_info)
         self.__frame_handler: FrameHandler = frame_handler_cls(self.__chiaki_py_session)
@@ -57,15 +58,19 @@ class Session:
         self.__retry_lock = threading.Lock()
         self.__retry_timer: threading.Timer | None = None
         self.error: BaseException | None = None
+        """The exception from the last failed retry, or None."""
         self.__ah = self.__chiaki_py_session.get_audio_handler()
         self._audio_stream: sd.OutputStream | None = None
-        """The exception from the last failed retry, or None."""
+        self.__play_audio = play_audio
 
         self.__subscriptions = [
             self.__chiaki_py_session.on_connected_changed().subscribe(self.__on_connected_changed),
             self.__chiaki_py_session.on_session_quit().subscribe(self.__on_session_quit),
-            # self.__chiaki_py_session.on_audio_frame_available().subscribe(self.__on_audio_frame),
         ]
+        if play_audio:
+            self.__subscriptions.append(
+                self.__chiaki_py_session.on_audio_frame_available().subscribe(self.__on_audio_frame)
+            )
 
     @property
     def chiaki_py_session(self) -> ChiakiPySession:
@@ -89,10 +94,12 @@ class Session:
         registration: HostRegistration,
         frame_handler_cls: type[FrameHandler] = CpuFrameHandler,
         retry_seconds: float = SESSION_RETRY_SECONDS,
+        play_audio: bool = True,
     ) -> "Session":
         """Build a Session for the console `registration` describes. Does not connect yet -
         use the returned Session as a context manager, or call `__enter__`/`stop()` directly,
-        to actually start and stop the stream."""
+        to actually start and stop the stream. Pass `play_audio=False` to consume the audio
+        yourself through `frames_with_audio()` instead of playing it on the default output device."""
         connect_info = ChiakiPySessionConnectInfo(
             settings=settings,
             target=registration.target,
@@ -107,7 +114,7 @@ class Session:
             zoom=registration.zoom,
             stretch=registration.stretch,
         )
-        return cls(connect_info, frame_handler_cls, retry_seconds)
+        return cls(connect_info, frame_handler_cls, retry_seconds, play_audio)
 
     @property
     def is_active(self) -> bool:
@@ -212,6 +219,7 @@ class Session:
         if self._audio_stream is not None:
             self._audio_stream.stop()
             self._audio_stream.close()
+            self._audio_stream = None
 
     def frames(
         self,
