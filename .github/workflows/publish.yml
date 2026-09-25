@@ -15,10 +15,13 @@ jobs:
   build-macos:
     uses: ./.github/workflows/build-macos.yml
 
+  build-raspberrypi:
+    uses: ./.github/workflows/build-raspberrypi.yml
+
   publish-testpypi:
     name: Publish to TestPyPI
     if: github.event_name == 'workflow_dispatch'
-    needs: [build-windows, build-ubuntu, build-macos]
+    needs: [build-windows, build-ubuntu, build-macos, build-raspberrypi]
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -43,7 +46,7 @@ jobs:
   publish:
     name: Publish to PyPI
     if: github.event_name == 'release'
-    needs: [build-windows, build-ubuntu, build-macos]
+    needs: [build-windows, build-ubuntu, build-macos, build-raspberrypi]
     runs-on: ubuntu-latest
     environment:
       name: pypi
