@@ -65,25 +65,12 @@ def main() -> None:
             try:
                 profile = session.stream_session.get_video_profile()
                 with GLVideoSurface(profile.width, profile.height, "chiaki-py") as surface:
-                    # Allocated once, refilled by every frame: (H, W, 3) uint8 RGB on the GPU. It has
-                    # to match the stream's size exactly (a PS5 streams what the profile says; a PS4
-                    # asked for 1080p downgrades to 720p once connected, which would not fit).
-                    frame = torch.empty((profile.height, profile.width, 3), dtype=torch.uint8, device="cuda")
+                    frame = CudaFrameHandler.empty_frame(profile.width, profile.height, backend="torch", channels_last=False)
 
                     print("Streaming - press 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.")
-                    title_updated = 0.0
-                    # max_fps=0: no limit, the stream already has its own frame rate.
+
                     for _ in session.frames(max_fps=0, out=frame):
-                        # `frame` now holds the newest frame; work on it on the GPU.
-                        x = frame.permute(2, 0, 1).float().div_(255)      # (3, H, W) floats in [0, 1]
-                        red, green, blue = x.mean(dim=(1, 2)).tolist()    # per-channel means
-
-                        surface.show(frame.data_ptr())                    # drawn from the tensor's own GPU memory
-
-                        now = time.perf_counter()
-                        if now - title_updated >= 0.25:                   # every frame would only flicker
-                            surface.set_title(f"chiaki-py - mean RGB {red:.2f} {green:.2f} {blue:.2f}")
-                            title_updated = now
+                        surface.show(frame)                               # drawn from the tensor's own GPU memory
                         if surface.should_close:
                             break
             finally:

@@ -1,5 +1,5 @@
-"""A GLFW window that shows RGB frames straight from CUDA device memory, shared by
-1.4.3_stream_cuda_glfw.py (frames in a CuPy array) and 1.4.4_stream_tensor.py (frames in a
+"""A GLFW window that shows (3, H, W) RGB frames straight from CUDA device memory, shared by
+1.4.4_stream_cuda_glfw.py (frames in a CuPy array) and 1.4.5_stream_tensor.py (frames in a
 PyTorch tensor). The interop itself is in cuda_gl.py.
 
 Needs: pip install glfw cuda-python PyOpenGL opencv-python
@@ -12,7 +12,7 @@ from fps_overlay import FpsCounter
 
 
 class GLVideoSurface:
-    """A GLFW window showing width x height RGB frames that arrive as CUDA device memory.
+    """A GLFW window showing (3, height, width) uint8 RGB frames that arrive as CUDA arrays.
 
     With `show_fps` the frame rate (frames shown per second) is drawn in the top-right corner.
     """
@@ -47,15 +47,16 @@ class GLVideoSurface:
     def set_title(self, title: str) -> None:
         glfw.set_window_title(self.window, title)
 
-    def upload(self, device_ptr: int) -> None:
-        self.texture.upload(device_ptr)
+    def upload(self, frame) -> None:
+        self.texture.upload(frame)
 
     def render(self) -> None:
         self.texture.render(*glfw.get_framebuffer_size(self.window))
 
-    def show(self, device_ptr: int) -> None:
-        """Show the RGB frame at `device_ptr` (width * height * 3 bytes of device memory)."""
-        self.upload(device_ptr)
+    def show(self, frame) -> None:
+        """Show `frame`, a (3, height, width) uint8 CUDA array (torch tensor, CuPy array, ...), either
+        planar (C-contiguous) or a transpose/permute view of interleaved (height, width, 3) memory."""
+        self.upload(frame)
         if self.fps is not None:
             fps = self.fps.tick()
             if fps is not None:

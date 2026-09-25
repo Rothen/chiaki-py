@@ -1,7 +1,12 @@
-"""CUDA -> OpenGL interop used by glfw_video.py (and so by 1.4.3_stream_cuda_glfw.py and
-1.4.4_stream_tensor.py): shows RGB frames that live in CUDA device memory as an OpenGL
+"""CUDA -> OpenGL interop used by glfw_video.py (and so by 1.4.4_stream_cuda_glfw.py and
+1.4.5_stream_tensor.py): shows (3, H, W) uint8 RGB frames that live in CUDA device memory
+(a torch tensor, a CuPy array, anything with __cuda_array_interface__) as an OpenGL
 texture, without them ever touching the CPU, with an optional text overlay (used for the
 frame rate) in the top-right corner.
+
+A (3, H, W) frame can be laid out two ways, and both are shown as they are, with no conversion:
+planar (C-contiguous, one plane per channel - what a model typically produces), or
+interleaved (a transpose/permute view of (H, W, 3) memory - what CudaFrameHandler writes).
 
 Needs: pip install cuda-python PyOpenGL opencv-python
 """
@@ -52,8 +57,36 @@ out vec4 color;
 void main() { color = texture(video, uv); }
 """
 
+# The planar layout: one single-channel layer per colour.
+PLANAR_FRAGMENT_SHADER = """#version 330 core
+uniform sampler2DArray video;
+in vec2 uv;
+out vec4 color;
+void main() {
+    color = vec4(texture(video, vec3(uv, 0)).r, texture(video, vec3(uv, 1)).r, texture(video, vec3(uv, 2)).r, 1.0);
+}
+"""
+
+def frame_layout(frame, width: int, height: int) -> tuple[int, bool]:
+    """The device pointer of a (3, height, width) uint8 CUDA frame, and whether it is planar
+    (True) or an interleaved view (False). Raises ValueError for any other shape, type or layout."""
+    interface = frame.__cuda_array_interface__
+    if tuple(interface["shape"]) != (3, height, width) or interface["typestr"] != "|u1":
+        raise ValueError(f"need a (3, {height}, {width}) uint8 frame, got {tuple(interface['shape'])} "
+                         f"{interface['typestr']}")
+    strides = interface.get("strides")
+    if strides is None or tuple(strides) == (height * width, width, 1):
+        planar = True
+    elif tuple(strides) == (1, width * 3, 3):
+        planar = False
+    else:
+        raise ValueError(f"unsupported strides {tuple(strides)}: need a C-contiguous (3, H, W) frame or a "
+                         f"(3, H, W) transpose/permute view of a C-contiguous (H, W, 3) one")
+    return interface["data"][0], planar
+
+
 class CudaGLTexture:
-    """A width x height RGB texture that is filled from CUDA device memory and drawn over the viewport.
+    """A width x height RGB picture that is filled from a (3, height, width) CUDA frame and drawn over the viewport.
 
     Needs an OpenGL 3.3 core context that is current on the calling thread, both
     when it is created and for every later call, and that renders on the same
@@ -64,16 +97,25 @@ class CudaGLTexture:
         self.width, self.height = width, height
         self.nbytes = width * height * 3
 
+        # One program and texture per layout, picked by the layout of the last frame uploaded:
+        # interleaved frames go to an RGB texture, planar ones to a 3-layer single-channel array.
         self.program = compileProgram(compileShader(VERTEX_SHADER, GL.GL_VERTEX_SHADER),
                                       compileShader(FRAGMENT_SHADER, GL.GL_FRAGMENT_SHADER))
+        self.planar_program = compileProgram(compileShader(VERTEX_SHADER, GL.GL_VERTEX_SHADER),
+                                             compileShader(PLANAR_FRAGMENT_SHADER, GL.GL_FRAGMENT_SHADER))
         self.vao = GL.glGenVertexArrays(1)   # core profile wants one bound even though no vertex data is used
 
         self.texture = GL.glGenTextures(1)
         self._configure_texture(self.texture, GL.GL_LINEAR)
         GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGB8, width, height, 0, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, None)
 
+        self.planar_texture = GL.glGenTextures(1)
+        self._configure_texture(self.planar_texture, GL.GL_LINEAR, GL.GL_TEXTURE_2D_ARRAY)
+        GL.glTexImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, GL.GL_R8, width, height, 3, 0, GL.GL_RED, GL.GL_UNSIGNED_BYTE, None)
+        self.planar = False
+
         # The pixel buffer object CUDA writes into and OpenGL then reads the texture from. (Not the
-        # texture itself: CUDA arrays have no 3-channel format, and the frames are RGB.)
+        # texture itself: CUDA arrays have no 3-channel format, and interleaved frames are RGB.)
         self.pbo = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_PIXEL_UNPACK_BUFFER, self.pbo)
         GL.glBufferData(GL.GL_PIXEL_UNPACK_BUFFER, self.nbytes, None, GL.GL_STREAM_DRAW)
@@ -91,15 +133,19 @@ class CudaGLTexture:
         self._overlay_stale = False
 
     @staticmethod
-    def _configure_texture(texture, filter) -> None:
-        GL.glBindTexture(GL.GL_TEXTURE_2D, texture)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, filter)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, filter)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+    def _configure_texture(texture, filter, target=GL.GL_TEXTURE_2D) -> None:
+        GL.glBindTexture(target, texture)
+        GL.glTexParameteri(target, GL.GL_TEXTURE_MIN_FILTER, filter)
+        GL.glTexParameteri(target, GL.GL_TEXTURE_MAG_FILTER, filter)
+        GL.glTexParameteri(target, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
+        GL.glTexParameteri(target, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
 
-    def upload(self, device_ptr: int) -> None:
-        """Copy the RGB frame at `device_ptr` (width * height * 3 bytes of device memory) into the texture."""
+    def upload(self, frame) -> None:
+        """Copy `frame`, a (3, height, width) uint8 CUDA array (planar or an interleaved view), into the texture.
+
+        It is read on CUDA's default stream, so work queued there (torch's and CuPy's default) is finished first.
+        """
+        device_ptr, self.planar = frame_layout(frame, self.width, self.height)
         check(cudart.cudaGraphicsMapResources(1, self.resource, 0))
         try:
             pbo_ptr, _ = check(cudart.cudaGraphicsResourceGetMappedPointer(self.resource))
@@ -111,8 +157,13 @@ class CudaGLTexture:
         # With a pixel unpack buffer bound, the "pointer" is an offset into it: OpenGL copies GPU to GPU.
         GL.glPixelStorei(GL.GL_UNPACK_ALIGNMENT, 1)
         GL.glBindBuffer(GL.GL_PIXEL_UNPACK_BUFFER, self.pbo)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture)
-        GL.glTexSubImage2D(GL.GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, None)
+        if self.planar:
+            GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.planar_texture)
+            GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, self.width, self.height, 3,
+                               GL.GL_RED, GL.GL_UNSIGNED_BYTE, None)
+        else:
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture)
+            GL.glTexSubImage2D(GL.GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, None)
         GL.glBindBuffer(GL.GL_PIXEL_UNPACK_BUFFER, 0)
 
     def set_overlay(self, text: str | None) -> None:
@@ -127,9 +178,13 @@ class CudaGLTexture:
         `ui_scale` sizes the overlay for high-DPI screens (the devicePixelRatio).
         """
         GL.glViewport(0, 0, viewport_width, viewport_height)
-        GL.glUseProgram(self.program)
         GL.glBindVertexArray(self.vao)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture)
+        if self.planar:
+            GL.glUseProgram(self.planar_program)
+            GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.planar_texture)
+        else:
+            GL.glUseProgram(self.program)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture)
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
         if self._overlay_text:
             self._draw_overlay(viewport_width, viewport_height, ui_scale)
@@ -171,9 +226,10 @@ class CudaGLTexture:
         check(cudart.cudaGraphicsUnregisterResource(self.resource))   # before the buffer goes away
         self.resource = None
         GL.glDeleteBuffers(1, [self.pbo])
-        GL.glDeleteTextures([self.texture])
+        GL.glDeleteTextures([self.texture, self.planar_texture])
         GL.glDeleteVertexArrays(1, [self.vao])
         GL.glDeleteProgram(self.program)
+        GL.glDeleteProgram(self.planar_program)
         if self._overlay_program is not None:
             GL.glDeleteTextures([self._overlay_texture])
             GL.glDeleteProgram(self._overlay_program)
