@@ -13,7 +13,7 @@ Python 3.11 only. Wheels are built for Windows, Ubuntu and macOS (Apple Silicon)
 ## Quickstart
 
 ```python
-from chiaki_py import Session, discover_hosts, register_host, Serializer
+from chiaki_py import Session, discover_hosts, register_host, Serializer, AudioSink
 from chiaki_py.lib import Settings
 from chiaki_py.psn import PSNLoginQt
 
@@ -29,6 +29,7 @@ registration = register_host(
 )
 
 with Session(settings, registration) as session:
+    audio_sink = AudioSink(session)
     for frame in session.frames(max_fps=60):
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
