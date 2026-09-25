@@ -18,3 +18,4 @@ dist/
 config.json
 scratch/
 cache/
+testing.py

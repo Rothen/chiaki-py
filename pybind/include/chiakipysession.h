@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
-#ifndef CHIAKI_PY_STREAMSESSION_H
-#define CHIAKI_PY_STREAMSESSION_H
+#ifndef CHIAKI_PY_SESSION_H
+#define CHIAKI_PY_SESSION_H
 
 #include <string>
 #include <map>
@@ -12,14 +12,16 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <mutex>
 
 #include "timer.h"
 #include "exception.h"
 #include "sessionlog.h"
-#include "controllermanager.h"
+#include "chiaki_py_controller.h"
 #include "settings.h"
 #include "elapsed_timer.h"
 #include "event_source.h"
+#include "audio_handler.h"
 #include "pylog.h"
 
 #include <chiaki/session.h>
@@ -161,14 +163,15 @@ class ChiakiPySession
 		bool session_started;
 
 		ChiakiFfmpegDecoder *ffmpeg_decoder;
-		void TriggerFfmpegFrameAvailable();
-		std::string audio_out_device_name;
+        void TriggerFfmpegFrameAvailable();
+        void TriggerAudioFrameAvailable(int16_t *buf, size_t samples_count);
+        void InitAudio(unsigned int channels, unsigned int rate);
+        std::string audio_out_device_name;
 		std::string audio_in_device_name;
-		// size_t audio_out_sample_size;
 		// bool audio_out_drain_queue;
 		// size_t haptics_buffer_size;
-		unsigned int audio_buffer_size;
-		ChiakiHolepunchSession holepunch_session;
+
+        ChiakiHolepunchSession holepunch_session;
 		uint8_t *haptics_resampler_buf;
 		std::map<int, int> key_map;
         ElapsedTimer connect_timer;
@@ -185,6 +188,9 @@ class ChiakiPySession
             if (OnUpdateGamepads) OnUpdateGamepads();
         }
 
+        AudioHandler audio_handler;
+
+        EventSource<bool> AudioFrameAvailable;
         EventSource<bool> FfmpegFrameAvailable;
         EventSource<ChiakiQuitReason> SessionQuit;
         EventSource<bool> LoginPINRequested;
@@ -203,13 +209,15 @@ class ChiakiPySession
 		bool IsConnected()	{ return connected; }
 		bool IsConnecting()	{ return connect_timer.isValid(); }
 
-		ChiakiConnectVideoProfile GetVideoProfile() const { return session.connect_info.video_profile; }
+        ChiakiConnectVideoProfile GetVideoProfile() const { return session.connect_info.video_profile; }
+        AudioHandler &GetAudioHandler() { return audio_handler; }
 
-		void Start();
+        void Start();
 		void Stop();
 		void GoToBed();
 		void SetLoginPIN(const std::string &pin);
 		void GoHome();
+
 		std::string GetHost() { return host; }
 		bool GetConnected() { return connected; }
 		double GetMeasuredBitrate()	{ return measured_bitrate; }
@@ -232,6 +240,7 @@ class ChiakiPySession
         }
         ChiakiFfmpegDecoder *GetFfmpegDecoder()	{ return ffmpeg_decoder; }
 
+        const EventSource<bool> &OnAudioFrameAvailable() { return AudioFrameAvailable; }
         const EventSource<bool> &OnFfmpegFrameAvailable() { return FfmpegFrameAvailable; }
         const EventSource<ChiakiQuitReason> &OnSessionQuit() { return SessionQuit; }
         const EventSource<bool> &OnLoginPINRequested() { return LoginPINRequested; }
@@ -367,4 +376,4 @@ class ChiakiPySession
         }
 };
 
-#endif // CHIAKI_PY_STREAMSESSION_H
+#endif // CHIAKI_PY_SESSION_H

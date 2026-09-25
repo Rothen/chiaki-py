@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
-#include "controllermanager.h"
+#include "chiaki_py_controller.h"
 #include <cassert>
 
 /* PS5 trigger effect documentation:
@@ -10,32 +10,32 @@
    Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
    https://github.com/libsdl-org/SDL/blob/release-2.24.1/test/testgamecontroller.c#L263-L289
 */
-typedef struct
-{
-    uint8_t ucEnableBits1;                /* 0 */
-    uint8_t ucEnableBits2;                /* 1 */
-    uint8_t ucRumbleRight;                /* 2 */
-    uint8_t ucRumbleLeft;                 /* 3 */
-    uint8_t ucHeadphoneVolume;            /* 4 */
-    uint8_t ucSpeakerVolume;              /* 5 */
-    uint8_t ucMicrophoneVolume;           /* 6 */
-    uint8_t ucAudioEnableBits;            /* 7 */
-    uint8_t ucMicLightMode;               /* 8 */
-    uint8_t ucAudioMuteBits;              /* 9 */
-    uint8_t rgucRightTriggerEffect[11];   /* 10 */
-    uint8_t rgucLeftTriggerEffect[11];    /* 21 */
-    uint8_t rgucUnknown1[6];              /* 32 */
-    uint8_t ucEnableBits3;                /* 38 */
-    uint8_t rgucUnknown2[2];              /* 39 */
-    uint8_t ucLedAnim;                    /* 41 */
-    uint8_t ucLedBrightness;              /* 42 */
-    uint8_t ucPadLights;                  /* 43 */
-    uint8_t ucLedRed;                     /* 44 */
-    uint8_t ucLedGreen;                   /* 45 */
-    uint8_t ucLedBlue;                    /* 46 */
-} DS5EffectsState_t;
+// typedef struct
+// {
+//     uint8_t ucEnableBits1;                /* 0 */
+//     uint8_t ucEnableBits2;                /* 1 */
+//     uint8_t ucRumbleRight;                /* 2 */
+//     uint8_t ucRumbleLeft;                 /* 3 */
+//     uint8_t ucHeadphoneVolume;            /* 4 */
+//     uint8_t ucSpeakerVolume;              /* 5 */
+//     uint8_t ucMicrophoneVolume;           /* 6 */
+//     uint8_t ucAudioEnableBits;            /* 7 */
+//     uint8_t ucMicLightMode;               /* 8 */
+//     uint8_t ucAudioMuteBits;              /* 9 */
+//     uint8_t rgucRightTriggerEffect[11];   /* 10 */
+//     uint8_t rgucLeftTriggerEffect[11];    /* 21 */
+//     uint8_t rgucUnknown1[6];              /* 32 */
+//     uint8_t ucEnableBits3;                /* 38 */
+//     uint8_t rgucUnknown2[2];              /* 39 */
+//     uint8_t ucLedAnim;                    /* 41 */
+//     uint8_t ucLedBrightness;              /* 42 */
+//     uint8_t ucPadLights;                  /* 43 */
+//     uint8_t ucLedRed;                     /* 44 */
+//     uint8_t ucLedGreen;                   /* 45 */
+//     uint8_t ucLedBlue;                    /* 46 */
+// } DS5EffectsState_t;
 
-static std::set<std::string> chiaki_motion_controller_guids{
+/*static std::set<std::string> chiaki_motion_controller_guids{
 	// Sony on Linux
 	"03000000341a00003608000011010000",
 	"030000004c0500006802000010010000",
@@ -209,7 +209,7 @@ Controller::Controller(int device_id, ControllerManager *manager) : ref(0),
                                                                     is_handheld(false),
                                                                     is_steam_virtual(false),
                                                                     is_steam_virtual_unmasked(false),*/
-{
+/*{
 	this->id = device_id;
 	this->manager = manager;
 	chiaki_orientation_tracker_init(&this->orientation_tracker);
@@ -337,4 +337,4 @@ bool Controller::IsSteamVirtualUnmasked()
 
 void Controller::resetMotionControls()
 {
-}
+}*/

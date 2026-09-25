@@ -16,6 +16,7 @@
 #include "backend.h"
 #include "cuda_driver.h"
 #include "frame_handler.h"
+#include "audio_handler.h"
 #include "vulkan_renderer.h"
 #include "pylog.h"
 // #include "core/session.h"
@@ -26,6 +27,7 @@
 #include <stdio.h>
 #include <stdexcept>
 #include <string>
+#include <cstring>
 #include <optional> // Required for std::optional
 
 #define PYBIND11_DETAILED_ERROR_MESSAGES
@@ -47,7 +49,15 @@ extern "C"
 
 namespace py = pybind11;
 
-
+// Wrap interleaved int16 PCM as a (frames, channels) numpy array; (0, 0) when there is none yet.
+static py::array_t<int16_t> pcm_to_array(const std::vector<int16_t> &pcm, size_t channels)
+{
+    if (channels == 0 || pcm.empty())
+        return py::array_t<int16_t>(std::vector<py::ssize_t>{0, 0});
+    py::array_t<int16_t> arr({(py::ssize_t)(pcm.size() / channels), (py::ssize_t)channels});
+    std::memcpy(arr.mutable_data(), pcm.data(), pcm.size() * sizeof(int16_t));
+    return arr;
+}
 
 PYBIND11_MODULE(chiaki_py, m)
 {
@@ -202,8 +212,20 @@ PYBIND11_MODULE(chiaki_py, m)
              "Pull the next decoded video frame, or None if none was available yet. What is returned, and "
              "what `out` may be, depends on the subclass. Raises RuntimeError on decoding failure.")
         .def_static("empty_frame", &FrameHandler::empty_frame,
-             py::arg("width") = 0, py::arg("height") = 0,
-             "Not implemented on the base class; call empty_frame() on a concrete subclass instead.");
+                    py::arg("width") = 0, py::arg("height") = 0,
+                    "Not implemented on the base class; call empty_frame() on a concrete subclass instead.");
+
+    py::class_<AudioHandler>(m, "AudioHandler")
+        .def("get_frame", &AudioHandler::GetFrame, py::arg("max_frames") = 0,
+             "Remove and return up to max_frames queued audio frames (0 = all) as an int16 array of shape (frames, channels).")
+        .def("get_audio_queued_frames", &AudioHandler::GetAudioQueuedFrames, "Get the number of audio frames waiting in the queue.")
+        .def("clear_audio_queue", &AudioHandler::ClearAudioQueue, "Drop every queued audio frame.")
+        .def("get_audio_queue_max_frames", &AudioHandler::GetAudioQueueMaxFrames,
+             "Get the queue capacity in frames; the oldest frames are dropped beyond it.")
+        .def("set_audio_queue_max_frames", &AudioHandler::SetAudioQueueMaxFrames, py::arg("max_frames"),
+             "Set the queue capacity in frames (0 = 3x the audio buffer size from Settings).")
+        .def("get_audio_channels", &AudioHandler::GetAudioChannels, "Get the number of audio channels.")
+        .def("get_audio_rate", &AudioHandler::GetAudioRate, "Get the audio sample rate in Hz.");
 
     py::class_<CpuFrameHandler, FrameHandler>(m, "CpuFrameHandler",
         "Decodes and converts frames to RGB entirely on the CPU. Works with any decoder, needs no "
@@ -445,12 +467,14 @@ PYBIND11_MODULE(chiaki_py, m)
             return decoder && decoder->hw_device_ctx; }, "Whether the video decoder is hardware-accelerated (i.e. get_frame_gpu() can return frames).")
         .def("get_video_profile", &ChiakiPySession::GetVideoProfile, "The stream's video profile (width, height, max_fps, bitrate, codec): the requested one until the "
                                                                      "console answers, then the negotiated one. Known before the first frame arrives.")
+        .def("get_audio_handler", &ChiakiPySession::GetAudioHandler, py::return_value_policy::reference)
         .def("hardware_decoder_type", [](ChiakiPySession &s) -> std::string
              {
             ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
             if (!decoder || !decoder->hw_device_ctx)
                 return "";
             return av_hwdevice_get_type_name(reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type); }, "Type of hardware decoder in use ('vulkan', 'cuda', 'd3d11va', ...), or '' if decoding on the CPU.")
+        .def("on_audio_frame_available", &ChiakiPySession::OnAudioFrameAvailable, "Retrieve the Audio frame available event.", py::return_value_policy::reference)
         .def("on_frame_available", &ChiakiPySession::OnFfmpegFrameAvailable, "Retrieve the FFmpeg frame available event.", py::return_value_policy::reference)
         .def("on_session_quit", &ChiakiPySession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
         .def("on_login_pin_requested", &ChiakiPySession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)

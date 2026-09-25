@@ -3,7 +3,7 @@
 #include "chiakipysession.h"
 #include "cuda_driver.h"
 #include "settings.h"
-#include "controllermanager.h"
+#include "chiaki_py_controller.h"
 #include "pylog.h"
 
 #include <ios>
@@ -171,13 +171,14 @@ ChiakiPySession::ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info)
       ffmpeg_decoder(nullptr),
       holepunch_session(nullptr),
       haptics_resampler_buf(nullptr)
-      // haptics_handheld(0),
-      // rumble_multiplier(1),
-      // ps5_rumble_intensity(0x00),
-      // ps5_trigger_intensity(0x00),
-      // rumble_haptics_connected(false),
-      // rumble_haptics_on(false)
+// haptics_handheld(0),
+// rumble_multiplier(1),
+// ps5_rumble_intensity(0x00),
+// ps5_trigger_intensity(0x00),
+// rumble_haptics_connected(false),
+// rumble_haptics_on(false)
 {
+    audio_handler.audio_buffer_size = connect_info.audio_buffer_size;
     connected = false;
     muted = true;
     mic_connected = false;
@@ -185,7 +186,6 @@ ChiakiPySession::ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info)
     dpad_regular = true;
     dpad_regular_touch_switched = false;
     rumble_haptics_intensity = RumbleHapticsIntensity::Off;
-    input_block = 0;
     memset(led_color, 0, sizeof(led_color));
     ChiakiErrorCode err;
     ffmpeg_decoder = new ChiakiFfmpegDecoder;
@@ -245,7 +245,6 @@ ChiakiPySession::ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info)
 
     chiaki_opus_decoder_init(&opus_decoder, log.GetChiakiLog());
     chiaki_opus_encoder_init(&opus_encoder, log.GetChiakiLog());
-    audio_buffer_size = connect_info.audio_buffer_size;
 
     host = connect_info.host;
 
@@ -287,13 +286,13 @@ ChiakiPySession::ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info)
         PS_TOUCHPAD_MAX_Y = PS4_TOUCHPAD_MAX_Y;
     }
 
-    chiaki_controller_state_set_idle(&keyboard_state);
-    chiaki_controller_state_set_idle(&touch_state);
-    chiaki_controller_state_set_idle(&controller_state);
+    // chiaki_controller_state_set_idle(&keyboard_state);
+    // chiaki_controller_state_set_idle(&touch_state);
+    // chiaki_controller_state_set_idle(&controller_state);
     touch_tracker = std::map<int, uint8_t>();
     mouse_touch_id = -1;
     dpad_touch_id = -1;
-    chiaki_controller_state_set_idle(&dpad_touch_state);
+    // chiaki_controller_state_set_idle(&dpad_touch_state);
     dpad_touch_value = std::tuple<uint16_t, uint16_t>(0, 0);
     dpad_touch_increment = connect_info.dpad_touch_increment;
     /*dpad_touch_timer = new QTimer(this);
@@ -609,23 +608,37 @@ void ChiakiPySession::TriggerFfmpegFrameAvailable()
     }
 }
 
+void ChiakiPySession::TriggerAudioFrameAvailable(int16_t *buf, size_t samples_count)
+{
+    if (!audio_handler.audio_channels)
+    {
+        return;
+    }
+    audio_handler.QueueFrame(buf, samples_count);
+    AudioFrameAvailable.next(true);
+}
+
+void ChiakiPySession::InitAudio(unsigned int channels, unsigned int rate)
+{
+    audio_handler.audio_out_sample_size = sizeof(int16_t) * channels;
+    audio_handler.audio_channels = channels;
+    audio_handler.audio_rate = rate;
+}
+
 class ChiakiPySessionPrivate
 {
 public:
-    static void InitAudio(ChiakiPySession *session, uint32_t channels, uint32_t rate)
-    {
-        // QMetaObject::invokeMethod(session, "InitAudio", Qt::ConnectionType::BlockingQueuedConnection, Q_ARG(unsigned int, channels), Q_ARG(unsigned int, rate));
-    }
+    static void InitAudio(ChiakiPySession *session, uint32_t channels, uint32_t rate) { session->InitAudio(channels, rate); }
 
     static void InitMic(ChiakiPySession *session, uint32_t channels, uint32_t rate)
     {
         // QMetaObject::invokeMethod(session, "InitMic", Qt::ConnectionType::QueuedConnection, Q_ARG(unsigned int, channels), Q_ARG(unsigned int, rate));
     }
 
-    static void PushAudioFrame(ChiakiPySession *session, int16_t *buf, size_t samples_count) { /*session->PushAudioFrame(buf, samples_count);*/ }
     static void PushHapticsFrame(ChiakiPySession *session, uint8_t *buf, size_t buf_size) { /*session->PushHapticsFrame(buf, buf_size);*/ }
     static void CantDisplayMessage(ChiakiPySession *session, bool cant_display) { session->CantDisplayMessage(cant_display); }
     static void Event(ChiakiPySession *session, ChiakiEvent *event) { session->Event(event); }
+    static void TriggerAudioFrameAvailable(ChiakiPySession *session, int16_t *buf, size_t samples_count) { session->TriggerAudioFrameAvailable(buf, samples_count); }
     static void TriggerFfmpegFrameAvailable(ChiakiPySession *session) { session->TriggerFfmpegFrameAvailable(); }
 };
 
@@ -638,7 +651,7 @@ static void AudioSettingsCb(uint32_t channels, uint32_t rate, void *user)
 static void AudioFrameCb(int16_t *buf, size_t samples_count, void *user)
 {
     auto session = reinterpret_cast<ChiakiPySession *>(user);
-    ChiakiPySessionPrivate::PushAudioFrame(session, buf, samples_count);
+    ChiakiPySessionPrivate::TriggerAudioFrameAvailable(session, buf, samples_count);
 }
 
 static void HapticsFrameCb(uint8_t *buf, size_t buf_size, void *user)

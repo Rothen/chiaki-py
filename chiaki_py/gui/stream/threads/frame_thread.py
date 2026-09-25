@@ -26,7 +26,7 @@ class FrameThread(QThread, Generic[T]):
         self.session = session
         self.max_fps = max_fps
         self._running = True
-        profile = session.stream_session.get_video_profile()
+        profile = session.chiaki_py_session.get_video_profile()
         self.width = profile.width
         self.height = profile.height
         self.size = (self.width, self.height)

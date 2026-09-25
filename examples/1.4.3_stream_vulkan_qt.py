@@ -48,16 +48,16 @@ def main() -> None:
         VulkanFrameHandler
     )
 
-    session.stream_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
-    session.stream_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
+    session.chiaki_py_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.chiaki_py_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
 
     with session:
-        controller, subscriptions = setup_controller(session.stream_session)
+        controller, subscriptions = setup_controller(session.chiaki_py_session)
 
         res = StreamDisplay.start(session, sys.argv)
 
         if controller is not None and subscriptions is not None:
-            detach_controller(controller, session.stream_session, subscriptions)
+            detach_controller(controller, session.chiaki_py_session, subscriptions)
 
         sys.exit(res)
 

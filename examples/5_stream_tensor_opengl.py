@@ -56,15 +56,15 @@ def main() -> None:
         CudaFrameHandler
     )
 
-    session.stream_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
-    session.stream_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
+    session.chiaki_py_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.chiaki_py_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
 
     try:
         with session:
-            controller, subscriptions = setup_controller(session.stream_session)
+            controller, subscriptions = setup_controller(session.chiaki_py_session)
 
             try:
-                profile = session.stream_session.get_video_profile()
+                profile = session.chiaki_py_session.get_video_profile()
                 with GLVideoSurface(profile.width, profile.height, "chiaki-py") as surface:
                     frame = CudaFrameHandler.empty_frame(profile.width, profile.height, backend="torch", channels_last=False)
 
@@ -76,7 +76,7 @@ def main() -> None:
                             break
             finally:
                 if controller is not None and subscriptions is not None:
-                    detach_controller(controller, session.stream_session, subscriptions)
+                    detach_controller(controller, session.chiaki_py_session, subscriptions)
     except KeyboardInterrupt:
         print("\nInterrupted, shutting down.")
 

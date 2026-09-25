@@ -38,14 +38,14 @@ class ControllerThread(QThread):
         if not available_controllers:
             _logger.info("No DualSense controllers found.")
             return
-        attach_controller(available_controllers[0], self.session.stream_session)
+        attach_controller(available_controllers[0], self.session.chiaki_py_session)
 
     def stop(self) -> None:
         self.quit()
         self.wait()
-        self.session.stream_session.release_right()
-        self.session.stream_session.release_left()
-        self.session.stream_session.send_feedback_state()
+        self.session.chiaki_py_session.release_right()
+        self.session.chiaki_py_session.release_left()
+        self.session.chiaki_py_session.send_feedback_state()
 
 
 class StreamDisplay(QObject):

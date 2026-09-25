@@ -48,7 +48,7 @@ set(SOURCES
     include/core/feedback.h
     include/core/log.h
     include/backend.h
-    include/controllermanager.h
+    include/chiaki_py_controller.h
     include/elapsed_timer.h
     include/exception.h
     include/host.h
@@ -58,6 +58,7 @@ set(SOURCES
     include/chiakipysession.h
     include/discovery_manager.h
     include/frame_handler.h
+    include/audio_handler.h
     include/placebo_vulkan.h
     include/vulkan_renderer.h
     include/timer.h
@@ -74,13 +75,14 @@ set(SOURCES
     src/backend.cpp
     src/host.cpp
     src/event_source.cpp
-    src/controllermanager.cpp
     src/pylog.cpp
     src/sessionlog.cpp
     src/settings.cpp
+    src/chiaki_py_controller.cpp
     src/chiakipysession.cpp
     src/discovery_manager.cpp
     src/frame_handler.cpp
+    src/audio_handler.cpp
     src/placebo_vulkan.cpp
     src/vulkan_renderer.cpp
     src/utils.cpp
