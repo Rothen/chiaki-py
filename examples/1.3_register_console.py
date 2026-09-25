@@ -10,10 +10,9 @@ the console's Link Device screen (PS5: Settings > System > Remote Play > Link
 Device; PS4: Settings > Remote Play Connection Settings > Add Device).
 """
 
+import argparse
 import sys
 from pathlib import Path
-
-import typer
 
 from chiaki_py import Serializer, register_host
 from chiaki_py.lib import Settings, Target
@@ -49,4 +48,10 @@ def main(host: str, pin: str, ps4: bool = False, console_pin: str = "") -> None:
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    parser = argparse.ArgumentParser(description="Pair with a PS4/PS5 over the local network.")
+    parser.add_argument("host", help="IP address or hostname of the console.")
+    parser.add_argument("pin", help="8-digit code from the console's Link Device screen.")
+    parser.add_argument("--ps4", action="store_true", help="Register a PS4 instead of a PS5.")
+    parser.add_argument("--console-pin", default="", help="Console PIN, if one is set.")
+    args = parser.parse_args()
+    main(host=args.host, pin=args.pin, ps4=args.ps4, console_pin=args.console_pin)

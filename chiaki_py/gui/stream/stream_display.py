@@ -1,3 +1,5 @@
+import logging
+
 from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 from dualsense_py.backends import SDL3Backend
@@ -17,6 +19,8 @@ from chiaki_py.gui.stream.views.cuda_view import CudaVideoWidget
 from chiaki_py.gui.stream.views.vulkan_view import VulkanVideoWidget
 from .threads.fps_thread import FpsThread
 
+_logger = logging.getLogger(__name__)
+
 
 class ControllerThread(QThread):
     """Attaches the first available DualSense controller to the session's input, off the GUI
@@ -32,10 +36,9 @@ class ControllerThread(QThread):
         SDL3Backend.init()
         available_controllers = get_available_controllers()
         if not available_controllers:
-            print("No DualSense controllers found.")
+            _logger.info("No DualSense controllers found.")
             return
-        attach_controller(
-            available_controllers[0], self.session.stream_session)
+        attach_controller(available_controllers[0], self.session.stream_session)
 
     def stop(self) -> None:
         self.quit()
@@ -90,9 +93,9 @@ class StreamDisplay(QObject):
                                     show_stats, keep_aspect_ratio)
             self.window.closeRequested.connect(self.close)  # type: ignore[attr-defined]
             self.window.show()
-        except Exception as e:
-            print(e)
-            raise e
+        except Exception:
+            _logger.exception("Failed to create the stream window")
+            raise
 
         self.frame_thread.start()
         self.fps_thread.start()

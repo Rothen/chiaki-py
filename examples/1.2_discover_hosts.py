@@ -6,7 +6,7 @@ Usage:
 No pairing/PSN login required - this just listens for consoles announcing
 themselves, the same way the PS Remote Play app's "device list" does.
 """
-import typer
+import argparse
 
 from chiaki_py import discover_hosts
 from chiaki_py.lib import Settings
@@ -29,4 +29,9 @@ def main(timeout: float = 3.0) -> None:
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    parser = argparse.ArgumentParser(description="Discover PS4/PS5 consoles on the local network.")
+    parser.add_argument(
+        "--timeout", type=float, default=3.0, help="Seconds to listen for consoles (default: 3.0)."
+    )
+    args = parser.parse_args()
+    main(timeout=args.timeout)
