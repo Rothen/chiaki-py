@@ -2,13 +2,14 @@
 #define CHIAKI_PY_BACKEND_H
 
 #include "settings.h"
-#include "streamsession.h"
+#include "chiakipysession.h"
 #include "timer.h"
 #include "host.h"
 #include "discovery_manager.h"
 #include "utils.h"
 #include "core/common.h"
 #include "event_source.h"
+#include "pylog.h"
 
 #include <chiaki/discovery.h>
 
@@ -65,7 +66,7 @@ private:
 
     static void log_cb(ChiakiLogLevel level, const char *msg, void *user)
     {
-        chiaki_log_cb_print(level, msg, user);
+        chiaki_log_cb_python(level, msg, user);
     }
 
     static void regist_cb(ChiakiRegistEvent *event, void *user)
@@ -241,6 +242,8 @@ public:
             promise.set_exception(std::make_exception_ptr(std::runtime_error("Failed to register host")));
         });
 
+        // Registration runs on chiaki's thread, which takes the GIL to log: wait for it without holding it.
+        GilReleaseIfHeld release;
         regist.start(info, settings->GetLogLevelMask());
         future.get();
         return result;
@@ -263,7 +266,7 @@ private:
     // void updateDiscoveryHosts();
 
     Settings *settings = {};
-    StreamSession *session = {};
+    ChiakiPySession *session = {};
     Timer *wakeup_start_timer = {};
     DiscoveryManager discovery_manager;
     Regist regist;

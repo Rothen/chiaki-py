@@ -11,12 +11,13 @@
 #include "core/log.h"
 #include "event_source.h"
 #include "settings.h"
-#include "streamsession.h"
+#include "chiakipysession.h"
 #include "discovery_manager.h"
 #include "backend.h"
 #include "cuda_driver.h"
 #include "frame_handler.h"
 #include "vulkan_renderer.h"
+#include "pylog.h"
 // #include "core/session.h"
 // #include "core/takion.h"
 // #include "core/remote/holepunch.h"
@@ -52,13 +53,15 @@ PYBIND11_MODULE(chiaki_py, m)
 {
     m.doc() = "Low-level pybind11 bindings around Chiaki, the PS4/PS5 Remote Play client library: "
               "discover consoles (DiscoveryManager), register with one (Backend), connect and stream "
-              "one (StreamSession) and pull its decoded frames (FrameHandler and subclasses). Most "
+              "one (ChiakiPySession) and pull its decoded frames (FrameHandler and subclasses). Most "
               "users want the pythonic wrapper in the `chiaki_py` package instead of this module directly.";
 
 #ifdef _WIN32
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
+
+    init_pylog();
 
     auto m_core = m.def_submodule("core", "The core submodule.");
     // auto m_core_takion = m_core.def_submodule("takion", "The takion submodule.");
@@ -119,7 +122,7 @@ PYBIND11_MODULE(chiaki_py, m)
 
     py::enum_<ChiakiVideoResolutionPreset>(m, "VideoResolutionPreset",
         "The resolution presets Settings' get/set_resolution_local_ps4/ps5 and .../remote_ps4/ps5 "
-        "methods store; the actual pixel dimensions negotiated end up in StreamSession.get_video_profile().")
+        "methods store; the actual pixel dimensions negotiated end up in ChiakiPySession.get_video_profile().")
         .value("Resolution360p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_360p)
         .value("Resolution540p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_540p)
         .value("Resolution720p", ChiakiVideoResolutionPreset::CHIAKI_VIDEO_RESOLUTION_PRESET_720p)
@@ -132,13 +135,39 @@ PYBIND11_MODULE(chiaki_py, m)
         .value("FPS60", ChiakiVideoFPSPreset::CHIAKI_VIDEO_FPS_PRESET_60)
         .export_values();
 
+    py::enum_<ChiakiQuitReason>(m, "QuitReason",
+        "Why a ChiakiPySession ended, as passed to ChiakiPySession.on_session_quit() subscribers. "
+        "See quit_reason_is_error() and quit_reason_string().")
+        .value("None_", CHIAKI_QUIT_REASON_NONE)
+        .value("Stopped", CHIAKI_QUIT_REASON_STOPPED)
+        .value("SessionRequestUnknown", CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN)
+        .value("SessionRequestConnectionRefused", CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED)
+        .value("SessionRequestRpInUse", CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_IN_USE)
+        .value("SessionRequestRpCrash", CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_CRASH)
+        .value("SessionRequestRpVersionMismatch", CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_VERSION_MISMATCH)
+        .value("CtrlUnknown", CHIAKI_QUIT_REASON_CTRL_UNKNOWN)
+        .value("CtrlConnectFailed", CHIAKI_QUIT_REASON_CTRL_CONNECT_FAILED)
+        .value("CtrlConnectionRefused", CHIAKI_QUIT_REASON_CTRL_CONNECTION_REFUSED)
+        .value("StreamConnectionUnknown", CHIAKI_QUIT_REASON_STREAM_CONNECTION_UNKNOWN)
+        .value("StreamConnectionRemoteDisconnected", CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_DISCONNECTED)
+        .value("StreamConnectionRemoteShutdown", CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_SHUTDOWN)
+        .value("PsnRegistFailed", CHIAKI_QUIT_REASON_PSN_REGIST_FAILED);
+
+    m.def("quit_reason_is_error", [](ChiakiQuitReason reason) { return chiaki_quit_reason_is_error(reason); },
+        py::arg("reason"),
+        "True if `reason` means the session failed, False for a normal stop or console shutdown.");
+
+    m.def("quit_reason_string", [](ChiakiQuitReason reason) { return std::string(chiaki_quit_reason_string(reason)); },
+        py::arg("reason"),
+        "A human-readable description of `reason`.");
+
     py::class_<ChiakiFfmpegDecoder>(m, "FfmpegDecoder",
-        "An opaque handle to a StreamSession's FFmpeg decoder, as returned by "
-        "StreamSession.get_ffmpeg_decoder(). Not usable from Python beyond passing it back around; "
-        "StreamSession.has_hardware_decoder() and .hardware_decoder_type() are how to inspect it.");
+        "An opaque handle to a ChiakiPySession's FFmpeg decoder, as returned by "
+        "ChiakiPySession.get_ffmpeg_decoder(). Not usable from Python beyond passing it back around; "
+        "ChiakiPySession.has_hardware_decoder() and .hardware_decoder_type() are how to inspect it.");
 
     py::class_<ChiakiConnectVideoProfile>(m, "ChiakiConnectVideoProfile",
-        "The stream's negotiated video settings, as returned by StreamSession.get_video_profile().")
+        "The stream's negotiated video settings, as returned by ChiakiPySession.get_video_profile().")
         .def_readwrite("width", &ChiakiConnectVideoProfile::width)
         .def_readwrite("height", &ChiakiConnectVideoProfile::height)
         .def_readwrite("max_fps", &ChiakiConnectVideoProfile::max_fps)
@@ -165,7 +194,7 @@ PYBIND11_MODULE(chiaki_py, m)
                                "AVCUDADeviceContext*, ...) the frame lives on.");
 
     py::class_<FrameHandler>(m, "FrameHandler",
-                             "Base class of the frame handlers, which pull decoded frames out of a StreamSession "
+                             "Base class of the frame handlers, which pull decoded frames out of a ChiakiPySession "
                              "in different forms (CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler). Not "
                              "instantiable itself.")
         .def("get_frame", &FrameHandler::get_frame,
@@ -179,7 +208,7 @@ PYBIND11_MODULE(chiaki_py, m)
     py::class_<CpuFrameHandler, FrameHandler>(m, "CpuFrameHandler",
         "Decodes and converts frames to RGB entirely on the CPU. Works with any decoder, needs no "
         "hardware decoder configured, and is the default FrameHandler `chiaki_py.Session` uses.")
-        .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
+        .def(py::init<ChiakiPySession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &CpuFrameHandler::get_frame,
              py::arg("out") = py::none(),
              "Pull the next decoded video frame as a (height, width, 3) uint8 RGB array, or None if "
@@ -195,7 +224,7 @@ PYBIND11_MODULE(chiaki_py, m)
         "Converts decoded frames to RGB on the GPU with CUDA and returns them as a CuPy (or PyTorch) "
         "array, without a round trip through system memory. Requires an NVIDIA GPU and "
         "Settings.set_hardware_decoder('cuda') before connecting.")
-        .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
+        .def(py::init<ChiakiPySession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &CudaFrameHandler::get_frame,
              py::arg("out") = py::none(),
              "Pull the next decoded video frame on the GPU as a (height, width, 3) uint8 RGB CuPy array, "
@@ -220,7 +249,7 @@ PYBIND11_MODULE(chiaki_py, m)
         "Hands out frames as VulkanFrame objects that stay resident on the Vulkan device the decoder "
         "decoded them on - no conversion, no copy. Requires Settings.set_hardware_decoder('vulkan') "
         "before connecting; pair with VulkanRenderer to draw them, e.g. via chiaki_py.gui.VulkanVideoWidget.")
-        .def(py::init<StreamSession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
+        .def(py::init<ChiakiPySession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &VulkanFrameHandler::get_frame,
              py::arg("out") = py::none(),
              "Pull the next decoded video frame without leaving GPU memory. Returns a VulcanFrame, or None "
@@ -236,7 +265,7 @@ PYBIND11_MODULE(chiaki_py, m)
              "and can guarantee it won't run concurrently with the hardware decoder's own Vulkan submissions.");
 
     py::class_<Settings>(m, "Settings",
-        "In-memory connection/decoding/UI settings, passed to StreamSessionConnectInfo, Backend and "
+        "In-memory connection/decoding/UI settings, passed to ChiakiPySessionConnectInfo, Backend and "
         "DiscoveryManager. A fresh instance starts at chiaki-ng's defaults; there is no persistence "
         "here (use chiaki_py.Serializer to save/load whichever of these settings an application cares "
         "about). Most get_/set_ pairs are self-explanatory config knobs; set_hardware_decoder() and "
@@ -365,11 +394,11 @@ PYBIND11_MODULE(chiaki_py, m)
                     << ")>";
                 return repr.str(); });
 
-    py::class_<StreamSessionConnectInfo>(m, "StreamSessionConnectInfo",
-        "Everything StreamSession needs to open a connection to an already-registered console. "
-        "Built from the registration a prior Backend.register_host() produced (`host`, `nickname`, "
-        "`regist_key`, `morning` i.e. the RP key, `target`) plus `settings`; the pythonic "
-        "`chiaki_py.Session.connect()` builds one of these from a `HostRegistration` for you.")
+    py::class_<ChiakiPySessionConnectInfo>(m, "ChiakiPySessionConnectInfo",
+                                           "Everything ChiakiPySession needs to open a connection to an already-registered console. "
+                                           "Built from the registration a prior Backend.register_host() produced (`host`, `nickname`, "
+                                           "`regist_key`, `morning` i.e. the RP key, `target`) plus `settings`; the pythonic "
+                                           "`chiaki_py.Session.connect()` builds one of these from a `HostRegistration` for you.")
         .def(py::init<>())
         .def(py::init<Settings *,
                       ChiakiTarget,
@@ -388,109 +417,108 @@ PYBIND11_MODULE(chiaki_py, m)
              py::arg("duid"), py::arg("auto_regist"), py::arg("fullscreen"),
              py::arg("zoom"), py::arg("stretch"));
 
-    py::class_<StreamSession>(m, "StreamSession",
-        "A live or about-to-be-started connection to a console: start()/stop() it, feed it "
-        "controller/motion input with the press_*/release_*/set_* methods, and pull decoded video "
-        "through a FrameHandler built around it (see FrameHandler.get_frame() and the CpuFrameHandler/ "
-        "CudaFrameHandler/VulkanFrameHandler subclasses). The on_*() methods each return an event "
-        "source frames/state changes can be subscribed to. Usually built and driven indirectly, via "
-        "chiaki_py.Session, rather than used directly.")
-        .def(py::init<const StreamSessionConnectInfo &>(), py::arg("connect_info"))
-        .def("start", &StreamSession::Start, "Start the stream session.")
-        .def("stop", &StreamSession::Stop, "Stop the stream session.")
-        .def("go_to_bed", &StreamSession::GoToBed, "Go to bed.")
-        .def("set_login_pin", &StreamSession::SetLoginPIN, py::arg("pin"), "Set the login PIN.")
-        .def("go_home", &StreamSession::GoHome, "Go home.")
-        .def("get_host", &StreamSession::GetHost, "Get the host.")
-        .def("is_connected", &StreamSession::IsConnected, "Check if connected.")
-        .def("is_connecting", &StreamSession::IsConnecting, "Check if connecting.")
-        .def("get_measured_bitrate", &StreamSession::GetMeasuredBitrate, "Get the measured bitrate.")
-        .def("get_average_packet_loss", &StreamSession::GetAveragePacketLoss, "Get the average packet loss.")
-        .def("get_muted", &StreamSession::GetMuted, "Get the muted status.")
-        .def("set_audio_volume", &StreamSession::SetAudioVolume, py::arg("volume"), "Set the audio volume.")
-        .def("get_cant_display", &StreamSession::GetCantDisplay, "Get the cant display status.")
-        .def("get_ffmpeg_decoder", &StreamSession::GetFfmpegDecoder, "Get the FFmpeg decoder.", py::return_value_policy::reference)
-        .def("has_hardware_decoder", [](StreamSession &s) {
+    py::class_<ChiakiPySession>(m, "ChiakiPySession",
+                                "A live or about-to-be-started connection to a console: start()/stop() it, feed it "
+                                "controller/motion input with the press_*/release_*/set_* methods, and pull decoded video "
+                                "through a FrameHandler built around it (see FrameHandler.get_frame() and the CpuFrameHandler/ "
+                                "CudaFrameHandler/VulkanFrameHandler subclasses). The on_*() methods each return an event "
+                                "source frames/state changes can be subscribed to. Usually built and driven indirectly, via "
+                                "chiaki_py.Session, rather than used directly.")
+        .def(py::init<const ChiakiPySessionConnectInfo &>(), py::arg("connect_info"))
+        .def("start", &ChiakiPySession::Start, "Start the stream session.")
+        .def("stop", &ChiakiPySession::Stop, "Stop the stream session.")
+        .def("go_to_bed", &ChiakiPySession::GoToBed, "Go to bed.")
+        .def("set_login_pin", &ChiakiPySession::SetLoginPIN, py::arg("pin"), "Set the login PIN.")
+        .def("go_home", &ChiakiPySession::GoHome, "Go home.")
+        .def("get_host", &ChiakiPySession::GetHost, "Get the host.")
+        .def("is_connected", &ChiakiPySession::IsConnected, "Check if connected.")
+        .def("is_connecting", &ChiakiPySession::IsConnecting, "Check if connecting.")
+        .def("get_measured_bitrate", &ChiakiPySession::GetMeasuredBitrate, "Get the measured bitrate.")
+        .def("get_average_packet_loss", &ChiakiPySession::GetAveragePacketLoss, "Get the average packet loss.")
+        .def("get_muted", &ChiakiPySession::GetMuted, "Get the muted status.")
+        .def("set_audio_volume", &ChiakiPySession::SetAudioVolume, py::arg("volume"), "Set the audio volume.")
+        .def("get_cant_display", &ChiakiPySession::GetCantDisplay, "Get the cant display status.")
+        .def("get_ffmpeg_decoder", &ChiakiPySession::GetFfmpegDecoder, "Get the FFmpeg decoder.", py::return_value_policy::reference)
+        .def("has_hardware_decoder", [](ChiakiPySession &s)
+             {
             ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
-            return decoder && decoder->hw_device_ctx;
-        }, "Whether the video decoder is hardware-accelerated (i.e. get_frame_gpu() can return frames).")
-        .def("get_video_profile", &StreamSession::GetVideoProfile,
-             "The stream's video profile (width, height, max_fps, bitrate, codec): the requested one until the "
-             "console answers, then the negotiated one. Known before the first frame arrives.")
-        .def("hardware_decoder_type", [](StreamSession &s) -> std::string {
+            return decoder && decoder->hw_device_ctx; }, "Whether the video decoder is hardware-accelerated (i.e. get_frame_gpu() can return frames).")
+        .def("get_video_profile", &ChiakiPySession::GetVideoProfile, "The stream's video profile (width, height, max_fps, bitrate, codec): the requested one until the "
+                                                                     "console answers, then the negotiated one. Known before the first frame arrives.")
+        .def("hardware_decoder_type", [](ChiakiPySession &s) -> std::string
+             {
             ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
             if (!decoder || !decoder->hw_device_ctx)
                 return "";
-            return av_hwdevice_get_type_name(reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type);
-        }, "Type of hardware decoder in use ('vulkan', 'cuda', 'd3d11va', ...), or '' if decoding on the CPU.")
-        .def("on_frame_available", &StreamSession::OnFfmpegFrameAvailable, "Retrieve the FFmpeg frame available event.", py::return_value_policy::reference)
-        .def("on_session_quit", &StreamSession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
-        .def("on_login_pin_requested", &StreamSession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)
-        .def("on_data_holepunch_progress", &StreamSession::OnDataHolepunchProgress, "Retrieve the data holepunch progress event.", py::return_value_policy::reference)
-        .def("on_auto_regist_succeeded", &StreamSession::OnAutoRegistSucceeded, "Retrieve the auto-registration succeeded event.", py::return_value_policy::reference)
-        .def("on_nickname_received", &StreamSession::OnNicknameReceived, "Retrieve the nickname received event.", py::return_value_policy::reference)
-        .def("on_connected_changed", &StreamSession::OnConnectedChanged, "Retrieve the connected changed event.", py::return_value_policy::reference)
-        .def("on_measured_bitrate_changed", &StreamSession::OnMeasuredBitrateChanged, "Retrieve the measured bitrate changed event.", py::return_value_policy::reference)
-        .def("on_average_packet_loss_changed", &StreamSession::OnAveragePacketLossChanged, "Retrieve the average packet loss changed event.", py::return_value_policy::reference)
-        .def("on_cant_display_changed", &StreamSession::OnCantDisplayChanged, "Retrieve the cant display changed event.", py::return_value_policy::reference)
-        .def("press_cross", &StreamSession::pressCross, "Press the cross button.")
-        .def("release_cross", &StreamSession::releaseCross, "Release the cross button.")
-        .def("press_circle", &StreamSession::pressCircle, "Press the circle button.")
-        .def("release_circle", &StreamSession::releaseCircle, "Release the circle button.")
-        .def("press_square", &StreamSession::pressSquare, "Press the square button.")
-        .def("release_square", &StreamSession::releaseSquare, "Release the square button.")
-        .def("press_triangle", &StreamSession::pressTriangle, "Press the triangle button.")
-        .def("release_triangle", &StreamSession::releaseTriangle, "Release the triangle button.")
-        .def("press_left", &StreamSession::pressLeft, "Press the left button.")
-        .def("release_left", &StreamSession::releaseLeft, "Release the left button.")
-        .def("press_right", &StreamSession::pressRight, "Press the right button.")
-        .def("release_right", &StreamSession::releaseRight, "Release the right button.")
-        .def("press_up", &StreamSession::pressUp, "Press the up button.")
-        .def("release_up", &StreamSession::releaseUp, "Release the up button.")
-        .def("press_down", &StreamSession::pressDown, "Press the down button.")
-        .def("release_down", &StreamSession::releaseDown, "Release the down button.")
-        .def("press_l1", &StreamSession::pressL1, "Press the L1 button.")
-        .def("release_l1", &StreamSession::releaseL1, "Release the L1 button.")
-        .def("press_r1", &StreamSession::pressR1, "Press the R1 button.")
-        .def("release_r1", &StreamSession::releaseR1, "Release the R1 button.")
-        .def("press_l3", &StreamSession::pressL3, "Press the L3 button.")
-        .def("release_l3", &StreamSession::releaseL3, "Release the L3 button.")
-        .def("press_r3", &StreamSession::pressR3, "Press the R3 button.")
-        .def("release_r3", &StreamSession::releaseR3, "Release the R3 button.")
-        .def("press_options", &StreamSession::pressOptions, "Press the options button.")
-        .def("release_options", &StreamSession::releaseOptions, "Release the options button.")
-        .def("press_create", &StreamSession::pressCreate, "Press the create button.")
-        .def("release_create", &StreamSession::releaseCreate, "Release the create button.")
-        .def("press_touchpad", &StreamSession::pressTouchpad, "Press the touchpad button.")
-        .def("release_touchpad", &StreamSession::releaseTouchpad, "Release the touchpad button.")
-        .def("press_ps", &StreamSession::pressPS, "Press the PS button.")
-        .def("release_ps", &StreamSession::releasePS, "Release the PS button.")
-        .def("set_l2", &StreamSession::setL2, py::arg("state"), "Set the L2 trigger state [0, 255].")
-        .def("set_r2", &StreamSession::setR2, py::arg("state"), "Set the R2 trigger state [0, 255].")
-        .def("set_left_x", &StreamSession::setLeftX, py::arg("x"), "Set the left analog's stick x value [0, 1023].")
-        .def("set_left_y", &StreamSession::setLeftY, py::arg("y"), "Set the left analog's stick y value [0, 1023].")
-        .def("set_left", &StreamSession::setLeft, py::arg("x"), py::arg("y"), "Set the left analog's stick x and y value [0, 1023].")
-        .def("set_right_x", &StreamSession::setRightX, py::arg("x"), "Set the right analog's stick x value [0, 1023].")
-        .def("set_right_y", &StreamSession::setRightY, py::arg("y"), "Set the right analog's stick y value [0, 1023].")
-        .def("set_right", &StreamSession::setRight, py::arg("x"), py::arg("y"), "Set the right analog's stick x and y value [0, 1023].")
+            return av_hwdevice_get_type_name(reinterpret_cast<AVHWDeviceContext *>(decoder->hw_device_ctx->data)->type); }, "Type of hardware decoder in use ('vulkan', 'cuda', 'd3d11va', ...), or '' if decoding on the CPU.")
+        .def("on_frame_available", &ChiakiPySession::OnFfmpegFrameAvailable, "Retrieve the FFmpeg frame available event.", py::return_value_policy::reference)
+        .def("on_session_quit", &ChiakiPySession::OnSessionQuit, "Retrieve the session quit event.", py::return_value_policy::reference)
+        .def("on_login_pin_requested", &ChiakiPySession::OnLoginPINRequested, "Retrieve the login PIN requested event.", py::return_value_policy::reference)
+        .def("on_data_holepunch_progress", &ChiakiPySession::OnDataHolepunchProgress, "Retrieve the data holepunch progress event.", py::return_value_policy::reference)
+        .def("on_auto_regist_succeeded", &ChiakiPySession::OnAutoRegistSucceeded, "Retrieve the auto-registration succeeded event.", py::return_value_policy::reference)
+        .def("on_nickname_received", &ChiakiPySession::OnNicknameReceived, "Retrieve the nickname received event.", py::return_value_policy::reference)
+        .def("on_connected_changed", &ChiakiPySession::OnConnectedChanged, "Retrieve the connected changed event.", py::return_value_policy::reference)
+        .def("on_measured_bitrate_changed", &ChiakiPySession::OnMeasuredBitrateChanged, "Retrieve the measured bitrate changed event.", py::return_value_policy::reference)
+        .def("on_average_packet_loss_changed", &ChiakiPySession::OnAveragePacketLossChanged, "Retrieve the average packet loss changed event.", py::return_value_policy::reference)
+        .def("on_cant_display_changed", &ChiakiPySession::OnCantDisplayChanged, "Retrieve the cant display changed event.", py::return_value_policy::reference)
+        .def("press_cross", &ChiakiPySession::pressCross, "Press the cross button.")
+        .def("release_cross", &ChiakiPySession::releaseCross, "Release the cross button.")
+        .def("press_circle", &ChiakiPySession::pressCircle, "Press the circle button.")
+        .def("release_circle", &ChiakiPySession::releaseCircle, "Release the circle button.")
+        .def("press_square", &ChiakiPySession::pressSquare, "Press the square button.")
+        .def("release_square", &ChiakiPySession::releaseSquare, "Release the square button.")
+        .def("press_triangle", &ChiakiPySession::pressTriangle, "Press the triangle button.")
+        .def("release_triangle", &ChiakiPySession::releaseTriangle, "Release the triangle button.")
+        .def("press_left", &ChiakiPySession::pressLeft, "Press the left button.")
+        .def("release_left", &ChiakiPySession::releaseLeft, "Release the left button.")
+        .def("press_right", &ChiakiPySession::pressRight, "Press the right button.")
+        .def("release_right", &ChiakiPySession::releaseRight, "Release the right button.")
+        .def("press_up", &ChiakiPySession::pressUp, "Press the up button.")
+        .def("release_up", &ChiakiPySession::releaseUp, "Release the up button.")
+        .def("press_down", &ChiakiPySession::pressDown, "Press the down button.")
+        .def("release_down", &ChiakiPySession::releaseDown, "Release the down button.")
+        .def("press_l1", &ChiakiPySession::pressL1, "Press the L1 button.")
+        .def("release_l1", &ChiakiPySession::releaseL1, "Release the L1 button.")
+        .def("press_r1", &ChiakiPySession::pressR1, "Press the R1 button.")
+        .def("release_r1", &ChiakiPySession::releaseR1, "Release the R1 button.")
+        .def("press_l3", &ChiakiPySession::pressL3, "Press the L3 button.")
+        .def("release_l3", &ChiakiPySession::releaseL3, "Release the L3 button.")
+        .def("press_r3", &ChiakiPySession::pressR3, "Press the R3 button.")
+        .def("release_r3", &ChiakiPySession::releaseR3, "Release the R3 button.")
+        .def("press_options", &ChiakiPySession::pressOptions, "Press the options button.")
+        .def("release_options", &ChiakiPySession::releaseOptions, "Release the options button.")
+        .def("press_create", &ChiakiPySession::pressCreate, "Press the create button.")
+        .def("release_create", &ChiakiPySession::releaseCreate, "Release the create button.")
+        .def("press_touchpad", &ChiakiPySession::pressTouchpad, "Press the touchpad button.")
+        .def("release_touchpad", &ChiakiPySession::releaseTouchpad, "Release the touchpad button.")
+        .def("press_ps", &ChiakiPySession::pressPS, "Press the PS button.")
+        .def("release_ps", &ChiakiPySession::releasePS, "Release the PS button.")
+        .def("set_l2", &ChiakiPySession::setL2, py::arg("state"), "Set the L2 trigger state [0, 255].")
+        .def("set_r2", &ChiakiPySession::setR2, py::arg("state"), "Set the R2 trigger state [0, 255].")
+        .def("set_left_x", &ChiakiPySession::setLeftX, py::arg("x"), "Set the left analog's stick x value [0, 1023].")
+        .def("set_left_y", &ChiakiPySession::setLeftY, py::arg("y"), "Set the left analog's stick y value [0, 1023].")
+        .def("set_left", &ChiakiPySession::setLeft, py::arg("x"), py::arg("y"), "Set the left analog's stick x and y value [0, 1023].")
+        .def("set_right_x", &ChiakiPySession::setRightX, py::arg("x"), "Set the right analog's stick x value [0, 1023].")
+        .def("set_right_y", &ChiakiPySession::setRightY, py::arg("y"), "Set the right analog's stick y value [0, 1023].")
+        .def("set_right", &ChiakiPySession::setRight, py::arg("x"), py::arg("y"), "Set the right analog's stick x and y value [0, 1023].")
 
-        .def("set_accelerometer_x", &StreamSession::setAccelerometerX, py::arg("x"), "Set the accelerometer x value [0, 1023].")
-        .def("set_accelerometer_y", &StreamSession::setAccelerometerY, py::arg("y"), "Set the accelerometer y value [0, 1023].")
-        .def("set_accelerometer_z", &StreamSession::setAccelerometerZ, py::arg("z"), "Set the accelerometer z value [0, 1023].")
-        .def("set_accelerometer", &StreamSession::setAccelerometer, py::arg("x"), py::arg("y"), py::arg("z"), "Set the accelerometer x, y and z value [0, 1023].")
+        .def("set_accelerometer_x", &ChiakiPySession::setAccelerometerX, py::arg("x"), "Set the accelerometer x value [0, 1023].")
+        .def("set_accelerometer_y", &ChiakiPySession::setAccelerometerY, py::arg("y"), "Set the accelerometer y value [0, 1023].")
+        .def("set_accelerometer_z", &ChiakiPySession::setAccelerometerZ, py::arg("z"), "Set the accelerometer z value [0, 1023].")
+        .def("set_accelerometer", &ChiakiPySession::setAccelerometer, py::arg("x"), py::arg("y"), py::arg("z"), "Set the accelerometer x, y and z value [0, 1023].")
 
-        .def("set_gyroscope_x", &StreamSession::setGyroscopeX, py::arg("x"), "Set the gyroscope x value [0, 1023].")
-        .def("set_gyroscope_y", &StreamSession::setGyroscopeY, py::arg("y"), "Set the gyroscope y value [0, 1023].")
-        .def("set_gyroscope_z", &StreamSession::setGyroscopeZ, py::arg("z"), "Set the gyroscope z value [0, 1023].")
-        .def("set_gyroscope", &StreamSession::setGyroscope, py::arg("x"), py::arg("y"), py::arg("z"), "Set the gyroscope x, y and z value [0, 1023].")
+        .def("set_gyroscope_x", &ChiakiPySession::setGyroscopeX, py::arg("x"), "Set the gyroscope x value [0, 1023].")
+        .def("set_gyroscope_y", &ChiakiPySession::setGyroscopeY, py::arg("y"), "Set the gyroscope y value [0, 1023].")
+        .def("set_gyroscope_z", &ChiakiPySession::setGyroscopeZ, py::arg("z"), "Set the gyroscope z value [0, 1023].")
+        .def("set_gyroscope", &ChiakiPySession::setGyroscope, py::arg("x"), py::arg("y"), py::arg("z"), "Set the gyroscope x, y and z value [0, 1023].")
 
-        .def("set_orientation_x", &StreamSession::setOrientationX, py::arg("x"), "Set the orientation x value [0, 1023].")
-        .def("set_orientation_y", &StreamSession::setOrientationY, py::arg("y"), "Set the orientation y value [0, 1023].")
-        .def("set_orientation_z", &StreamSession::setOrientationZ, py::arg("z"), "Set the orientation z value [0, 1023].")
-        .def("set_orientation_w", &StreamSession::setOrientationW, py::arg("w"), "Set the orientation w value [0, 1023].")
-        .def("set_orientation", &StreamSession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation x, y, z and w value [0, 1023].")
+        .def("set_orientation_x", &ChiakiPySession::setOrientationX, py::arg("x"), "Set the orientation x value [0, 1023].")
+        .def("set_orientation_y", &ChiakiPySession::setOrientationY, py::arg("y"), "Set the orientation y value [0, 1023].")
+        .def("set_orientation_z", &ChiakiPySession::setOrientationZ, py::arg("z"), "Set the orientation z value [0, 1023].")
+        .def("set_orientation_w", &ChiakiPySession::setOrientationW, py::arg("w"), "Set the orientation w value [0, 1023].")
+        .def("set_orientation", &ChiakiPySession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation x, y, z and w value [0, 1023].")
 
-        .def("send_feedback_state", &StreamSession::SendFeedbackState, "Send the feedback state.");
+        .def("send_feedback_state", &ChiakiPySession::SendFeedbackState, "Send the feedback state.");
 
     py::reinterpret_borrow<py::class_<VulkanFrame>>(m.attr("VulkanFrame"))
         .def_static("upload_nv12", &VulkanFrame::upload_nv12, py::arg("stream_session"), py::arg("nv12"),
@@ -512,7 +540,7 @@ PYBIND11_MODULE(chiaki_py, m)
                                "HDR), scales them and presents them on the same Vulkan device the decoder decodes "
                                "on. Windows only so far. Call from one thread (the GUI thread), and close() before "
                                "the window is destroyed.")
-        .def(py::init<StreamSession &, uintptr_t>(), py::arg("stream_session"), py::arg("window"), py::keep_alive<1, 2>(),
+        .def(py::init<ChiakiPySession &, uintptr_t>(), py::arg("stream_session"), py::arg("window"), py::keep_alive<1, 2>(),
              "Draw into the native window `window` (an HWND). The session must use the Vulkan hardware decoder "
              "(Settings.set_hardware_decoder(\"vulkan\")); raises RuntimeError otherwise, or if the window can't be drawn into.")
         .def("render", &VulkanRenderer::render, py::arg("frame"), py::call_guard<py::gil_scoped_release>(),

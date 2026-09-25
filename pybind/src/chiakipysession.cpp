@@ -1,9 +1,10 @@
 #include "../../lib/src/utils.h"
 #include "utils.h"
-#include "streamsession.h"
+#include "chiakipysession.h"
 #include "cuda_driver.h"
 #include "settings.h"
 #include "controllermanager.h"
+#include "pylog.h"
 
 #include <ios>
 #include <cstring>
@@ -84,7 +85,7 @@ extern "C"
     return false;
 }
 
-StreamSessionConnectInfo::StreamSessionConnectInfo(
+ChiakiPySessionConnectInfo::ChiakiPySessionConnectInfo(
     Settings *settings,
     ChiakiTarget target,
     std::string host,
@@ -164,7 +165,7 @@ static void CantDisplayCb(void *user, bool cant_display);
 static void EventCb(ChiakiEvent *event, void *user);
 static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user);
 
-StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
+ChiakiPySession::ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info)
     : log(this, connect_info.log_level_mask, connect_info.log_file),
       session_started(false),
       ffmpeg_decoder(nullptr),
@@ -296,7 +297,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
     dpad_touch_value = std::tuple<uint16_t, uint16_t>(0, 0);
     dpad_touch_increment = connect_info.dpad_touch_increment;
     /*dpad_touch_timer = new QTimer(this);
-    connect(dpad_touch_timer, &QTimer::timeout, this, &StreamSession::DpadSendFeedbackState);
+    connect(dpad_touch_timer, &QTimer::timeout, this, &ChiakiPySession::DpadSendFeedbackState);
     dpad_touch_timer->setInterval(DPAD_TOUCH_UPDATE_INTERVAL_MS);
     dpad_touch_stop_timer = new QTimer(this);
     dpad_touch_stop_timer->setSingleShot(true);
@@ -373,8 +374,11 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info)
     });
 }
 
-StreamSession::~StreamSession()
+ChiakiPySession::~ChiakiPySession()
 {
+    // Usually run by Python's garbage collector, with the GIL held. The threads joined below take it to
+    // log and to emit events, so they could never finish while it is held.
+    GilReleaseIfHeld release;
     // The timer's thread reads packet_loss_history and the session below; it used to be a leaked
     // `new Timer()` that was never stopped, so it kept running (and writing) after this object was gone.
     packet_loss_timer.stop();
@@ -414,40 +418,46 @@ StreamSession::~StreamSession()
     }
 }
 
-void StreamSession::Start()
+void ChiakiPySession::Start()
 {
+    GilReleaseIfHeld release;
     if (!connect_timer.isValid())
         connect_timer.start();
     ChiakiErrorCode err = chiaki_session_start(&session);
     if (err != CHIAKI_ERR_SUCCESS)
     {
-        session_started = true;
+        session_started = false;
         throw ChiakiException("Chiaki Session Start failed");
     }
+    session_started = true;
 }
 
-void StreamSession::Stop()
+void ChiakiPySession::Stop()
 {
+    GilReleaseIfHeld release;
     chiaki_session_stop(&session);
 }
 
-void StreamSession::GoToBed()
+void ChiakiPySession::GoToBed()
 {
+    GilReleaseIfHeld release;
     chiaki_session_goto_bed(&session);
 }
 
-void StreamSession::SetLoginPIN(const std::string &pin)
+void ChiakiPySession::SetLoginPIN(const std::string &pin)
 {
+    GilReleaseIfHeld release;
     std::vector<uint8_t> data(pin.begin(), pin.end());
     chiaki_session_set_login_pin(&session, (const uint8_t *)data.data(), data.size());
 }
 
-void StreamSession::GoHome()
+void ChiakiPySession::GoHome()
 {
+    GilReleaseIfHeld release;
     chiaki_session_go_home(&session);
 }
 
-void StreamSession::Event(ChiakiEvent *event)
+void ChiakiPySession::Event(ChiakiEvent *event)
 {
     switch (event->type)
     {
@@ -457,11 +467,8 @@ void StreamSession::Event(ChiakiEvent *event)
         ConnectedChanged.next(connected);
         break;
     case CHIAKI_EVENT_QUIT:
-        if (!connected && !holepunch_session && chiaki_quit_reason_is_error(event->quit.reason) && connect_timer.elapsed() < SESSION_RETRY_SECONDS * 1000)
-        {
-            Timer::singleShot(1000, [this]() { this->Start(); });
-            return;
-        }
+        // This attempt is over; a retry from the Python side restarts the timer in Start().
+        connect_timer.invalidate();
         connected = false;
         ConnectedChanged.next(connected);
         // SessionQuit.next(event->quit.reason, event->quit.reason_str ? std::string(event->quit.reason_str) : std::string());
@@ -514,13 +521,13 @@ void StreamSession::Event(ChiakiEvent *event)
     }
 }
 
-void StreamSession::CantDisplayMessage(bool cant_display)
+void ChiakiPySession::CantDisplayMessage(bool cant_display)
 {
     this->cant_display = cant_display;
     CantDisplayChanged.next(cant_display);
 }
 
-ChiakiErrorCode StreamSession::InitiatePsnConnection(std::string psn_token)
+ChiakiErrorCode ChiakiPySession::InitiatePsnConnection(std::string psn_token)
 {
     ChiakiLog *log = GetChiakiLog();
     holepunch_session = chiaki_holepunch_session_init(psn_token.data(), log);
@@ -532,7 +539,7 @@ ChiakiErrorCode StreamSession::InitiatePsnConnection(std::string psn_token)
     return CHIAKI_ERR_SUCCESS;
 }
 
-ChiakiErrorCode StreamSession::ConnectPsnConnection(std::string duid, bool ps5)
+ChiakiErrorCode ChiakiPySession::ConnectPsnConnection(std::string duid, bool ps5)
 {
     ChiakiLog *log = GetChiakiLog();
     if (ps5)
@@ -587,12 +594,12 @@ ChiakiErrorCode StreamSession::ConnectPsnConnection(std::string duid, bool ps5)
     return err;
 }
 
-void StreamSession::CancelPsnConnection(bool stop_thread)
+void ChiakiPySession::CancelPsnConnection(bool stop_thread)
 {
     chiaki_holepunch_main_thread_cancel(holepunch_session, stop_thread);
 }
 
-void StreamSession::TriggerFfmpegFrameAvailable()
+void ChiakiPySession::TriggerFfmpegFrameAvailable()
 {
     FfmpegFrameAvailable.next(true);
     if (measured_bitrate != session.stream_connection.measured_bitrate)
@@ -602,58 +609,58 @@ void StreamSession::TriggerFfmpegFrameAvailable()
     }
 }
 
-class StreamSessionPrivate
+class ChiakiPySessionPrivate
 {
 public:
-    static void InitAudio(StreamSession *session, uint32_t channels, uint32_t rate)
+    static void InitAudio(ChiakiPySession *session, uint32_t channels, uint32_t rate)
     {
         // QMetaObject::invokeMethod(session, "InitAudio", Qt::ConnectionType::BlockingQueuedConnection, Q_ARG(unsigned int, channels), Q_ARG(unsigned int, rate));
     }
 
-    static void InitMic(StreamSession *session, uint32_t channels, uint32_t rate)
+    static void InitMic(ChiakiPySession *session, uint32_t channels, uint32_t rate)
     {
         // QMetaObject::invokeMethod(session, "InitMic", Qt::ConnectionType::QueuedConnection, Q_ARG(unsigned int, channels), Q_ARG(unsigned int, rate));
     }
 
-    static void PushAudioFrame(StreamSession *session, int16_t *buf, size_t samples_count) { /*session->PushAudioFrame(buf, samples_count);*/ }
-    static void PushHapticsFrame(StreamSession *session, uint8_t *buf, size_t buf_size) { /*session->PushHapticsFrame(buf, buf_size);*/ }
-    static void CantDisplayMessage(StreamSession *session, bool cant_display) { session->CantDisplayMessage(cant_display); }
-    static void Event(StreamSession *session, ChiakiEvent *event) { session->Event(event); }
-    static void TriggerFfmpegFrameAvailable(StreamSession *session) { session->TriggerFfmpegFrameAvailable(); }
+    static void PushAudioFrame(ChiakiPySession *session, int16_t *buf, size_t samples_count) { /*session->PushAudioFrame(buf, samples_count);*/ }
+    static void PushHapticsFrame(ChiakiPySession *session, uint8_t *buf, size_t buf_size) { /*session->PushHapticsFrame(buf, buf_size);*/ }
+    static void CantDisplayMessage(ChiakiPySession *session, bool cant_display) { session->CantDisplayMessage(cant_display); }
+    static void Event(ChiakiPySession *session, ChiakiEvent *event) { session->Event(event); }
+    static void TriggerFfmpegFrameAvailable(ChiakiPySession *session) { session->TriggerFfmpegFrameAvailable(); }
 };
 
 static void AudioSettingsCb(uint32_t channels, uint32_t rate, void *user)
 {
-    auto session = reinterpret_cast<StreamSession *>(user);
-    StreamSessionPrivate::InitAudio(session, channels, rate);
+    auto session = reinterpret_cast<ChiakiPySession *>(user);
+    ChiakiPySessionPrivate::InitAudio(session, channels, rate);
 }
 
 static void AudioFrameCb(int16_t *buf, size_t samples_count, void *user)
 {
-    auto session = reinterpret_cast<StreamSession *>(user);
-    StreamSessionPrivate::PushAudioFrame(session, buf, samples_count);
+    auto session = reinterpret_cast<ChiakiPySession *>(user);
+    ChiakiPySessionPrivate::PushAudioFrame(session, buf, samples_count);
 }
 
 static void HapticsFrameCb(uint8_t *buf, size_t buf_size, void *user)
 {
-    auto session = reinterpret_cast<StreamSession *>(user);
-    StreamSessionPrivate::PushHapticsFrame(session, buf, buf_size);
+    auto session = reinterpret_cast<ChiakiPySession *>(user);
+    ChiakiPySessionPrivate::PushHapticsFrame(session, buf, buf_size);
 }
 
 static void CantDisplayCb(void *user, bool cant_display)
 {
-    auto session = reinterpret_cast<StreamSession *>(user);
-    StreamSessionPrivate::CantDisplayMessage(session, cant_display);
+    auto session = reinterpret_cast<ChiakiPySession *>(user);
+    ChiakiPySessionPrivate::CantDisplayMessage(session, cant_display);
 }
 
 static void EventCb(ChiakiEvent *event, void *user)
 {
-    auto session = reinterpret_cast<StreamSession *>(user);
-    StreamSessionPrivate::Event(session, event);
+    auto session = reinterpret_cast<ChiakiPySession *>(user);
+    ChiakiPySessionPrivate::Event(session, event);
 }
 
 static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user)
 {
-    auto session = reinterpret_cast<StreamSession *>(user);
-    StreamSessionPrivate::TriggerFfmpegFrameAvailable(session);
+    auto session = reinterpret_cast<ChiakiPySession *>(user);
+    ChiakiPySessionPrivate::TriggerFfmpegFrameAvailable(session);
 }

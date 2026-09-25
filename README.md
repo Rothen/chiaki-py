@@ -42,6 +42,33 @@ with Session.connect(settings, registration, CudaFrameHandler) as session:
         ...  # frame is a (H, W, 3) uint8 CuPy array on the GPU
 ```
 
+## Logging
+
+chiaki-py logs through Python's standard `logging` module, including the messages of the C libraries underneath it:
+
+| Logger | What it logs |
+| --- | --- |
+| `chiaki_py.lib` | chiaki-ng: connecting, streaming, pairing and discovery |
+| `chiaki_py.lib.placebo` | libplacebo, which draws `VulkanFrameHandler` frames (Windows) |
+| `chiaki_py.*` | chiaki-py's own Python code |
+
+Like any library, chiaki-py prints nothing until your program configures logging. To see what it is doing:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("chiaki_py.lib.placebo").setLevel(logging.WARNING)  # loggers can be tuned one by one
+```
+
+chiaki-ng's `VERBOSE` and `DEBUG` levels and libplacebo's `TRACE` all arrive as `DEBUG`.
+
+These settings drop messages before they reach Python, which is cheaper than filtering them there. The stream sends many messages per second at the lowest levels, so use these rather than a logger level to silence them:
+
+- `settings.set_log_level(LogLevel.WARNING)` sets the least severe chiaki-ng message that is still passed on (`LogLevel` is in `chiaki_py.lib`). The default, `LogLevel.DEBUG`, passes on everything.
+- `settings.set_log_verbose(True)` additionally passes on chiaki-ng's `VERBOSE` messages, which are off by default.
+- For libplacebo, the `CHIAKI_PY_PLACEBO_LOG` environment variable does the same: `error`, `warning` (the default), `info`, `debug`, `trace` or `none`.
+
 ## Examples
 
 Run these from the root of a clone of the repo, e.g. `python examples/1.2_discover_hosts.py`. The scripts share a `./cache` directory (relative to where you run them) for the PSN account and console registration, so run them from the same place every time. The `1.x` scripts are the step-by-step path; `2_...` does the same in one script.

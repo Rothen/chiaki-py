@@ -3,10 +3,10 @@ from dualsense_py.utils import get_available_controllers
 from dualsense_py import DualSenseController
 
 from chiaki_py.controller import attach_controller, ControllerSubscriptions
-from chiaki_py.lib import StreamSession
+from chiaki_py.lib import ChiakiPySession
 
 
-def setup_controller(stream_session: StreamSession) -> tuple[DualSenseController | None, ControllerSubscriptions | None]:
+def setup_controller(stream_session: ChiakiPySession) -> tuple[DualSenseController | None, ControllerSubscriptions | None]:
     SDL3Backend.init()
     controllers = get_available_controllers()
     if not controllers:

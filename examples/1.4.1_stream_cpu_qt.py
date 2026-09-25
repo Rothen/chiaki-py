@@ -10,6 +10,7 @@ window to show the frame rate.
 
 import sys
 from pathlib import Path
+import logging
 
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.gui import StreamDisplay
@@ -17,6 +18,9 @@ from chiaki_py.lib import Settings, LogLevel
 from chiaki_py.controller import detach_controller
 
 from helpers import setup_controller
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("chiaki_py.lib").setLevel(logging.WARNING)  # or quiet one logger again
 
 
 def main() -> None:
@@ -41,15 +45,18 @@ def main() -> None:
     session.stream_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
     session.stream_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
     
-    with session:
-        controller, subscriptions = setup_controller(session.stream_session)
+    try:
+        with session:
+            controller, subscriptions = setup_controller(session.stream_session)
 
-        res = StreamDisplay.start(session, sys.argv)
+            res = StreamDisplay.start(session, sys.argv)
 
-        if controller is not None and subscriptions is not None:
-            detach_controller(controller, session.stream_session, subscriptions)
-            
-        sys.exit(res)
+            if controller is not None and subscriptions is not None:
+                detach_controller(controller, session.stream_session, subscriptions)
+                
+            sys.exit(res)
+    except Exception as e:
+        print(e)
         
 
 

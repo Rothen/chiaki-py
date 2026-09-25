@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
 #include "sessionlog.h"
+#include "pylog.h"
 
 #include <chiaki/log.h>
 // #include <boost/filesystem.hpp>
 
 static void LogCb(ChiakiLogLevel level, const char *msg, void *user);
 
-SessionLog::SessionLog(StreamSession *session, uint32_t level_mask, const std::string &filename)
+SessionLog::SessionLog(ChiakiPySession *session, uint32_t level_mask, const std::string &filename)
 	// : session(session)
 {
     chiaki_log_init(&log, level_mask, LogCb, this);
@@ -39,7 +40,7 @@ SessionLog::~SessionLog()
 
 void SessionLog::Log(ChiakiLogLevel level, const char *msg)
 {
-	chiaki_log_cb_print(level, msg, nullptr);
+	chiaki_log_cb_python(level, msg, nullptr);
 
     /*if (file->is_open())
     {

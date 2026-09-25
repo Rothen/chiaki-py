@@ -12,21 +12,21 @@
 #include <algorithm>
 #include <chiaki/log.h>
 
-class StreamSession;
+class ChiakiPySession;
 
 class SessionLog
 {
     friend class SessionLogPrivate;
 
     private:
-        // StreamSession *session;
+        // ChiakiPySession *session;
         ChiakiLog log;
         // std::ofstream *file;
 
         void Log(ChiakiLogLevel level, const char *msg);
 
     public:
-        SessionLog(StreamSession *session, uint32_t level_mask, const std::string &filename);
+        SessionLog(ChiakiPySession *session, uint32_t level_mask, const std::string &filename);
         ~SessionLog();
 
         ChiakiLog *GetChiakiLog() { return &log; }

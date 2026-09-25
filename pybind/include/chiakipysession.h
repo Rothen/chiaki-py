@@ -20,6 +20,7 @@
 #include "settings.h"
 #include "elapsed_timer.h"
 #include "event_source.h"
+#include "pylog.h"
 
 #include <chiaki/session.h>
 #include <chiaki/opusdecoder.h>
@@ -44,7 +45,7 @@ class ChiakiException: public Exception
 		explicit ChiakiException(const std::string &msg) : Exception(msg) {};
 };
 
-struct StreamSessionConnectInfo
+struct ChiakiPySessionConnectInfo
 {
 	Settings *settings;
 	std::map<int, int> key_map;
@@ -85,8 +86,8 @@ struct StreamSessionConnectInfo
 	unsigned int dpad_touch_shortcut3;
 	unsigned int dpad_touch_shortcut4;
 
-	StreamSessionConnectInfo() {}
-    StreamSessionConnectInfo(
+	ChiakiPySessionConnectInfo() {}
+    ChiakiPySessionConnectInfo(
         Settings *settings,
         ChiakiTarget target,
         std::string host,
@@ -101,9 +102,9 @@ struct StreamSessionConnectInfo
         bool stretch);
 };
 
-class StreamSession
+class ChiakiPySession
 {
-	friend class StreamSessionPrivate;
+	friend class ChiakiPySessionPrivate;
 
 	private:
         std::string host;
@@ -196,8 +197,8 @@ class StreamSession
         EventSource<bool> CantDisplayChanged;
 
     public:
-		explicit StreamSession(const StreamSessionConnectInfo &connect_info);
-		~StreamSession();
+		explicit ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info);
+		~ChiakiPySession();
 
 		bool IsConnected()	{ return connected; }
 		bool IsConnecting()	{ return connect_timer.isValid(); }
@@ -322,6 +323,7 @@ class StreamSession
 
         void SendFeedbackState()
         {
+            GilReleaseIfHeld release; // chiaki takes locks its threads may hold while waiting for the GIL to log
             ChiakiControllerState state;
             chiaki_controller_state_set_idle(&state);
 

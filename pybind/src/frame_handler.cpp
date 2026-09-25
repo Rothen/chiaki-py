@@ -11,7 +11,7 @@ namespace
 // the frames context, which the caller must av_buffer_unref() once the transfer is done (the frame
 // holds its own reference, so the context itself isn't needed past that point). Throws if the session
 // isn't using the Vulkan hardware decoder.
-AVFrame *alloc_vulkan_nv12_frame(StreamSession &session, int width, int height, AVBufferRef *&frames_ref)
+AVFrame *alloc_vulkan_nv12_frame(ChiakiPySession &session, int width, int height, AVBufferRef *&frames_ref)
 {
     ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
     if (!decoder || !decoder->hw_device_ctx ||
@@ -101,7 +101,7 @@ std::vector<int> VulkanFrame::linesize() const
 
 uintptr_t VulkanFrame::device_hwctx() const { return reinterpret_cast<uintptr_t>(frames_ctx()->device_ctx->hwctx); }
 
-std::unique_ptr<VulkanFrame> VulkanFrame::upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
+std::unique_ptr<VulkanFrame> VulkanFrame::upload_nv12(ChiakiPySession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
                                                 std::optional<int> visible_width, std::optional<int> visible_height)
 {
     if (nv12.ndim() != 2 || nv12.shape(0) % 3 != 0 || nv12.shape(0) / 3 * 2 % 2 != 0 || nv12.shape(1) % 2 != 0)
@@ -149,7 +149,7 @@ std::unique_ptr<VulkanFrame> VulkanFrame::upload_nv12(StreamSession &session, co
     return std::make_unique<VulkanFrame>(hw, 0.0, 0.0);
 }
 
-std::unique_ptr<VulkanFrame> VulkanFrame::black(StreamSession &session, int width, int height)
+std::unique_ptr<VulkanFrame> VulkanFrame::black(ChiakiPySession &session, int width, int height)
 {
     if (width < 1 || height < 1)
         throw py::value_error("width and height must be positive");
@@ -311,7 +311,7 @@ void CudaArrayDestination::check_fits(const CudaFrameLayout &layout) const
     }
 }
 
-FrameHandler::FrameHandler(StreamSession *streamSession) : streamSession(streamSession) {}
+FrameHandler::FrameHandler(ChiakiPySession *streamSession) : streamSession(streamSession) {}
 
 py::object FrameHandler::empty_frame(int width, int height)
 {

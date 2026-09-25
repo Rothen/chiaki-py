@@ -18,7 +18,7 @@ struct VulkanRenderer::Impl
 {
 };
 
-VulkanRenderer::VulkanRenderer(StreamSession &, uintptr_t)
+VulkanRenderer::VulkanRenderer(ChiakiPySession &, uintptr_t)
 {
     throw std::runtime_error("Rendering with Vulkan is only supported on Windows so far");
 }
@@ -78,14 +78,14 @@ struct VulkanRenderer::Impl
         }
     }
 
-    void init(StreamSession &session, uintptr_t native_window);
+    void init(ChiakiPySession &session, uintptr_t native_window);
     void render(const VulkanFrame &frame);
     void set_overlay(const uint8_t *rgba, int width, int height, int margin);
     void clear_overlay();
     void close();
 };
 
-void VulkanRenderer::Impl::init(StreamSession &session, uintptr_t native_window)
+void VulkanRenderer::Impl::init(ChiakiPySession &session, uintptr_t native_window)
 {
     ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
     if (!decoder || !decoder->hw_device_ctx)
@@ -284,7 +284,7 @@ void VulkanRenderer::Impl::close()
     av_buffer_unref(&device_ref); // the device stays alive for as long as the decoder has it
 }
 
-VulkanRenderer::VulkanRenderer(StreamSession &session, uintptr_t window) : impl(std::make_unique<Impl>())
+VulkanRenderer::VulkanRenderer(ChiakiPySession &session, uintptr_t window) : impl(std::make_unique<Impl>())
 {
     if (!is_supported())
         throw std::runtime_error("Rendering with Vulkan is only supported on Windows so far");

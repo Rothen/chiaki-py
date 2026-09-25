@@ -1,12 +1,16 @@
 """Python bindings and a high-level API for Chiaki's PS4/PS5 Remote Play protocol: discover
 consoles on the network, register with one, and stream its video/audio/input as a Session.
 
-The low-level pybind11 bindings (StreamSession, Settings, DiscoveryManager, ...) live in
+The low-level pybind11 bindings (ChiakiPySession, Settings, DiscoveryManager, ...) live in
 `chiaki_py.lib`; this package wraps them into the pythonic pieces re-exported below. GUI widgets
 that can display a Session's frames are in the optional `chiaki_py.gui` subpackage (needs PyQt6).
 """
 
+import logging
 from importlib.metadata import PackageNotFoundError, version
+
+# A library leaves output to the application: without logging configured, nothing is printed.
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 from .discovery import discover_hosts
 from .registration import register_host, HostRegistration

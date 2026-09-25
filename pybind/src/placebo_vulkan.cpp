@@ -1,4 +1,5 @@
 #include "placebo_vulkan.h"
+#include "pylog.h"
 
 #include <cstdio>
 #include <cstring>
@@ -25,8 +26,9 @@ extern "C"
 
 namespace
 {
-    // libplacebo talks to stderr by default only if asked to; its warnings and errors say why a device or a
-    // shader could not be made, which is worth having. CHIAKI_PY_PLACEBO_LOG=debug (or info, trace) shows more.
+    // libplacebo only logs if asked to; its warnings and errors say why a device or a shader could not be made,
+    // which is worth having. They go to the `chiaki_py.lib.placebo` Python logger. CHIAKI_PY_PLACEBO_LOG=debug
+    // (or info, trace) lets more through to it.
     pl_log_level log_level_from_environment()
     {
         char name[16];
@@ -48,8 +50,7 @@ namespace
 
     void log_callback(void *, pl_log_level level, const char *message)
     {
-        static const char *const names[] = {"", "fatal", "error", "warning", "info", "debug", "trace"};
-        std::fprintf(stderr, "[libplacebo %s] %s\n", names[level], message);
+        placebo_log_python(level, message);
     }
 
     // Called by FFmpeg once it is done with the device, after it has uninitialised its own parts of it.

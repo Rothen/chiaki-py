@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "utils.h"
 #include "event_queue.h"
+#include "pylog.h"
 
 #include <algorithm>
 #include <cstring>
@@ -42,7 +43,7 @@ static void DiscoveryServiceHostsManualCallback(ChiakiDiscoveryHost *hosts, size
 
 DiscoveryManager::DiscoveryManager()
 {
-    chiaki_log_init(&log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, chiaki_log_cb_print, nullptr);
+    chiaki_log_init(&log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, chiaki_log_cb_python, nullptr);
 
     service_active = false;
     service_active_ipv6 = false;
@@ -50,6 +51,8 @@ DiscoveryManager::DiscoveryManager()
 
 DiscoveryManager::~DiscoveryManager()
 {
+    // The discovery services' threads take the GIL to log, so they can't be joined while it is held.
+    GilReleaseIfHeld release;
     if (service_active)
         chiaki_discovery_service_fini(&service);
     if (service_active_ipv6)
@@ -58,6 +61,7 @@ DiscoveryManager::~DiscoveryManager()
 
 void DiscoveryManager::SetActive(bool active)
 {
+    GilReleaseIfHeld release; // starts and joins discovery threads, which take the GIL to log
     if (service_active == active && service_active_ipv6 == active)
         return;
 
@@ -275,6 +279,7 @@ void DiscoveryManager::SetActive(bool active)
 
 void DiscoveryManager::SetSettings(Settings *settings)
 {
+    GilReleaseIfHeld release; // starts and joins discovery threads, which take the GIL to log
     this->settings = settings;
     chiaki_log_set_level(&log, settings->GetLogLevelMask());
     // connect(settings, &Settings::ManualHostsUpdated, this, &DiscoveryManager::UpdateManualServices);
@@ -352,6 +357,7 @@ void DiscoveryManager::DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> h
 
 void DiscoveryManager::UpdateManualServices()
 {
+    GilReleaseIfHeld release; // starts and joins discovery threads, which take the GIL to log
     if (!settings || (!service_active && !service_active_ipv6))
         return;
 

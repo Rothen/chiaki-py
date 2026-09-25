@@ -55,7 +55,7 @@ set(SOURCES
     include/event_source.h
     include/sessionlog.h
     include/settings.h
-    include/streamsession.h
+    include/chiakipysession.h
     include/discovery_manager.h
     include/frame_handler.h
     include/placebo_vulkan.h
@@ -75,9 +75,10 @@ set(SOURCES
     src/host.cpp
     src/event_source.cpp
     src/controllermanager.cpp
+    src/pylog.cpp
     src/sessionlog.cpp
     src/settings.cpp
-    src/streamsession.cpp
+    src/chiakipysession.cpp
     src/discovery_manager.cpp
     src/frame_handler.cpp
     src/placebo_vulkan.cpp

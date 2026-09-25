@@ -13,7 +13,7 @@
 #include "core/log.h"
 #include "event_source.h"
 #include "settings.h"
-#include "streamsession.h"
+#include "chiakipysession.h"
 #include "discovery_manager.h"
 #include "backend.h"
 #include "cuda_driver.h"
@@ -86,13 +86,13 @@ struct VulkanFrame
     // would have produced it. For trying out consumers of VulkanFrames without a console. The frame is
     // `visible_width` x `visible_height` (the whole picture by default), like a decoded picture that is
     // smaller than the image it is stored in.
-    static std::unique_ptr<VulkanFrame> upload_nv12(StreamSession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
+    static std::unique_ptr<VulkanFrame> upload_nv12(ChiakiPySession &session, const py::array_t<uint8_t, py::array::c_style> &nv12,
                                                  std::optional<int> visible_width = std::nullopt,
                                                  std::optional<int> visible_height = std::nullopt);
 
     // A new all-black `width` x `height` frame uploaded to the session's Vulkan hardware device, for
     // VulkanFrameHandler::empty_frame() to hand out before any frame has been decoded yet.
-    static std::unique_ptr<VulkanFrame> black(StreamSession &session, int width, int height);
+    static std::unique_ptr<VulkanFrame> black(ChiakiPySession &session, int width, int height);
 };
 
 struct CudaFrameLayout
@@ -127,7 +127,7 @@ struct CudaArrayDestination
 class FrameHandler
 {
 public:
-    FrameHandler(StreamSession *streamSession);
+    FrameHandler(ChiakiPySession *streamSession);
     virtual ~FrameHandler() = default;
 
     virtual py::object get_frame(const py::object &out) = 0;
@@ -137,7 +137,7 @@ public:
     static py::object empty_frame(int width = 0, int height = 0);
 
 protected:
-    StreamSession *streamSession;
+    ChiakiPySession *streamSession;
 
     struct AVFrameGuard
     {
@@ -151,7 +151,7 @@ protected:
 class CpuFrameHandler : public FrameHandler
 {
 public:
-    CpuFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
+    CpuFrameHandler(ChiakiPySession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
 
     // A (height, width, 3) uint8 numpy array, suitable as `out` for get_frame() of this size.
@@ -171,7 +171,7 @@ private:
 class CudaFrameHandler : public FrameHandler
 {
 public:
-    CudaFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
+    CudaFrameHandler(ChiakiPySession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
 
     // A (height, width, 3) uint8 CUDA array, suitable as `out` for get_frame() of this size: a CuPy
@@ -184,7 +184,7 @@ public:
 class VulkanFrameHandler : public FrameHandler
 {
 public:
-    VulkanFrameHandler(StreamSession *streamSession) : FrameHandler(streamSession) {}
+    VulkanFrameHandler(ChiakiPySession *streamSession) : FrameHandler(streamSession) {}
     py::object get_frame(const py::object &out);
 
     // An empty VulkanFrame holding no decoded frame yet, suitable as `out` for get_frame(); width

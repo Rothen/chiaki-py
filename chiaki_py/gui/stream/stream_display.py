@@ -97,6 +97,8 @@ class StreamDisplay(QObject):
             _logger.exception("Failed to create the stream window")
             raise
 
+        # frames() ends once the session does (stopped, disconnected, or failed for good): close then too.
+        self.frame_thread.finished.connect(self.__on_frames_ended)
         self.frame_thread.start()
         self.fps_thread.start()
         self.controller_thread.start()
@@ -111,6 +113,11 @@ class StreamDisplay(QObject):
         else:
             raise TypeError(f"StreamDisplay can't show frames from a {type(self.session.frame_handler).__name__}: use a CpuFrameHandler (rendered on the CPU), a CudaFrameHandler (rendered on the GPU with OpenGL) or a VulkanFrameHandler (rendered on the GPU with Vulkan)")
 
+
+    def __on_frames_ended(self) -> None:
+        if self.window.isVisible():
+            _logger.info("Session ended, closing the stream window")
+            self.window.close()
 
     def close(self) -> None:
         if self.aspect_lock is not None:

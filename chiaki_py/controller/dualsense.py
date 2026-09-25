@@ -6,26 +6,26 @@ from reactivex.abc import DisposableBase
 from dualsense_py.dual_sense_controller import DualSenseController
 from dualsense_py.states import Accelerometer, Gyroscope, JoyStick, Orientation
 
-from ..lib import StreamSession
+from ..lib import ChiakiPySession
 
 
-def _left_stick_change(joy_stick: JoyStick, stream_session: StreamSession) -> None:
+def _left_stick_change(joy_stick: JoyStick, stream_session: ChiakiPySession) -> None:
     stream_session.set_left(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
 
 
-def _right_stick_change(joy_stick: JoyStick, stream_session: StreamSession) -> None:
+def _right_stick_change(joy_stick: JoyStick, stream_session: ChiakiPySession) -> None:
     stream_session.set_right(int(joy_stick.x * 1023), int(joy_stick.y * 1023))
 
 
-def _accelerometer_change(accelerometer: Accelerometer, stream_session: StreamSession) -> None:
+def _accelerometer_change(accelerometer: Accelerometer, stream_session: ChiakiPySession) -> None:
     stream_session.set_accelerometer(accelerometer.x, accelerometer.y, accelerometer.z)
 
 
-def _gyroscope_change(gyroscope: Gyroscope, stream_session: StreamSession) -> None:
+def _gyroscope_change(gyroscope: Gyroscope, stream_session: ChiakiPySession) -> None:
     stream_session.set_gyroscope(gyroscope.x, gyroscope.y, gyroscope.z)
 
 
-def _orientation_change(orientation: Orientation, stream_session: StreamSession) -> None:
+def _orientation_change(orientation: Orientation, stream_session: ChiakiPySession) -> None:
     cy = math.cos(math.radians(orientation.yaw) * 0.5)
     sy = math.sin(math.radians(orientation.yaw) * 0.5)
     cp = math.cos(math.radians(orientation.pitch) * 0.5)
@@ -83,8 +83,8 @@ class ControllerSubscriptions(TypedDict):
     orientation_changed: DisposableBase
 
 
-def attach_controller(controller: DualSenseController, stream_session: StreamSession) -> ControllerSubscriptions:
-    """Wire a DualSense controller's inputs to a StreamSession's inputs."""
+def attach_controller(controller: DualSenseController, stream_session: ChiakiPySession) -> ControllerSubscriptions:
+    """Wire a DualSense controller's inputs to a ChiakiPySession's inputs."""
     controller.open()
 
     return {
@@ -130,8 +130,8 @@ def attach_controller(controller: DualSenseController, stream_session: StreamSes
     }
 
 
-def detach_controller(controller: DualSenseController, stream_session: StreamSession, subscriptions: ControllerSubscriptions) -> None:
-    """Wire a DualSense controller's inputs to a StreamSession's inputs."""
+def detach_controller(controller: DualSenseController, stream_session: ChiakiPySession, subscriptions: ControllerSubscriptions) -> None:
+    """Wire a DualSense controller's inputs to a ChiakiPySession's inputs."""
     
     for subscription in subscriptions.values():
         cast(DisposableBase, subscription).dispose()

@@ -8,7 +8,7 @@
 
 // Draws the frames of a VulkanFrameHandler into a window without them ever leaving the GPU, using libplacebo.
 //
-// The Vulkan device the decoder decodes on (see the StreamSession constructor, which has libplacebo create
+// The Vulkan device the decoder decodes on (see the ChiakiPySession constructor, which has libplacebo create
 // it) is also the one drawn on, so a decoded frame is used where it is: libplacebo samples its NV12/P010
 // planes, converts them to RGB with the frame's own colour space (SDR or HDR), scales them to the window and
 // presents the result on the window's swapchain. Nothing is copied.
@@ -20,7 +20,7 @@ class VulkanRenderer
 {
 public:
     // `window` is the native window to draw into: an HWND on Windows, the only platform supported so far.
-    VulkanRenderer(StreamSession &session, uintptr_t window);
+    VulkanRenderer(ChiakiPySession &session, uintptr_t window);
     ~VulkanRenderer();
     VulkanRenderer(const VulkanRenderer &) = delete;
     VulkanRenderer &operator=(const VulkanRenderer &) = delete;
