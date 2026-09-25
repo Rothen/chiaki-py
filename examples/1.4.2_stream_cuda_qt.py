@@ -35,12 +35,7 @@ def main() -> None:
 
     registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
 
-    settings = Settings()
-    settings.set_log_level(LogLevel.ERROR)
-    settings.set_hardware_decoder("cuda")
-
     session = Session(
-        settings,
         registration,
         CudaFrameHandler
     )

@@ -9,14 +9,10 @@ themselves, the same way the PS Remote Play app's "device list" does.
 import argparse
 
 from chiaki_py import discover_hosts
-from chiaki_py.lib import Settings
 
 
 def main(timeout: float = 3.0) -> None:
-    settings = Settings()
-    settings.set_log_verbose(False)
-
-    hosts = discover_hosts(settings, timeout=timeout)
+    hosts = discover_hosts(timeout=timeout)
     if not hosts:
         print(f"No consoles found after {timeout:.1f}s. "
               "Make sure the console is on and on the same network/subnet.")

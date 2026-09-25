@@ -2,7 +2,6 @@
 #define CHIAKI_PY_DISCOVERYMANAGER_H
 
 #include "host.h"
-#include "settings.h"
 #include "core/struct_wrapper.h"
 
 #include <chiaki/discoveryservice.h>
@@ -74,16 +73,6 @@ public:
     HostMAC GetHostMAC() const { return raw().GetHostMAC(); };
 };
 
-struct ManualService
-{
-	~ManualService() { chiaki_discovery_service_fini(&service); }
-
-	class DiscoveryManager *manager;
-	bool discovered = false;
-	DiscoveryHostWrapper discovery_host;
-	ChiakiDiscoveryService service;
-};
-
 class DiscoveryManager
 {
 	friend class DiscoveryManagerPrivate;
@@ -97,8 +86,6 @@ class DiscoveryManager
 		bool service_active_ipv6;
 		mutable std::mutex hosts_mutex;
 		std::vector<DiscoveryHostWrapper> hosts;
-		Settings *settings = {};
-        std::unordered_map<std::string, ManualService *> manual_services;
 
     // slots
 
@@ -107,7 +94,6 @@ class DiscoveryManager
 		~DiscoveryManager();
 
 		void SetActive(bool active);
-		void SetSettings(Settings *settings);
 
         void SendWakeup(const std::string &host, const std::string &regist_key, bool ps5);
 
@@ -115,7 +101,6 @@ class DiscoveryManager
 		const std::vector<DiscoveryHostWrapper> GetHosts() const;
 
 		void DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> hosts);
-		void UpdateManualServices();
 
 		void HostsUpdated();
 };

@@ -1,5 +1,4 @@
 #include "backend.h"
-#include "settings.h"
 #include "chiakipysession.h"
 #include "timer.h"
 #include "host.h"
@@ -176,7 +175,7 @@ void init_backend(py::module &m)
         "Registers with a console: the one-time PIN pairing that gets back the registration key "
         "ChiakiPySession later needs to connect. `chiaki_py.register_host()` wraps register_host() with "
         "a pythonic result type (HostRegistration) and is the easier way to call this from Python.")
-        .def(py::init<Settings *>(), py::arg("settings"))
+        .def(py::init<>())
         .def("register_host_async", &Backend::registerHostAsync,
              py::arg("host"),
              py::arg("psn_id"),

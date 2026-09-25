@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, PlainSerializer, PlainValidator
 
-from .lib import Backend, Settings
+from .lib import Backend
 from .lib.core.common import Target
 
 
@@ -49,7 +49,6 @@ class HostRegistration(BaseModel):
 
 
 def register_host(
-    settings: Settings,
     host: str,
     psn_id: str,
     pin: str,
@@ -67,7 +66,7 @@ def register_host(
     only needed for a console that has a login PIN set. Blocks until registration finishes;
     raises RuntimeError on failure (wrong PIN, console unreachable, ...).
     """
-    result = Backend(settings).register_host(
+    result = Backend().register_host(
         host=host,
         psn_id=psn_id,
         pin=pin,

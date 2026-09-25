@@ -44,11 +44,7 @@ def main() -> None:
     settings.set_log_verbose(False)
     settings.set_hardware_decoder("cuda")
 
-    session = Session(
-        settings,
-        registration,
-        CudaFrameHandler
-    )
+    session = Session(registration, CudaFrameHandler)
 
     session.cp_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
     session.cp_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))

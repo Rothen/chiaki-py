@@ -287,8 +287,8 @@ PYBIND11_MODULE(chiaki_py, m)
              "and can guarantee it won't run concurrently with the hardware decoder's own Vulkan submissions.");
 
     py::class_<Settings>(m, "Settings",
-        "In-memory connection/decoding/UI settings, passed to ChiakiPySessionConnectInfo, Backend and "
-        "DiscoveryManager. A fresh instance starts at chiaki-ng's defaults; there is no persistence "
+        "In-memory connection/decoding/UI settings, passed to ChiakiPySessionConnectInfo. "
+        "A fresh instance starts at chiaki-ng's defaults; there is no persistence "
         "here (use chiaki_py.Serializer to save/load whichever of these settings an application cares "
         "about). Most get_/set_ pairs are self-explanatory config knobs; set_hardware_decoder() and "
         "set_log_level()/set_log_verbose() are the ones most callers need to touch directly.")
@@ -620,27 +620,19 @@ PYBIND11_MODULE(chiaki_py, m)
 
     py::class_<DiscoveryManager>(m, "DiscoveryManager",
                                  "Broadcasts for PS4/PS5 hosts on the local network (IPv4 and IPv6) in the background and keeps "
-                                 "track of what answered, plus individually pings any manually-added registered hosts from "
-                                 "`settings` so they show up even when broadcast can't reach them. `chiaki_py.discover_hosts()` "
+                                 "track of what answered. `chiaki_py.discover_hosts()` "
                                  "wraps the start/wait/collect/stop sequence this class otherwise requires driving by hand.")
         .def(py::init<>())
         .def("set_active", &DiscoveryManager::SetActive, py::arg("active"),
              "Start or stop broadcasting. Starting re-inits the discovery sockets if they were not "
              "already active; stopping tears them down and clears the discovered host list.")
-        .def("set_settings", &DiscoveryManager::SetSettings, py::arg("settings"),
-             "Set the Settings this manager reads its log level and manually-registered hosts from, "
-             "and refresh the manual per-host discovery services from it immediately.")
         .def("send_wakeup", &DiscoveryManager::SendWakeup, py::arg("host"), py::arg("regist_key"), py::arg("ps5"),
              "Send a wakeup packet to `host` (a registration's `regist_key`, hex-encoded) so a console "
              "in standby powers on. Raises RuntimeError if `regist_key` is malformed or sending fails.")
         .def("get_active", &DiscoveryManager::GetActive, "Whether broadcast discovery is currently running.")
         .def("get_hosts", &DiscoveryManager::GetHosts,
-             "The hosts discovered so far: everything the last broadcast round found, plus any manually "
-             "probed host currently confirmed reachable. Empty until set_active(True) has had time to hear back.")
+             "The hosts the last broadcast round found. Empty until set_active(True) has had time to hear back.")
         .def("discovery_service_hosts", &DiscoveryManager::DiscoveryServiceHosts, py::arg("hosts"),
              "Replace the broadcast-discovered host list wholesale. Called internally as broadcast replies "
-             "come in; not normally needed from Python.")
-        .def("update_manual_services", &DiscoveryManager::UpdateManualServices,
-             "Re-sync the per-host discovery pings from `settings`' currently registered manual hosts, "
-             "starting one for each newly added host and dropping ones no longer configured.");
+             "come in; not normally needed from Python.");
 }

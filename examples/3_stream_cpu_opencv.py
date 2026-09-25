@@ -37,14 +37,7 @@ def main() -> None:
 
     registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
 
-    settings = Settings()
-    settings.set_log_verbose(False)
-    settings.set_log_level(LogLevel.ERROR)
-
-    session = Session(
-        settings,
-        registration
-    )
+    session = Session(registration)
     _ = AudioSink(session)
 
     session.cp_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))

@@ -33,14 +33,7 @@ def main() -> None:
 
     registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
 
-    settings = Settings()
-    settings.set_log_verbose(False)
-    settings.set_log_level(LogLevel.ERROR)
-
-    session = Session(
-        settings,
-        registration
-    )
+    session = Session(registration)
 
     session.cp_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
     session.cp_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))

@@ -47,7 +47,7 @@ def _login(headless: bool):
         sys.exit()
 
 
-def _register(settings: Settings, host: DiscoveryHost, dir: Path, headless: bool):
+def _register(host: DiscoveryHost, dir: Path, headless: bool):
     psn_account = Serializer.load_or(PSNAccount, Path(
         dir, "psn_account.json"), lambda: _login(headless))
     psn_id = psn_account.user_rpid if host.ps5 else psn_account.online_id
@@ -55,7 +55,7 @@ def _register(settings: Settings, host: DiscoveryHost, dir: Path, headless: bool
         "Enter the registration PIN shown on the console's Link Device screen: ").strip()
     print("Registering...")
     registration = register_host(
-        settings, host=host.host_addr, psn_id=psn_id, pin=pin, target=host.target)
+        host=host.host_addr, psn_id=psn_id, pin=pin, target=host.target)
     return registration
 
 
@@ -76,26 +76,23 @@ def pairing_cache_path(dir: Path, host: DiscoveryHost) -> Path:
     return Path(dir, f"{host.host_name}.json")
 
 
-def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_pair: bool, headless: bool) -> HostRegistration:
+def get_registration(host: DiscoveryHost, dir: Path, force_pair: bool, headless: bool) -> HostRegistration:
     cache_path = pairing_cache_path(dir, host)
 
     if force_pair:
-        registration = _register(settings, host, dir, headless)
+        registration = _register(host, dir, headless)
         Serializer.save(registration, cache_path)
         print(f"Saved pairing for next time at {cache_path}")
     else:
         print(f"Reusing saved pairing for '{host.host_name}'.")
-        registration = Serializer.load_or(HostRegistration, cache_path, lambda: _register(settings, host, dir, headless))
+        registration = Serializer.load_or(HostRegistration, cache_path, lambda: _register(host, dir, headless))
 
     return registration
 
 
 def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./cache')) -> None:
-    settings = Settings()
-    settings.set_log_verbose(False)
-
     print("Scanning network for consoles (3s)...")
-    hosts = discover_hosts(settings, timeout=3.0)
+    hosts = discover_hosts(timeout=3.0)
     if not hosts:
         print("No consoles found. Make sure it's powered on and on the same network.")
         sys.exit(1)
@@ -105,10 +102,10 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
 
     dir.mkdir(exist_ok=True)
 
-    registration = get_registration(settings, host, dir, force_pair, headless)
+    registration = get_registration(host, dir, force_pair, headless)
     print(f"Connecting to '{registration.nickname}'.")
 
-    session = Session(settings, registration, CpuFrameHandler)
+    session = Session(registration, CpuFrameHandler)
     session.cp_session.on_session_quit().subscribe(lambda reason: print("Session quit:", reason))
     session.cp_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login PIN requested, incorrect:", incorrect))
 

@@ -2,14 +2,12 @@
 
 #include "discovery_manager.h"
 #include "exception.h"
-#include "settings.h"
 #include "utils.h"
 #include "event_queue.h"
 #include "pylog.h"
 
 #include <algorithm>
 #include <cstring>
-#include <set>
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -39,11 +37,10 @@ HostMAC DiscoveryHost::GetHostMAC() const
 }
 
 static void DiscoveryServiceHostsCallback(ChiakiDiscoveryHost *hosts, size_t hosts_count, void *user);
-static void DiscoveryServiceHostsManualCallback(ChiakiDiscoveryHost *hosts, size_t hosts_count, void *user);
 
 DiscoveryManager::DiscoveryManager()
 {
-    chiaki_log_init(&log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, chiaki_log_cb_python, nullptr);
+    chiaki_log_init_python(&log);
 
     service_active = false;
     service_active_ipv6 = false;
@@ -251,8 +248,6 @@ void DiscoveryManager::SetActive(bool active)
             else
                 service_active_ipv6 = true;
         }
-
-        UpdateManualServices();
     }
     else
     {
@@ -266,8 +261,6 @@ void DiscoveryManager::SetActive(bool active)
             chiaki_discovery_service_fini(&service_ipv6);
             service_active_ipv6 = false;
         }
-        manual_services.clear();
-
         {
             std::lock_guard<std::mutex> lock(hosts_mutex);
             hosts = {};
@@ -275,16 +268,6 @@ void DiscoveryManager::SetActive(bool active)
         // emit
         HostsUpdated();
     }
-}
-
-void DiscoveryManager::SetSettings(Settings *settings)
-{
-    GilReleaseIfHeld release; // starts and joins discovery threads, which take the GIL to log
-    this->settings = settings;
-    chiaki_log_set_level(&log, settings->GetLogLevelMask());
-    // connect(settings, &Settings::ManualHostsUpdated, this, &DiscoveryManager::UpdateManualServices);
-    // connect(settings, &Settings::RegisteredHostsUpdated, this, &DiscoveryManager::UpdateManualServices);
-    UpdateManualServices();
 }
 
 void DiscoveryManager::HostsUpdated()
@@ -326,24 +309,8 @@ void DiscoveryManager::SendWakeup(const std::string &host, const std::string &re
 
 const std::vector<DiscoveryHostWrapper> DiscoveryManager::GetHosts() const
 {
-    std::vector<DiscoveryHostWrapper> ret;
-    {
-        std::lock_guard<std::mutex> lock(hosts_mutex);
-        ret = hosts;
-    }
-    std::set<std::string> discovered_hosts;
-    for (auto &host : ret) {
-        discovered_hosts.insert(host.getHostAddr());
-    }
-
-    for (const auto &[key, s] : manual_services)
-    {
-        if (s->discovered && discovered_hosts.find(s->discovery_host.getHostAddr()) != discovered_hosts.end())
-        {
-            ret.push_back(s->discovery_host);
-        }
-    }
-    return ret;
+    std::lock_guard<std::mutex> lock(hosts_mutex);
+    return hosts;
 }
 
 void DiscoveryManager::DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> hosts)
@@ -353,62 +320,6 @@ void DiscoveryManager::DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> h
         this->hosts = std::move(hosts);
     }
     HostsUpdated();
-}
-
-void DiscoveryManager::UpdateManualServices()
-{
-    GilReleaseIfHeld release; // starts and joins discovery threads, which take the GIL to log
-    if (!settings || (!service_active && !service_active_ipv6))
-        return;
-
-    std::set<std::string> hosts;
-    for (const auto &host : settings->GetManualHosts())
-        if (settings->GetRegisteredHostRegistered(host.GetMAC()))
-            hosts.insert(host.GetHost());
-
-    for (const auto &[key, s] : manual_services)
-        if (hosts.find(key) == hosts.end())
-            manual_services.erase(key);
-
-    for (const auto &host : std::as_const(hosts))
-    {
-        if (manual_services.find(host) != manual_services.end())
-            continue;
-
-        ManualService *s = new ManualService;
-        s->manager = this;
-        manual_services[host] = s;
-
-        ChiakiDiscoveryServiceOptions options = {};
-        options.ping_ms = PING_MS;
-        options.ping_initial_ms = PING_MS;
-        options.hosts_max = 1;
-        options.host_drop_pings = DROP_PINGS;
-        options.cb = DiscoveryServiceHostsManualCallback;
-        options.cb_user = s;
-        options.send_host = const_cast<char *>(host.c_str());
-        bool ipv6 = host.find(':') != std::string::npos;
-        struct sockaddr_storage addr = {};
-        if (ipv6)
-        {
-            addr.ss_family = AF_INET6;
-            options.send_addr = &addr;
-            options.send_addr_size = sizeof(struct sockaddr_in6);
-        }
-        else
-        {
-            addr.ss_family = AF_INET;
-            options.send_addr = &addr;
-            options.send_addr_size = sizeof(struct sockaddr_in);
-        }
-        ChiakiErrorCode err = chiaki_discovery_service_init(&s->service, &options, &log);
-        if (err != CHIAKI_ERR_SUCCESS)
-        {
-            CHIAKI_LOGE(&log, "DiscoveryManager failed to init manual discovery service for host: %s with error %s", host.data(), chiaki_error_string(err));
-            manual_services.erase(host);
-            continue;
-        }
-    }
 }
 
 class DiscoveryManagerThread
@@ -440,15 +351,6 @@ public:
     EventQueue eventQueue;
 };
 
-class DiscoveryManagerPrivate
-{
-public:
-    static void DiscoveryServiceManualHost(DiscoveryManager *discovery_manager)
-    {
-        // QMetaObject::invokeMethod(discovery_manager, &DiscoveryManager::HostsUpdated);
-    }
-};
-
 static std::vector<DiscoveryHostWrapper> CreateHostsList(ChiakiDiscoveryHost *hosts, size_t hosts_count)
 {
     std::vector<DiscoveryHostWrapper> hosts_list;
@@ -474,13 +376,4 @@ static void DiscoveryServiceHostsCallback(ChiakiDiscoveryHost *hosts, size_t hos
 {
     // Called from chiaki-ng's background discovery thread.
     reinterpret_cast<DiscoveryManager *>(user)->DiscoveryServiceHosts(CreateHostsList(hosts, hosts_count));
-}
-
-static void DiscoveryServiceHostsManualCallback(ChiakiDiscoveryHost *hosts, size_t hosts_count, void *user)
-{
-    ManualService *s = reinterpret_cast<ManualService *>(user);
-    s->discovered = hosts_count;
-    if (s->discovered)
-        s->discovery_host = CreateHostsList(hosts, hosts_count).at(0);
-    DiscoveryManagerPrivate::DiscoveryServiceManualHost(s->manager);
 }

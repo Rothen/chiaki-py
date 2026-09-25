@@ -17,18 +17,16 @@ from chiaki_py import Session, discover_hosts, register_host, Serializer, AudioS
 from chiaki_py.lib import Settings
 from chiaki_py.psn import PSNLoginQt
 
-settings = Settings()
-host = discover_hosts(settings, timeout=3.0)[0]
+host = discover_hosts(timeout=3.0)[0]
 psn_account = PSNLoginQt.login()
 registration = register_host(
-    settings,
     host=host.host_addr,
     psn_id=psn_account.user_rpid,  # or .online_id for a PS4
     pin="12345678",                # shown on the console's Link Device screen
     target=host.target,
 )
 
-with Session(settings, registration) as session:
+with Session(registration) as session:
     audio_sink = AudioSink(session)
     for frame in session.frames(max_fps=60):
         ...  # frame is an (H, W, 3) uint8 numpy array
@@ -48,7 +46,7 @@ What `session.frames()` yields depends on the frame handler class passed as the 
 from chiaki_py.lib import CudaFrameHandler
 
 settings.set_hardware_decoder("cuda")
-with Session(settings, registration, CudaFrameHandler) as session:
+with Session(registration, CudaFrameHandler) as session:
     for frame in session.frames():
         ...  # frame is a (H, W, 3) uint8 CuPy array on the GPU
 ```
@@ -78,7 +76,7 @@ chiaki-ng's `VERBOSE` and `DEBUG` levels, libplacebo's `TRACE` and FFmpeg's `VER
 
 These settings drop messages before they reach Python, which is cheaper than filtering them there. The stream sends many messages per second at the lowest levels, so use these rather than a logger level to silence them:
 
-- `settings.set_log_level(LogLevel.WARNING)` sets the least severe chiaki-ng message that is still passed on (`LogLevel` is in `chiaki_py.lib`). The default, `LogLevel.DEBUG`, passes on everything.
+- `settings.set_log_level(LogLevel.WARNING)` sets the least severe chiaki-ng message from the `Session` that is still passed on (`LogLevel` is in `chiaki_py.lib`). The default, `LogLevel.DEBUG`, passes on everything. Discovery and registration are quiet enough that they always pass on everything but `VERBOSE`; filter those with the logger.
 - `settings.set_log_verbose(True)` additionally passes on chiaki-ng's `VERBOSE` messages, which are off by default.
 - For libplacebo, the `CHIAKI_PY_PLACEBO_LOG` environment variable does the same: `error`, `warning` (the default), `info`, `debug`, `trace` or `none`.
 

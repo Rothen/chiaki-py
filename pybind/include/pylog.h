@@ -16,6 +16,14 @@ void init_pylog();
 // call from any thread; falls back to chiaki_log_cb_print while Python is shutting down.
 void chiaki_log_cb_python(ChiakiLogLevel level, const char *msg, void *user);
 
+// Initializes log to hand its messages to chiaki_log_cb_python. level_mask is checked by chiaki-ng before a
+// message is even formatted, the `chiaki_py.lib` logger's level after that; the default leaves out VERBOSE.
+// Pass a narrower mask only where the messages are frequent enough for formatting them to cost something.
+inline void chiaki_log_init_python(ChiakiLog *log, uint32_t level_mask = CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE)
+{
+    chiaki_log_init(log, level_mask, chiaki_log_cb_python, nullptr);
+}
+
 // The same for libplacebo's messages (pl_log_level passed as int), to `chiaki_py.lib.placebo`.
 void placebo_log_python(int pl_level, const char *msg);
 

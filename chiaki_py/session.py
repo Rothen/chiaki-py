@@ -39,10 +39,17 @@ class Session:
 
     def __init__(
         self,
-        settings: Settings,
         registration: HostRegistration,
-        frame_handler_cls: type[FrameHandler] = CpuFrameHandler
+        frame_handler_cls: type[FrameHandler] = CpuFrameHandler,
+        settings: Settings | None = None,
     ):
+        settings = settings if settings is not None else Settings()
+        
+        if frame_handler_cls == VulkanFrameHandler:
+            settings.set_hardware_decoder("vulkan")
+        elif frame_handler_cls == CudaFrameHandler:
+            settings.set_hardware_decoder("cuda")
+        
         connect_info = ChiakiPySessionConnectInfo(
             settings=settings,
             target=registration.target,
@@ -114,19 +121,6 @@ class Session:
         set up for; either way the attempt is torn down before raising. There is no timeout. A login PIN
         request does not end the wait: answer it from an on_login_pin_requested() subscription.
         """
-        hw_type = self.__cp_session.hardware_decoder_type()
-
-        if isinstance(self.__frame_handler, VulkanFrameHandler) and not self.__cp_session.has_hardware_decoder():
-            raise RuntimeError(
-                "VulkanFrameHandler needs a hardware decoder; set one with "
-                "Settings.set_hardware_decoder() (e.g. 'vulkan', 'cuda', 'd3d11va') before connecting"
-            )
-        elif isinstance(self.__frame_handler, CudaFrameHandler) and hw_type != "cuda":
-            raise RuntimeError(
-                "CudaFrameHandler needs the CUDA hardware decoder; set it with "
-                f"Settings.set_hardware_decoder('cuda') before connecting (currently: {hw_type or 'none'})"
-            )
-
         self.__connected.clear()
         self.__quit.clear()
         self.__quit_reason = None

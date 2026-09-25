@@ -1,7 +1,6 @@
 #ifndef CHIAKI_PY_BACKEND_H
 #define CHIAKI_PY_BACKEND_H
 
-#include "settings.h"
 #include "chiakipysession.h"
 #include "timer.h"
 #include "host.h"
@@ -41,11 +40,11 @@ using SuccessCallback = std::function<void(ChiakiRegistEvent *)>;
 class Regist
 {
 public:
-    Regist(uint32_t log_mask) {
-        chiaki_log_init(&chiaki_log, log_mask, &Regist::log_cb, this);
+    Regist() {
+        chiaki_log_init_python(&chiaki_log);
     }
 
-    void start(const ChiakiRegistInfo &regist_info, uint32_t log_mask)
+    void start(const ChiakiRegistInfo &regist_info)
     {
         chiaki_regist_start(&chiaki_regist, &chiaki_log, &regist_info, &Regist::regist_cb, this);
     }
@@ -63,11 +62,6 @@ public:
 private:
     SuccessCallback successCallback;
     FailedCallback failedCallback;
-
-    static void log_cb(ChiakiLogLevel level, const char *msg, void *user)
-    {
-        chiaki_log_cb_python(level, msg, user);
-    }
 
     static void regist_cb(ChiakiRegistEvent *event, void *user)
     {
@@ -126,9 +120,8 @@ enum class PsnConnectState
 class Backend
 {
 public:
-    Backend(Settings *settings) : settings(settings), regist(settings->GetLogLevelMask())
+    Backend() : regist()
     {
-        discovery_manager.SetSettings(settings);
         wakeup_start_timer = new Timer();
     }
 
@@ -174,7 +167,7 @@ public:
         event_source = EventSource<ChiakiRegistEvent *>();
 
         event_source.set_on_subscribe([this, info]() mutable {
-            regist.start(info, settings->GetLogLevelMask());
+            regist.start(info);
         });
 
         regist.setSuccessCallback([this](ChiakiRegistEvent *event) {
@@ -244,7 +237,7 @@ public:
 
         // Registration runs on chiaki's thread, which takes the GIL to log: wait for it without holding it.
         GilReleaseIfHeld release;
-        regist.start(info, settings->GetLogLevelMask());
+        regist.start(info);
         future.get();
         return result;
     }
@@ -263,9 +256,7 @@ private:
             return false;
         }
     }
-    // void updateDiscoveryHosts();
 
-    Settings *settings = {};
     ChiakiPySession *session = {};
     Timer *wakeup_start_timer = {};
     DiscoveryManager discovery_manager;

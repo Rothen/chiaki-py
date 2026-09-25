@@ -9,7 +9,11 @@
 
 Settings::Settings() : audioVideoDisabled(CHIAKI_NONE_DISABLED),
                        logVerbose(false),
+#ifdef NDEBUG
+                       logLevel(CHIAKI_LOG_WARNING),
+#else
                        logLevel(CHIAKI_LOG_DEBUG),
+#endif
                        rumbleHapticsIntensity(RumbleHapticsIntensity::Normal),
                        buttonsByPosition(false),
                        startMicUnmuted(false),
@@ -36,7 +40,7 @@ Settings::Settings() : audioVideoDisabled(CHIAKI_NONE_DISABLED),
                        decoder(Decoder::Ffmpeg),
                        hardwareDecoder("vulkan"),
                        packetLossMax(0.05),
-                       audioVolume(100), // SDL_MIX_MAXVOLUME,
+                       audioVolume(100),   // SDL_MIX_MAXVOLUME,
                        audioBufferSize(0), // 0 = GetAudioBufferSizeDefault()
                        dpadTouchEnabled(true),
                        dpadTouchIncrement(30),

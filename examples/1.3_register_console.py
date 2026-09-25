@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from chiaki_py import Serializer, register_host
-from chiaki_py.lib import Settings, Target
+from chiaki_py.lib import Target
 from chiaki_py.psn import PSNLoginQt, PSNAccount
 
 
@@ -31,11 +31,7 @@ def main(host: str, pin: str, ps4: bool = False, console_pin: str = "") -> None:
     psn_account = Serializer.load_or(PSNAccount, psn_account_file, PSNLoginQt.login)
 
     target = Target.PS4_8 if ps4 else Target.PS5_1
-    settings = Settings()
-    settings.set_log_verbose(False)
-
     registration = register_host(
-        settings,
         host=host,
         psn_id=psn_account.user_rpid,
         pin=pin,
