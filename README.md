@@ -31,7 +31,7 @@ What `session.frames()` yields depends on the frame handler class passed as the 
 
 - **`CpuFrameHandler`** (default): downloads every frame to system memory as the numpy array above.
 - **`VulkanFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`, set with `settings.set_hardware_decoder(...)` before connecting): yields `VulkanFrame` handles — raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp, NV12/P010 rather than RGB. Each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
-- **`CudaFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`): converts every frame to RGB on the GPU and yields a (H, W, 3) uint8 CuPy array. Pass a uint8 CUDA tensor or array of that shape as `out` to have the frame converted into it instead (e.g. a PyTorch tensor); `out` is then returned and released right away.
+- **`CudaFrameHandler`** (NVIDIA only, `settings.set_hardware_decoder("cuda")`): converts every frame to RGB on the GPU and yields a (H, W, 3) uint8 CuPy array. Pass a uint8 CUDA tensor or array of that shape as `out` to have the frame converted into it instead (e.g. a PyTorch tensor); `out` is then returned and released right away. `out` may also be (3, H, W), as long as it is a transpose/permute view of interleaved (H, W, 3) memory — `CudaFrameHandler.empty_frame(width, height, backend="torch", channels_last=False)` makes one. A separately allocated planar tensor such as `torch.empty((3, H, W), device="cuda")` is rejected, because the frame is always written as interleaved RGB.
 
 ```python
 from chiaki_py.lib import CudaFrameHandler
@@ -51,12 +51,13 @@ Run these from the root of a clone of the repo, e.g. `python examples/1.2_discov
 1. **`1.1_login.py`**: PSN login. Opens a Qt web view to sign in (`--headless` for the terminal instead) and saves the account to `cache/psn_account.json`.
 2. **`1.2_discover_hosts.py [--timeout 3.0]`**: scans the network and prints the consoles that answer. No login or pairing needed.
 3. **`1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]`**: pairs with the console at `<host>` using the PIN from its Link Device screen (PS5: Settings > System > Remote Play > Link Device; PS4: Settings > Remote Play Connection Settings > Add Device) and saves `cache/host_registration.json`. Needs the account from step 1. Defaults to a PS5; pass `--ps4` for a PS4.
-4. **Stream.** Each of these loads `cache/host_registration.json` from step 3, attaches a DualSense if one is connected, and differs in how frames get on screen. Press `F` for the frame-rate overlay, `A` to lock the aspect ratio:
+4. **Stream.** Each of these loads `cache/host_registration.json` from step 3, attaches a DualSense if one is connected, and differs in how frames get on screen. In the Qt ones (1.4.1–1.4.3), press `F` for the frame-rate overlay and `A` to lock the aspect ratio:
+   - **`1.4.0_stream_cpu_opencv.py`**: the minimal version, frames decoded to system memory as a numpy array and shown with `cv2.imshow` (`q` quits). Works everywhere, no GPU needed: `pip install opencv-python`.
    - **`1.4.1_stream_cpu_qt.py`**: the built-in PyQt6 `StreamDisplay`, frames decoded to system memory. Works everywhere, no GPU needed.
    - **`1.4.2_stream_cuda_qt.py`**: same `StreamDisplay`, with `CudaFrameHandler` — frames are RGB-converted on the GPU and drawn by an OpenGL widget straight from GPU memory. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
    - **`1.4.3_stream_vulkan_qt.py`**: same `StreamDisplay`, with `VulkanFrameHandler` and the Vulkan hardware decoder. [libplacebo](https://code.videolan.org/videolan/libplacebo) draws the window on the very Vulkan device that decoded the frames, so nothing is copied, not even within the GPU. No CUDA/OpenGL, no extra packages — just a GPU and driver with Vulkan video decoding. Windows only so far.
    - **`1.4.4_stream_cuda_glfw.py`**: the CUDA path without Qt, in a plain GLFW window (frame rate drawn in the top-right corner; `q`/Esc quits). NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
-   - **`1.4.5_stream_tensor.py`**: like 1.4.4 but each frame lands in a PyTorch tensor on the GPU, so it can feed a model without leaving the GPU; the example prints the per-channel mean colour computed on the GPU. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
+   - **`1.4.5_stream_tensor.py`**: like 1.4.4, but each frame lands in a (3, H, W) uint8 PyTorch tensor on the GPU (channels first, over interleaved memory, i.e. PyTorch's `channels_last` memory format). The tensor can feed a model such as YOLO without leaving the GPU (convert it with `.unsqueeze(0).float().div(255)`, then resize), and the window draws straight from it. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
 
 ### All in one
 
@@ -64,7 +65,7 @@ Run these from the root of a clone of the repo, e.g. `python examples/1.2_discov
 
 ### Shared code
 
-`helpers.py` (attaches a DualSense), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 1.4.4/1.4.5), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
+`helpers.py` (attaches a DualSense), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 1.4.4/1.4.5; `GLVideoSurface.show()` takes any (3, H, W) uint8 CUDA array — torch or CuPy, planar or a view of interleaved memory), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
 
 ## Building from source
 

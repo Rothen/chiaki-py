@@ -2,13 +2,15 @@
 
 The CUDA frame handler decodes with NVDEC and converts every frame to RGB on
 the GPU, directly into a tensor you own, so the pixels stay on the GPU - which
-is where a model wants them. Here each frame is turned into a (3, H, W) float
-tensor and its per-channel means are computed on the GPU. The picture is drawn
-from the tensor's own GPU memory through CUDA-OpenGL interop (cuda_gl.py), so
-nothing but those three numbers, shown in the window title, ever reaches the CPU.
+is where a model wants them. The tensor is (3, H, W) uint8, channels first like
+a model's input, over interleaved RGB memory (PyTorch's channels_last memory
+format), because that is what the handler writes. For a model such as YOLO,
+convert it with frame.unsqueeze(0).float().div(255) and resize. The picture is
+drawn from the tensor's own GPU memory through CUDA-OpenGL interop (cuda_gl.py),
+so no pixel ever reaches the CPU.
 
 Usage:
-    python examples/1.4.4_stream_tensor.py
+    python examples/1.4.5_stream_tensor.py
 
 The registration is the one written by examples/1.3_register_console.py. Press
 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.
@@ -19,7 +21,6 @@ Needs: an NVIDIA GPU that also renders the window, a CUDA build of PyTorch
 """
 
 import sys
-import time
 from pathlib import Path
 
 import torch

@@ -3,12 +3,12 @@
 The Vulkan hardware decoder decodes on the GPU and, with the VulkanFrameHandler, the
 frames stay right where it put them: the window is drawn on that same Vulkan device
 by libplacebo, which converts the NV12 frames to RGB (see chiaki_py/gui/stream/vulkan_view.py).
-Unlike 1.4.2_stream_gpu_qt.py there is no CUDA or OpenGL involved, so it is not tied to
-NVIDIA and needs nothing beyond chiaki-py itself. Compare 1.4.1_stream_qt.py, which
+Unlike 1.4.2_stream_cuda_qt.py there is no CUDA or OpenGL involved, so it is not tied to
+NVIDIA and needs nothing beyond chiaki-py itself. Compare 1.4.1_stream_cpu_qt.py, which
 decodes to system memory.
 
 Usage:
-    python examples/1.4.5_stream_vulkan_qt.py
+    python examples/1.4.3_stream_vulkan_qt.py
 
 The registration is the one written by 1.3_register_console.py. Press F in the
 window to show the frame rate (drawn over the video by libplacebo), A to lock its aspect ratio.

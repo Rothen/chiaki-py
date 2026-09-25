@@ -2,10 +2,10 @@
 
 With the CudaFrameHandler every frame is converted to RGB on the GPU and drawn
 straight from GPU memory by an OpenGL widget (see chiaki_py/gui/stream/gpu_view.py).
-Compare 1.4.1_stream_qt.py, which decodes to system memory.
+Compare 1.4.1_stream_cpu_qt.py, which decodes to system memory.
 
 Usage:
-    python examples/1.4.2_stream_gpu_qt.py
+    python examples/1.4.2_stream_cuda_qt.py
 
 The registration is the one written by 1.3_register_console.py. Press F in the
 window to show the frame rate.

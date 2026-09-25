@@ -1,11 +1,18 @@
-"""PyQt6 remote-play viewer built on chiaki_py's high-level API. Frames are
-decoded to system memory; see 1.4.2_stream_gpu_qt.py for the GPU version.
+"""The smallest remote-play viewer: frames in a numpy array, shown with OpenCV.
+
+Frames are decoded to system memory into one (H, W, 3) uint8 RGB numpy array
+that every frame overwrites, and shown with cv2.imshow - the easiest starting
+point for processing frames with OpenCV or NumPy. See 1.4.1_stream_cpu_qt.py
+for the Qt viewer, and 1.4.2_stream_cuda_qt.py or 1.4.5_stream_tensor.py to
+keep the frames on the GPU.
 
 Usage:
-    python examples/1.4.1_stream_qt.py
+    python examples/1.4.0_stream_cpu_opencv.py
 
-The registration is the one written by 1.3_register_console.py. Press F in the
-window to show the frame rate.
+The registration is the one written by 1.3_register_console.py. Press 'q' in
+the window, or Ctrl+C in the terminal, to quit.
+
+Needs: pip install opencv-python
 """
 
 import sys
@@ -14,7 +21,6 @@ from pathlib import Path
 import cv2
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.session import CpuFrameHandler
-from chiaki_py.gui import StreamDisplay
 from chiaki_py.lib import Settings, LogLevel
 from chiaki_py.controller import detach_controller
 

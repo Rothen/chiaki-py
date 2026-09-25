@@ -5,10 +5,10 @@ RGB on the GPU into a CUDA buffer, and CUDA-OpenGL interop (cuda_gl.py) then
 hands that buffer to OpenGL: it is copied (GPU to GPU) into a pixel buffer
 object, from which OpenGL fills a texture that is drawn on the screen. Compare
 2_discover_and_stream_opencv.py, which downloads every frame to the CPU for
-OpenCV, and 1.4.2_stream_gpu_qt.py, which does this inside a Qt window.
+OpenCV, and 1.4.2_stream_cuda_qt.py, which does this inside a Qt window.
 
 Usage:
-    python examples/1.4.3_stream_cuda_glfw.py
+    python examples/1.4.4_stream_cuda_glfw.py
 
 The registration is the one written by 1.3_register_console.py. Press 'q' or
 Esc in the window, or Ctrl+C in the terminal, to quit.

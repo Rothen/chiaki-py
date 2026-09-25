@@ -1,8 +1,8 @@
 """PyQt6 remote-play viewer built on chiaki_py's high-level API. Frames are
-decoded to system memory; see 1.4.2_stream_gpu_qt.py for the GPU version.
+decoded to system memory; see 1.4.2_stream_cuda_qt.py for the GPU version.
 
 Usage:
-    python examples/1.4.1_stream_qt.py
+    python examples/1.4.1_stream_cpu_qt.py
 
 The registration is the one written by 1.3_register_console.py. Press F in the
 window to show the frame rate.
