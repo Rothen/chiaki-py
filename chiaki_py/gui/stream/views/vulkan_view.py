@@ -97,7 +97,7 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
         raises RuntimeError if the session can't be drawn (it does not use the Vulkan decoder, ...)."""
         if self._renderer is not None:
             return
-        self._renderer = VulkanRenderer(self.session.chiaki_py_session, int(self.winId()))
+        self._renderer = VulkanRenderer(self.session.cp_session, int(self.winId()))
         self._render_thread = VulkanRenderThread(self._frame_thread, self._renderer, self._fps_thread)
         self._render_thread.start()
         super().start()

@@ -11,6 +11,7 @@ from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
 from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
 from .threads.frame_thread import FrameThread
+from ...audio_sink import AudioSink
 from .views.cpu_view import CpuVideoWidget
 from .views.cuda_view import CudaVideoWidget
 from .views.vulkan_view import VulkanVideoWidget
@@ -38,14 +39,14 @@ class ControllerThread(QThread):
         if not available_controllers:
             _logger.info("No DualSense controllers found.")
             return
-        attach_controller(available_controllers[0], self.session.chiaki_py_session)
+        attach_controller(available_controllers[0], self.session.cp_session)
 
     def stop(self) -> None:
         self.quit()
         self.wait()
-        self.session.chiaki_py_session.release_right()
-        self.session.chiaki_py_session.release_left()
-        self.session.chiaki_py_session.send_feedback_state()
+        self.session.cp_session.release_right()
+        self.session.cp_session.release_left()
+        self.session.cp_session.send_feedback_state()
 
 
 class StreamDisplay(QObject):
@@ -85,6 +86,7 @@ class StreamDisplay(QObject):
         self.session = session
         self.aspect_lock: AspectRatioLock | None = None
         self.frame_thread = FrameThread(session)
+        self.audio_sink = AudioSink(session)
         self.fps_thread = FpsThread(self.frame_thread, render_async=isinstance(self.session.frame_handler, (CudaFrameHandler, VulkanFrameHandler)))
         self.controller_thread = ControllerThread(session)
  
@@ -97,7 +99,6 @@ class StreamDisplay(QObject):
             _logger.exception("Failed to create the stream window")
             raise
 
-        # frames() ends once the session does (stopped, disconnected, or failed for good): close then too.
         self.frame_thread.finished.connect(self.__on_frames_ended)
         self.frame_thread.start()
         self.fps_thread.start()
@@ -124,7 +125,8 @@ class StreamDisplay(QObject):
             self.aspect_lock.remove()
         self.controller_thread.stop()
         self.frame_thread.stop()
-        self.session.stop()
+        self.audio_sink.stop()
+        self.session.disconnect()
 
     @classmethod
     def start(cls, session: Session, argv: list[str], show_stats: bool = False, keep_aspect_ratio: bool = False):

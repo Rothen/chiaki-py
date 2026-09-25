@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 import cv2
-from chiaki_py import Session, Serializer, HostRegistration
+from chiaki_py import Session, Serializer, HostRegistration, AudioSink
 from chiaki_py.session import CpuFrameHandler
 from chiaki_py.lib import Settings, LogLevel
 from chiaki_py.controller import detach_controller
@@ -41,19 +41,20 @@ def main() -> None:
     settings.set_log_verbose(False)
     settings.set_log_level(LogLevel.ERROR)
 
-    session = Session.connect(
+    session = Session(
         settings,
         registration
     )
+    _ = AudioSink(session)
 
-    session.chiaki_py_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
-    session.chiaki_py_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
+    session.cp_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.cp_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
     
     with session:
-        controller, subscriptions = setup_controller(session.chiaki_py_session)
+        controller, subscriptions = setup_controller(session.cp_session)
 
         try:
-            profile = session.chiaki_py_session.get_video_profile()
+            profile = session.cp_session.get_video_profile()
             frame = CpuFrameHandler.empty_frame(profile.width, profile.height)
 
             print("Streaming - press 'q' in the window, or Ctrl+C in the terminal, to quit.")
@@ -64,7 +65,7 @@ def main() -> None:
                     break
         finally:
             if controller is not None and subscriptions is not None:
-                detach_controller(controller, session.chiaki_py_session, subscriptions)
+                detach_controller(controller, session.cp_session, subscriptions)
 
     cv2.destroyAllWindows()
     sys.exit()

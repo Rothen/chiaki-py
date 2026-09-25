@@ -27,7 +27,7 @@ void AudioHandler::QueueFrame(int16_t *buf, size_t samples_count)
     // If nobody drains the queue, drop the oldest samples to cap latency and memory.
     size_t max_samples = audio_queue_max_frames
                              ? audio_queue_max_frames * audio_channels
-                             : 3 * audio_buffer_size / sizeof(int16_t); // audio_buffer_size is in bytes, same threshold as chiaki-ng
+                             : 3 * (size_t)audio_buffer_size / sizeof(int16_t); // audio_buffer_size is in bytes, same threshold as chiaki-ng
     if (audio_queue.size() > max_samples)
     {
         if (!audio_queue_overflow_logged)
@@ -78,7 +78,7 @@ size_t AudioHandler::GetAudioQueueMaxFrames()
     std::lock_guard<std::mutex> lock(audio_buf_mutex);
     if (audio_queue_max_frames)
         return audio_queue_max_frames;
-    return audio_out_sample_size ? 3 * audio_buffer_size / audio_out_sample_size : 0;
+    return audio_out_sample_size ? 3 * (size_t)audio_buffer_size / audio_out_sample_size : 0;
 }
 
 void AudioHandler::SetAudioQueueMaxFrames(size_t max_frames)

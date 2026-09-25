@@ -44,21 +44,21 @@ def main() -> None:
     settings.set_log_verbose(False)
     settings.set_hardware_decoder("cuda")
 
-    session = Session.connect(
+    session = Session(
         settings,
         registration,
         CudaFrameHandler
     )
 
-    session.chiaki_py_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
-    session.chiaki_py_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
+    session.cp_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.cp_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
     
     try:
         with session:
-            controller, subscriptions = setup_controller(session.chiaki_py_session)
+            controller, subscriptions = setup_controller(session.cp_session)
 
             try:
-                profile = session.chiaki_py_session.get_video_profile()
+                profile = session.cp_session.get_video_profile()
                 with GLVideoSurface(profile.width, profile.height, "chiaki-py") as surface:
                     # Every frame is converted to RGB into this device buffer, which must match the
                     # stream's size exactly (a PS5 streams what the profile says; a PS4 asked for 1080p
@@ -74,7 +74,7 @@ def main() -> None:
                             break
             finally:
                 if controller is not None and subscriptions is not None:
-                    detach_controller(controller, session.chiaki_py_session, subscriptions)
+                    detach_controller(controller, session.cp_session, subscriptions)
     except KeyboardInterrupt:
         print("\nInterrupted, shutting down.")
 

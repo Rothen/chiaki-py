@@ -16,7 +16,7 @@ class FpsThread(QThread):
     for a VulkanFrame, which only wraps a frame the decoder already produced - and the GUI thread simply
     keeps whichever frame it is using alive by holding a reference to it for as long as it needs it.
     """
-    new_fps = pyqtSignal(float, float, float, float)
+    new_fps = pyqtSignal(float, float, float)
 
     def __init__(self, frame_thread: FrameThread, update_time: float = 0.5, render_async: bool = False):
         super().__init__()
@@ -32,7 +32,6 @@ class FpsThread(QThread):
         self.__tick_render_start: float = 0.0
         self.__tick_total_start: float = 0.0
 
-        self.__total_pull_time: float = 0.0
         self.__total_render_time: float = 0.0
         self.__total_time: float = 0.0
         
@@ -51,32 +50,27 @@ class FpsThread(QThread):
     
     def _on_frame(self, _: object) -> None:
         self._frame_count += 1
-        self.__total_pull_time += self._frame_thread.session.pull_time
 
     def run(self) -> None:
         self._running = True
         self._last_time = time.perf_counter()
         
-        pull_time: float = 0.0
         render_time: float = 0.0
         total_time: float = 0.0
         
         while self._running:
             self.msleep(self._sleep_time)
             dt = time.perf_counter() - self._last_time
-            pull_time = (self.__total_pull_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000
             render_time = (self.__total_render_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000
-            total_time = (self.__total_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000 + pull_time + self._render_async * render_time
+            total_time = (self.__total_time / self._frame_count if self._frame_count > 0 else 0.0) * 1000 + self._render_async * render_time
 
             self.new_fps.emit(
                 self._frame_count / dt,
-                pull_time,
                 render_time,
                 total_time
             )
 
             self._frame_count = 0.0
-            self.__total_pull_time = 0.0
             self.__total_render_time = 0.0
             self.__total_time = 0.0
             self._last_time = time.perf_counter()

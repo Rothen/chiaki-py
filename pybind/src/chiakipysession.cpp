@@ -6,6 +6,7 @@
 #include "chiaki_py_controller.h"
 #include "pylog.h"
 
+#include <algorithm>
 #include <ios>
 #include <cstring>
 #include <iostream>
@@ -120,7 +121,7 @@ ChiakiPySessionConnectInfo::ChiakiPySessionConnectInfo(
     this->host = std::move(host);
 
     std::memset(this->regist_key, '\0', CHIAKI_SESSION_AUTH_SIZE); // Zero out first
-    strncpy(this->regist_key, regist_key.c_str(), CHIAKI_SESSION_AUTH_SIZE - 1);
+    std::memcpy(this->regist_key, regist_key.data(), std::min<size_t>(regist_key.size(), CHIAKI_SESSION_AUTH_SIZE - 1));
     std::memset(this->morning, 0, 0x10);
     std::string morning_str = morning;
     std::vector<uint8_t> morning_converted(morning_str.begin(), morning_str.end());
@@ -610,7 +611,7 @@ void ChiakiPySession::TriggerFfmpegFrameAvailable()
 
 void ChiakiPySession::TriggerAudioFrameAvailable(int16_t *buf, size_t samples_count)
 {
-    if (!audio_handler.audio_channels)
+    if (!audio_handler.audio_channels || !connected)
     {
         return;
     }

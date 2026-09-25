@@ -1,6 +1,6 @@
 """Pairs with a PS4/PS5 over the local network and writes
 cache/host_registration.json, which the 1.4.x streaming examples (or any
-chiaki_py.Session.connect call) can use directly.
+chiaki_py.Session instance) can use directly.
 
 Usage:
     python examples/1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]

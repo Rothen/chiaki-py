@@ -59,7 +59,7 @@ def register_host(
 ) -> HostRegistration:
     """Register with a console (the one-time PIN pairing Remote Play needs before it can stream)
     and return the resulting `HostRegistration`, ready to `Serializer.save()` and later pass to
-    `Session.connect()`.
+    `Session()`.
 
     `host` is the console's IP/hostname; `psn_id` is the account-ID (PS5, or a PS4 in "PS4 8.0"
     mode) or PSN online ID (older PS4) of the account being registered - see `PSNAccount`. `pin`

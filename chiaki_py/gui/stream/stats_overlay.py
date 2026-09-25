@@ -116,5 +116,5 @@ class StatsOverlay(QLabel):
         else:
             super().keyPressEvent(ev)
 
-    def _on_fps(self, fps: float, pull_time: float, render_time: float, total_time: float) -> None:
-        self.set_text(f"FPS: {fps:.2f}\nPull Time: {pull_time:.2f} ms\nRender Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")
+    def _on_fps(self, fps: float, render_time: float, total_time: float) -> None:
+        self.set_text(f"FPS: {fps:.2f}\nRender Time: {render_time:.2f} ms\nTotal Time: {total_time:.2f} ms")

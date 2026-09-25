@@ -37,12 +37,13 @@ Settings::Settings() : audioVideoDisabled(CHIAKI_NONE_DISABLED),
                        hardwareDecoder("vulkan"),
                        packetLossMax(0.05),
                        audioVolume(100), // SDL_MIX_MAXVOLUME,
+                       audioBufferSize(0), // 0 = GetAudioBufferSizeDefault()
+                       dpadTouchEnabled(true),
                        dpadTouchIncrement(30),
                        dpadTouchShortcut1(9),
                        dpadTouchShortcut2(10),
                        dpadTouchShortcut3(7),
                        dpadTouchShortcut4(0)
-// audioBufferSizeRaw(0),
 { }
 
 unsigned int Settings::GetAudioBufferSize() const

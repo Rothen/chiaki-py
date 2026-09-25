@@ -109,17 +109,17 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
     registration = get_registration(settings, host, dir, force_pair, headless)
     print(f"Connecting to '{registration.nickname}'.")
 
-    session = Session.connect(settings, registration, CpuFrameHandler)
-    session.chiaki_py_session.on_session_quit().subscribe(lambda reason: print("Session quit:", reason))
-    session.chiaki_py_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login PIN requested, incorrect:", incorrect))
+    session = Session(settings, registration, CpuFrameHandler)
+    session.cp_session.on_session_quit().subscribe(lambda reason: print("Session quit:", reason))
+    session.cp_session.on_login_pin_requested().subscribe(lambda incorrect: print("Login PIN requested, incorrect:", incorrect))
 
     try:
         with session:
-            controller, subscriptions = setup_controller(session.chiaki_py_session)
+            controller, subscriptions = setup_controller(session.cp_session)
             
             print("Streaming - press 'q' in the video window, or Ctrl+C in the terminal, to quit.")
             try:
-                profile = session.chiaki_py_session.get_video_profile()
+                profile = session.cp_session.get_video_profile()
                 shape = (profile.height, profile.width, 3)
                 frame_np: np.ndarray = np.empty(shape, dtype=np.uint8)
                 frame_out: Any = frame_np
@@ -134,7 +134,7 @@ def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./c
                         break
             finally:
                 if controller is not None and subscriptions is not None:
-                    detach_controller(controller, session.chiaki_py_session, subscriptions)
+                    detach_controller(controller, session.cp_session, subscriptions)
     except KeyboardInterrupt:
         print("\nInterrupted, shutting down.")
     finally:

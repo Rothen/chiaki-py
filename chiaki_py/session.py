@@ -3,26 +3,29 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Callable, Iterator, TypeVar
+from typing import Any, Iterator
 from types import TracebackType
-import sounddevice as sd
 
 import numpy as np
 import numpy.typing as npt
 
 from .lib import VulkanFrame, Settings, ChiakiPySession, ChiakiPySessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, QuitReason, quit_reason_is_error, quit_reason_string
 from .registration import HostRegistration
+from .event_iterator import AudioFrameEventIterator, FrameEventIterator
 
 _logger = logging.getLogger(__name__)
 
-_T = TypeVar("_T")
-
 FrameHandler = CpuFrameHandler | CudaFrameHandler | VulkanFrameHandler
 
-SESSION_RETRY_SECONDS = 10.0
-"""How long after start() a failed connection attempt is still retried."""
-RETRY_DELAY_SECONDS = 1.0
-"""Pause between a failed connection attempt and the next one."""
+
+class SessionConnectError(ConnectionError):
+    """The console refused the session or the connection failed; `reason` says why
+    (e.g. QuitReason.SessionRequestRpInUse when another Remote Play session is running)."""
+
+    def __init__(self, reason: QuitReason):
+        super().__init__(f"Session could not be established: {quit_reason_string(reason)}")
+        self.reason = reason
+
 
 class Session:
     """A Remote Play connection to a console, and the frame handler that pulls its decoded video.
@@ -32,74 +35,14 @@ class Session:
     kept on the Vulkan device - see `frames()`). Build one with `connect()`, which takes a
     `HostRegistration` instead of a raw `ChiakiPySessionConnectInfo`; use it as a context manager, or
     call `stop()` directly, to make sure the connection is torn down.
-
-    A connection attempt that fails before ever connecting is retried every
-    `RETRY_DELAY_SECONDS` until `retry_seconds` have passed since the start (0 disables retries).
-    A failed retry can't raise into the caller - it runs later, on its own thread - so it is
-    logged and kept in `error` instead.
     """
 
     def __init__(
         self,
-        connect_info: ChiakiPySessionConnectInfo,
-        frame_handler_cls: type[FrameHandler] = CpuFrameHandler,
-        retry_seconds: float = SESSION_RETRY_SECONDS,
-        play_audio: bool = True,
-    ):
-        self.__chiaki_py_session = ChiakiPySession(connect_info)
-        self.__frame_handler: FrameHandler = frame_handler_cls(self.__chiaki_py_session)
-        self.__pull_time = 0.0
-
-        self.__retry_seconds = retry_seconds
-        self.__connect_deadline = 0.0
-        self.__ever_connected = False
-        self.__stopping = False
-        self.__active = False  # connected, connecting or waiting to retry
-        self.__retry_lock = threading.Lock()
-        self.__retry_timer: threading.Timer | None = None
-        self.error: BaseException | None = None
-        """The exception from the last failed retry, or None."""
-        self.__ah = self.__chiaki_py_session.get_audio_handler()
-        self._audio_stream: sd.OutputStream | None = None
-        self.__play_audio = play_audio
-
-        self.__subscriptions = [
-            self.__chiaki_py_session.on_connected_changed().subscribe(self.__on_connected_changed),
-            self.__chiaki_py_session.on_session_quit().subscribe(self.__on_session_quit),
-        ]
-        if play_audio:
-            self.__subscriptions.append(
-                self.__chiaki_py_session.on_audio_frame_available().subscribe(self.__on_audio_frame)
-            )
-
-    @property
-    def chiaki_py_session(self) -> ChiakiPySession:
-        """The underlying pybind11 connection: input, low-level events, connection state."""
-        return self.__chiaki_py_session
-
-    @property
-    def pull_time(self) -> float:
-        """Seconds the frame handler took for the latest frame delivered by frames() (0.0 before the first)."""
-        return self.__pull_time
-
-    @property
-    def frame_handler(self) -> FrameHandler:
-        """The handler frames() pulls decoded frames through; matches `frame_handler_cls`."""
-        return self.__frame_handler
-
-    @classmethod
-    def connect(
-        cls,
         settings: Settings,
         registration: HostRegistration,
-        frame_handler_cls: type[FrameHandler] = CpuFrameHandler,
-        retry_seconds: float = SESSION_RETRY_SECONDS,
-        play_audio: bool = True,
-    ) -> "Session":
-        """Build a Session for the console `registration` describes. Does not connect yet -
-        use the returned Session as a context manager, or call `__enter__`/`stop()` directly,
-        to actually start and stop the stream. Pass `play_audio=False` to consume the audio
-        yourself through `frames_with_audio()` instead of playing it on the default output device."""
+        frame_handler_cls: type[FrameHandler] = CpuFrameHandler
+    ):
         connect_info = ChiakiPySessionConnectInfo(
             settings=settings,
             target=registration.target,
@@ -114,70 +57,67 @@ class Session:
             zoom=registration.zoom,
             stretch=registration.stretch,
         )
-        return cls(connect_info, frame_handler_cls, retry_seconds, play_audio)
+
+        self.__cp_session = ChiakiPySession(connect_info)
+        self.__frame_handler: FrameHandler = frame_handler_cls(self.__cp_session)
+        self.__active = False
+        self.__connected = threading.Event()
+        self.__quit = threading.Event()
+        self.__quit_reason: QuitReason | None = None
+
+        self.__subscriptions = [
+            self.__cp_session.on_session_quit().subscribe(self.__on_session_quit),
+            self.__cp_session.on_connected_changed().subscribe(self.__on_connected_changed),
+        ]
+
+    @property
+    def cp_session(self) -> ChiakiPySession:
+        """The underlying pybind11 connection: input, low-level events, connection state."""
+        return self.__cp_session
+
+    @property
+    def frame_handler(self) -> FrameHandler:
+        """The handler frames() pulls decoded frames through; matches `frame_handler_cls`."""
+        return self.__frame_handler
 
     @property
     def is_active(self) -> bool:
-        """True from start until the session ends for good: stopped, disconnected, or out of retries."""
+        """True from start until the session ends for good: stopped, disconnected, or failed to connect."""
         return self.__active
-    
-    def __on_audio_frame(self, _):
 
-        if self._audio_stream is None:
-            self._audio_stream = sd.OutputStream(
-                samplerate=self.__ah.get_audio_rate(),
-                channels=self.__ah.get_audio_channels(),
-                dtype='int16',
-                callback=self.callback
-            )
-            self._audio_stream.start()
-            
-    def callback(self, out, frames, t, status):
-        pcm = self.__ah.get_frame(frames)
-        if len(pcm):
-            out[:len(pcm)] = pcm
-        out[len(pcm):] = 0
+    def __on_session_quit(self, reason: QuitReason) -> None:
+        if quit_reason_is_error(reason):
+            _logger.error("Session quit: %s", quit_reason_string(reason))
+        self.__active = False
+        self.__quit_reason = reason
+        self.__quit.set()
 
     def __on_connected_changed(self, connected: bool) -> None:
         if connected:
-            self.__ever_connected = True
-
-    def __on_session_quit(self, reason: QuitReason) -> None:
-        # Called on chiaki's session thread, which is the one quitting: only decide here and hand
-        # the actual start() over to another thread.
-        should_retry = (
-            not self.__stopping
-            and not self.__ever_connected
-            and quit_reason_is_error(reason)
-            and time.monotonic() < self.__connect_deadline
-        )
-        if not should_retry:
-            self.__active = False
-            return
-
-        _logger.info("Connection failed (%s), retrying in %.0fs", quit_reason_string(reason), RETRY_DELAY_SECONDS)
-        with self.__retry_lock:
-            self.__retry_timer = threading.Timer(RETRY_DELAY_SECONDS, self.__retry)
-            self.__retry_timer.daemon = True
-            self.__retry_timer.start()
-
-    def __retry(self) -> None:
-        with self.__retry_lock:
-            if self.__stopping:
-                return
-            try:
-                self.__chiaki_py_session.start()
-            except RuntimeError as e:  # ChiakiException
-                _logger.error("Retrying the connection failed: %s", e)
-                self.error = e
-                self.__active = False
+            self.__connected.set()
 
     def __enter__(self) -> "Session":
-        """Start the connection: raises RuntimeError up front if `frame_handler` needs a hardware
-        decoder that `settings` was not set up for, rather than failing once frames start arriving."""
-        hw_type = self.__chiaki_py_session.hardware_decoder_type()
-        
-        if isinstance(self.__frame_handler, VulkanFrameHandler) and not self.__chiaki_py_session.has_hardware_decoder():
+        """Connect and wait until the session is established (see connect()). Raises RuntimeError up
+        front if `frame_handler` needs a hardware decoder that `settings` was not set up for, rather
+        than failing once frames start arriving."""
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None) -> None:
+        self.disconnect()
+
+    def connect(self) -> None:
+        """Start connecting to the console.
+
+        With `wait` (the default), block until the session is established, or raise SessionConnectError
+        if the console refuses or it fails (see its `reason`), or TimeoutError after `timeout` seconds;
+        either way the attempt is torn down before raising. A login PIN request does not end the wait:
+        answer it from an on_login_pin_requested() subscription. Without `wait`, return right after the
+        attempt started and follow it through on_connected_changed()/on_session_quit().
+        """
+        hw_type = self.__cp_session.hardware_decoder_type()
+
+        if isinstance(self.__frame_handler, VulkanFrameHandler) and not self.__cp_session.has_hardware_decoder():
             raise RuntimeError(
                 "VulkanFrameHandler needs a hardware decoder; set one with "
                 "Settings.set_hardware_decoder() (e.g. 'vulkan', 'cuda', 'd3d11va') before connecting"
@@ -188,44 +128,46 @@ class Session:
                 f"Settings.set_hardware_decoder('cuda') before connecting (currently: {hw_type or 'none'})"
             )
 
-        self.__stopping = False
-        self.__ever_connected = False
-        self.error = None
-        self.__connect_deadline = time.monotonic() + self.__retry_seconds
+        self.__connected.clear()
+        self.__quit.clear()
+        self.__quit_reason = None
         self.__active = True
         try:
-            self.__chiaki_py_session.start()
+            self.__cp_session.start()
+            self.__wait_connected()
         except BaseException:
-            self.__active = False
+            self.disconnect()
             raise
 
-        return self
+    def __wait_connected(self) -> None:
+        while not self.__connected.wait(timeout=0.2):
+            if self.__quit.is_set():
+                reason = self.__quit_reason
+                assert reason is not None
+                raise SessionConnectError(reason)
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None) -> None:
-        self.stop()
+    def disconnect(self) -> None:
+        """Disconnect, if a connection is up or in progress. Safe to call more than once."""
+        self.__active = False
+        if self.__cp_session.is_connected() or self.__cp_session.is_connecting():
+            self.__cp_session.stop()
 
-    def stop(self) -> None:
-        """Disconnect, if a connection is up or in progress, and cancel a pending retry.
-        Safe to call more than once."""
-        with self.__retry_lock:
-            self.__stopping = True
-            self.__active = False
-            if self.__retry_timer is not None:
-                self.__retry_timer.cancel()
-                self.__retry_timer = None
-        if self.__chiaki_py_session.is_connected() or self.__chiaki_py_session.is_connecting():
-            self.__chiaki_py_session.stop()
-
-        if self._audio_stream is not None:
-            self._audio_stream.stop()
-            self._audio_stream.close()
-            self._audio_stream = None
+    def audio_frames(
+        self,
+    ) -> Iterator[npt.NDArray[np.int16]]:
+        self._iter_audio_frames = AudioFrameEventIterator(
+            self.__cp_session.on_audio_frame_available(),
+            lambda: self.__cp_session.get_audio_handler().get_frame()
+        )
+        if not self.__connected.is_set():
+            return []
+        return self._iter_audio_frames()
 
     def frames(
         self,
         max_fps: float = 60.0,
         out: npt.NDArray[np.uint8] | VulkanFrame | Any | None = None,
-    ) -> Iterator[npt.NDArray[np.uint8]]:
+    ) -> Iterator[npt.NDArray[np.uint8] | VulkanFrame | Any]:
         """Yield decoded frames as (H, W, 3) uint8 RGB arrays, downloaded to system memory.
 
         By default every frame is a new array. Pass `out` (C-contiguous, uint8,
@@ -234,32 +176,10 @@ class Session:
         overwritten by the next frame, so copy it if you keep it or hand it to
         another thread.
         """
-        return self._iter_frames(lambda: self.__frame_handler.get_frame(out), max_fps)
-
-    def _iter_frames(self, pull: Callable[[], _T | None], max_fps: float) -> Iterator[_T]:
-        min_interval = (1.0 / max_fps) if max_fps > 0 else 0.0
-        ready = threading.Event()
-        subscription = self.__chiaki_py_session.on_frame_available().subscribe(lambda _: ready.set())
-        try:
-            next_yield = 0.0
-            while self.__active:
-                if not ready.wait(timeout=0.5):
-                    continue
-                ready.clear()
-                try:
-                    started = time.perf_counter()
-                    frame = pull()
-                    pull_time = time.perf_counter() - started
-                except RuntimeError:
-                    _logger.warning("Dropping unreadable frame", exc_info=True)
-                    continue
-                if frame is None:
-                    continue
-                self.__pull_time = pull_time
-                now = time.perf_counter()
-                if now < next_yield:
-                    continue
-                next_yield = max(next_yield + min_interval, now - min_interval)
-                yield frame
-        finally:
-            subscription.unsubscribe()
+        if not self.__connected.is_set():
+            return []
+        self._iter_frames = FrameEventIterator(
+            self.__cp_session.on_frame_available(),
+            lambda: self.__frame_handler.get_frame(out)
+        )
+        return self._iter_frames(max_fps)

@@ -42,22 +42,22 @@ def main() -> None:
     settings.set_log_level(LogLevel.ERROR)
     settings.set_hardware_decoder("vulkan")
 
-    session = Session.connect(
+    session = Session(
         settings,
         registration,
         VulkanFrameHandler
     )
 
-    session.chiaki_py_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
-    session.chiaki_py_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
+    session.cp_session.on_session_quit().subscribe(lambda reason: print(f"session quit ({reason})"))
+    session.cp_session.on_connected_changed().subscribe(lambda connected: print(f"connected to {registration.nickname}" if connected else "connection closed"))
 
     with session:
-        controller, subscriptions = setup_controller(session.chiaki_py_session)
+        controller, subscriptions = setup_controller(session.cp_session)
 
         res = StreamDisplay.start(session, sys.argv)
 
         if controller is not None and subscriptions is not None:
-            detach_controller(controller, session.chiaki_py_session, subscriptions)
+            detach_controller(controller, session.cp_session, subscriptions)
 
         sys.exit(res)
 

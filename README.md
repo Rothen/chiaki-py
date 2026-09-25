@@ -20,14 +20,14 @@ registration = register_host(
     target=host.target,
 )
 
-with Session.connect(settings, registration) as session:
+with Session(settings, registration) as session:
     for frame in session.frames(max_fps=60):
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
 `Serializer.save(registration, path)` / `Serializer.load(HostRegistration, path)` persist a `registration` to JSON so you don't have to pair every run.
 
-What `session.frames()` yields depends on the frame handler class passed as the third argument to `Session.connect`:
+What `session.frames()` yields depends on the frame handler class passed as the third argument to `Session`:
 
 - **`CpuFrameHandler`** (default): downloads every frame to system memory as the numpy array above.
 - **`VulkanFrameHandler`** (any hardware decoder, e.g. `"vulkan"`, `"cuda"` or `"d3d11va"`, set with `settings.set_hardware_decoder(...)` before connecting): yields `VulkanFrame` handles — raw Vulkan/CUDA/D3D11 handles as integers plus format, size and timestamp, NV12/P010 rather than RGB. Each one holds a slot in the decoder's frame pool until dropped, so release them promptly.
@@ -37,7 +37,7 @@ What `session.frames()` yields depends on the frame handler class passed as the 
 from chiaki_py.lib import CudaFrameHandler
 
 settings.set_hardware_decoder("cuda")
-with Session.connect(settings, registration, CudaFrameHandler) as session:
+with Session(settings, registration, CudaFrameHandler) as session:
     for frame in session.frames():
         ...  # frame is a (H, W, 3) uint8 CuPy array on the GPU
 ```

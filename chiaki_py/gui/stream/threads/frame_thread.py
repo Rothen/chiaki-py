@@ -26,15 +26,12 @@ class FrameThread(QThread, Generic[T]):
         self.session = session
         self.max_fps = max_fps
         self._running = True
-        profile = session.chiaki_py_session.get_video_profile()
+        profile = session.cp_session.get_video_profile()
         self.width = profile.width
         self.height = profile.height
         self.size = (self.width, self.height)
         self.frame_init: T = cast(T, session.frame_handler.empty_frame(profile.width, profile.height))
 
-        # A second, Qt-independent way to consume frames (see wait_for_frame): only the latest one is ever
-        # kept, so a consumer that falls behind catches up by skipping the ones in between rather than
-        # working through a backlog - unlike new_frame, which every frame is emitted on regardless.
         self._frame_cv = threading.Condition()
         self._latest_frame: T | None = None
         self._frame_seq = 0
