@@ -22,6 +22,12 @@ jobs:
         # Raspberry Pi 3/4/5 (and Zero 2 W) running a 64-bit OS only; 32-bit (armhf) Pi OS is not covered.
         runs-on: ubuntu-24.04-arm
         container: debian:bookworm
+        env:
+            # Bookworm's FFmpeg (5.1, also what Raspberry Pi OS ships) is too old for chiaki-ng, which needs
+            # AVFrame.duration (FFmpeg 6.0+), so a newer one is built here and auditwheel bundles it into the
+            # wheel. Only what chiaki-py uses: the H.264/HEVC software decoders and swscale. LGPL, no --enable-gpl.
+            FFMPEG_VERSION: "7.1.1"
+            FFMPEG_PREFIX: /opt/ffmpeg
 
         defaults:
             run:
@@ -34,13 +40,13 @@ jobs:
               run: |
                   apt-get update
                   apt-get install -y --no-install-recommends \
-                      ca-certificates git file \
-                      build-essential ninja-build cmake pkg-config nasm \
+                      ca-certificates git file curl xz-utils \
+                      build-essential ninja-build cmake pkg-config \
                       python3 python3-dev python3-venv \
                       protobuf-compiler libprotobuf-dev \
                       libopus-dev libjson-c-dev libminiupnpc-dev libpsl-dev libevdev-dev libevent-dev \
                       libgf-complete-dev libspeexdsp-dev libidn2-dev libnghttp2-dev libssh2-1-dev \
-                      libfmt-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavdevice-dev \
+                      libfmt-dev \
                       libsdl2-dev libhidapi-dev libssl-dev libfftw3-dev liblcms2-dev libvulkan-dev zlib1g-dev
 
             - uses: actions/checkout@v4
@@ -51,6 +57,38 @@ jobs:
               # The workspace is owned by the runner's user, not the container's root; without this git
               # refuses to read the repo, and setuptools-scm finds no version.
               run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+            - name: Cache FFmpeg
+              id: ffmpeg-cache
+              uses: actions/cache@v4
+              with:
+                  path: ${{ env.FFMPEG_PREFIX }}
+                  # Bump the trailing revision when the configure flags below change.
+                  key: ffmpeg-${{ env.FFMPEG_VERSION }}-bookworm-arm64-r1
+
+            - name: Build FFmpeg ${{ env.FFMPEG_VERSION }}
+              if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+              working-directory: ${{ runner.temp }}
+              run: |
+                  curl -fsSL "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" | tar xJ
+                  cd "ffmpeg-$FFMPEG_VERSION"
+                  ./configure --prefix="$FFMPEG_PREFIX" \
+                      --enable-shared --disable-static --enable-pic \
+                      --disable-programs --disable-doc \
+                      --disable-autodetect --enable-pthreads \
+                      --disable-everything \
+                      --disable-avdevice --disable-avfilter --disable-swresample \
+                      --enable-decoder=h264,hevc --enable-parser=h264,hevc
+                  make -j"$(nproc)"
+                  make install
+
+            - name: Point the build at FFmpeg
+              # LD_LIBRARY_PATH too: the stub generator imports the module right after it is built, and
+              # auditwheel has to find the libraries to bundle them.
+              run: |
+                  echo "PKG_CONFIG_PATH=$FFMPEG_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
+                  echo "LD_LIBRARY_PATH=$FFMPEG_PREFIX/lib" >> "$GITHUB_ENV"
+                  PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig" pkg-config --modversion libavcodec libavformat libavutil libswscale
 
             - name: Set up Python build/CI tooling
               # Bookworm's Python is externally managed (PEP 668), so the tooling goes into a venv.
@@ -86,6 +124,8 @@ jobs:
             - name: Smoke test wheel
               working-directory: ${{ runner.temp }}
               run: |
+                  # Only what the wheel bundles may be used here, not the FFmpeg build it was made from.
+                  unset LD_LIBRARY_PATH
                   python3 -m venv smoke-venv
                   smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
                   smoke-venv/bin/python -m pip install numpy pydantic
