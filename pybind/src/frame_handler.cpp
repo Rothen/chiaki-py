@@ -325,6 +325,10 @@ ChiakiFfmpegFrame FrameHandler::pull_decoded_frame()
     if (!decoder)
         throw std::runtime_error("Session has no FFmpeg decoder");
 
+    // The decoder's mutex is held by chiaki's receive thread while it decodes, and FFmpeg logs from
+    // there (through ffmpeg_log_python), which takes the GIL: waiting for the mutex with the GIL held
+    // would deadlock.
+    GilReleaseIfHeld release;
     int32_t frames_lost;
     return chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
 }

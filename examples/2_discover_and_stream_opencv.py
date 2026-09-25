@@ -93,7 +93,6 @@ def get_registration(settings: Settings, host: DiscoveryHost, dir: Path, force_p
 def main(force_pair: bool = False, headless: bool = False, dir: Path = Path('./cache')) -> None:
     settings = Settings()
     settings.set_log_verbose(False)
-    settings.set_hardware_decoder('cuda')
 
     print("Scanning network for consoles (3s)...")
     hosts = discover_hosts(settings, timeout=3.0)

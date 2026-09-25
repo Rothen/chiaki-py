@@ -8,7 +8,7 @@ object, from which OpenGL fills a texture that is drawn on the screen. Compare
 OpenCV, and 1.4.2_stream_cuda_qt.py, which does this inside a Qt window.
 
 Usage:
-    python examples/1.4.4_stream_cuda_glfw.py
+    python examples/4_stream_cuda_glfw.py
 
 The registration is the one written by 1.3_register_console.py. Press 'q' or
 Esc in the window, or Ctrl+C in the terminal, to quit.

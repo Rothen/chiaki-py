@@ -32,9 +32,9 @@ class Session:
 
     Wraps the pybind11 `ChiakiPySession` (the actual connection, input and event source) together
     with a `FrameHandler` (how decoded frames are retrieved: to system memory, to a CUDA buffer or
-    kept on the Vulkan device - see `frames()`). Build one with `connect()`, which takes a
-    `HostRegistration` instead of a raw `ChiakiPySessionConnectInfo`; use it as a context manager, or
-    call `stop()` directly, to make sure the connection is torn down.
+    kept on the Vulkan device - see `frames()`). It is built from a `HostRegistration` instead of a
+    raw `ChiakiPySessionConnectInfo`, and `frame_handler_cls` picks the handler. Use it as a context
+    manager, or call `connect()` and `disconnect()` yourself, so the connection is always torn down.
     """
 
     def __init__(
@@ -107,13 +107,12 @@ class Session:
         self.disconnect()
 
     def connect(self) -> None:
-        """Start connecting to the console.
+        """Connect to the console and block until the session is established.
 
-        With `wait` (the default), block until the session is established, or raise SessionConnectError
-        if the console refuses or it fails (see its `reason`), or TimeoutError after `timeout` seconds;
-        either way the attempt is torn down before raising. A login PIN request does not end the wait:
-        answer it from an on_login_pin_requested() subscription. Without `wait`, return right after the
-        attempt started and follow it through on_connected_changed()/on_session_quit().
+        Raises SessionConnectError if the console refuses or the connection fails (see its `reason`),
+        and RuntimeError up front if the frame handler needs a hardware decoder that `settings` was not
+        set up for; either way the attempt is torn down before raising. There is no timeout. A login PIN
+        request does not end the wait: answer it from an on_login_pin_requested() subscription.
         """
         hw_type = self.__cp_session.hardware_decoder_type()
 
@@ -155,9 +154,16 @@ class Session:
     def audio_frames(
         self,
     ) -> Iterator[npt.NDArray[np.int16]]:
+        """Yield the queued audio as int16 arrays of shape (frames, channels), each holding every frame
+        queued since the last one. The rate and channel count are on `cp_session.get_audio_handler()`.
+
+        Yields nothing unless the session is connected. Don't combine this with an `AudioSink`: both take
+        frames off the same queue, so each would only get part of the audio.
+        """
         self._iter_audio_frames = AudioFrameEventIterator(
             self.__cp_session.on_audio_frame_available(),
-            lambda: self.__cp_session.get_audio_handler().get_frame()
+            lambda: self.__cp_session.get_audio_handler().get_frame(),
+            lambda: self.__active
         )
         if not self.__connected.is_set():
             return []
@@ -168,18 +174,21 @@ class Session:
         max_fps: float = 60.0,
         out: npt.NDArray[np.uint8] | VulkanFrame | Any | None = None,
     ) -> Iterator[npt.NDArray[np.uint8] | VulkanFrame | Any]:
-        """Yield decoded frames as (H, W, 3) uint8 RGB arrays, downloaded to system memory.
+        """Yield decoded frames, at most `max_fps` per second (0 = every frame). Yields nothing unless
+        the session is connected.
 
-        By default every frame is a new array. Pass `out` (C-contiguous, uint8,
-        with exactly the stream's (H, W, 3) shape) to have every frame written
-        into it instead: the same array is then yielded each time and is
-        overwritten by the next frame, so copy it if you keep it or hand it to
-        another thread.
+        What a frame is depends on the frame handler: a (H, W, 3) uint8 RGB numpy array for
+        CpuFrameHandler, a (H, W, 3) uint8 CuPy array for CudaFrameHandler, a VulkanFrame for
+        VulkanFrameHandler. By default every frame is a new object. Pass `out` (an array of the
+        stream's shape, see the handler's `empty_frame()`) to have every frame written into it
+        instead: the same object is then yielded each time and is overwritten by the next frame, so
+        copy it if you keep it or hand it to another thread.
         """
         if not self.__connected.is_set():
             return []
         self._iter_frames = FrameEventIterator(
             self.__cp_session.on_frame_available(),
-            lambda: self.__frame_handler.get_frame(out)
+            lambda: self.__frame_handler.get_frame(out),
+            lambda: self.__active
         )
         return self._iter_frames(max_fps)

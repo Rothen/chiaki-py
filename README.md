@@ -1,6 +1,14 @@
 # chiaki-py
 
-PS4/PS5 Remote Play from Python, built on [chiaki-ng](https://github.com/streetpea/chiaki-ng): discover consoles on the network, pair with them, stream video, and send controller input.
+PS4/PS5 Remote Play from Python, built on [chiaki-ng](https://github.com/streetpea/chiaki-ng): discover consoles on the network, pair with them, stream video and audio, and send controller input.
+
+## Install
+
+```bash
+pip install chiaki-py
+```
+
+Python 3.11 only. Wheels are built for Windows, Ubuntu and macOS (Apple Silicon); anywhere else, see [Building from source](#building-from-source).
 
 ## Quickstart
 
@@ -27,6 +35,8 @@ with Session(settings, registration) as session:
 
 `Serializer.save(registration, path)` / `Serializer.load(HostRegistration, path)` persist a `registration` to JSON so you don't have to pair every run.
 
+To hear the stream, create an `AudioSink(session)` before connecting: it plays the audio on the default output device (through [sounddevice](https://python-sounddevice.readthedocs.io)) on its own thread and stops by itself when the session ends. The Qt `StreamDisplay` does this for you.
+
 What `session.frames()` yields depends on the frame handler class passed as the third argument to `Session`:
 
 - **`CpuFrameHandler`** (default): downloads every frame to system memory as the numpy array above.
@@ -50,6 +60,7 @@ chiaki-py logs through Python's standard `logging` module, including the message
 | --- | --- |
 | `chiaki_py.lib` | chiaki-ng: connecting, streaming, pairing and discovery |
 | `chiaki_py.lib.placebo` | libplacebo, which draws `VulkanFrameHandler` frames (Windows) |
+| `chiaki_py.lib.ffmpeg` | FFmpeg, which decodes the video (e.g. `Could not find ref with POC 39` after packet loss, which the stream recovers from) |
 | `chiaki_py.*` | chiaki-py's own Python code |
 
 Like any library, chiaki-py prints nothing until your program configures logging. To see what it is doing:
@@ -59,9 +70,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("chiaki_py.lib.placebo").setLevel(logging.WARNING)  # loggers can be tuned one by one
+logging.getLogger("chiaki_py.lib.ffmpeg").setLevel(logging.CRITICAL)   # e.g. hide decoder errors
 ```
 
-chiaki-ng's `VERBOSE` and `DEBUG` levels and libplacebo's `TRACE` all arrive as `DEBUG`.
+chiaki-ng's `VERBOSE` and `DEBUG` levels, libplacebo's `TRACE` and FFmpeg's `VERBOSE`, `DEBUG` and `TRACE` all arrive as `DEBUG`. FFmpeg messages less severe than `INFO` are dropped before they reach Python.
 
 These settings drop messages before they reach Python, which is cheaper than filtering them there. The stream sends many messages per second at the lowest levels, so use these rather than a logger level to silence them:
 
@@ -71,28 +83,33 @@ These settings drop messages before they reach Python, which is cheaper than fil
 
 ## Examples
 
-Run these from the root of a clone of the repo, e.g. `python examples/1.2_discover_hosts.py`. The scripts share a `./cache` directory (relative to where you run them) for the PSN account and console registration, so run them from the same place every time. The `1.x` scripts are the step-by-step path; `2_...` does the same in one script.
+Run these from the root of a clone of the repo, e.g. `python examples/1.2_discover_hosts.py`. The scripts share a `./cache` directory (relative to where you run them) for the PSN account and console registration, so run them from the same place every time. The `1.x` scripts are the step-by-step path; `2_...` does the same in one script; `3_...` to `5_...` are more ways to stream once you have paired.
 
 ### Step by step
 
 1. **`1.1_login.py`**: PSN login. Opens a Qt web view to sign in (`--headless` for the terminal instead) and saves the account to `cache/psn_account.json`.
 2. **`1.2_discover_hosts.py [--timeout 3.0]`**: scans the network and prints the consoles that answer. No login or pairing needed.
 3. **`1.3_register_console.py <host> <pin> [--ps4] [--console-pin PIN]`**: pairs with the console at `<host>` using the PIN from its Link Device screen (PS5: Settings > System > Remote Play > Link Device; PS4: Settings > Remote Play Connection Settings > Add Device) and saves `cache/host_registration.json`. Needs the account from step 1. Defaults to a PS5; pass `--ps4` for a PS4.
-4. **Stream.** Each of these loads `cache/host_registration.json` from step 3, attaches a DualSense if one is connected, and differs in how frames get on screen. In the Qt ones (1.4.1–1.4.3), press `F` for the frame-rate overlay and `A` to lock the aspect ratio:
-   - **`1.4.0_stream_cpu_opencv.py`**: the minimal version, frames decoded to system memory as a numpy array and shown with `cv2.imshow` (`q` quits). Works everywhere, no GPU needed: `pip install opencv-python`.
-   - **`1.4.1_stream_cpu_qt.py`**: the built-in PyQt6 `StreamDisplay`, frames decoded to system memory. Works everywhere, no GPU needed.
+4. **Stream** in the built-in PyQt6 `StreamDisplay`, which also plays the audio. Each of these loads `cache/host_registration.json` from step 3, attaches a DualSense if one is connected, and differs in how frames get on screen. Press `F` for the frame-rate overlay and `A` to lock the aspect ratio:
+   - **`1.4.1_stream_cpu_qt.py`**: frames decoded to system memory. Works everywhere, no GPU needed.
    - **`1.4.2_stream_cuda_qt.py`**: same `StreamDisplay`, with `CudaFrameHandler` — frames are RGB-converted on the GPU and drawn by an OpenGL widget straight from GPU memory. NVIDIA only: `pip install cupy-cuda12x cuda-python PyOpenGL`.
    - **`1.4.3_stream_vulkan_qt.py`**: same `StreamDisplay`, with `VulkanFrameHandler` and the Vulkan hardware decoder. [libplacebo](https://code.videolan.org/videolan/libplacebo) draws the window on the very Vulkan device that decoded the frames, so nothing is copied, not even within the GPU. No CUDA/OpenGL, no extra packages — just a GPU and driver with Vulkan video decoding. Windows only so far.
-   - **`1.4.4_stream_cuda_glfw.py`**: the CUDA path without Qt, in a plain GLFW window (frame rate drawn in the top-right corner; `q`/Esc quits). NVIDIA only: `pip install cupy-cuda12x cuda-python glfw PyOpenGL`.
-   - **`1.4.5_stream_tensor.py`**: like 1.4.4, but each frame lands in a (3, H, W) uint8 PyTorch tensor on the GPU (channels first, over interleaved memory, i.e. PyTorch's `channels_last` memory format). The tensor can feed a model such as YOLO without leaving the GPU (convert it with `.unsqueeze(0).float().div(255)`, then resize), and the window draws straight from it. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install cuda-python glfw PyOpenGL`.
 
 ### All in one
 
-- **`2_discover_and_stream_opencv.py [--force-pair] [--headless] [--dir ./cache]`**: discover a console (you pick one if several answer), log in, pair and stream into an OpenCV window (`q` quits), all without the other scripts. Pairing is cached per console as `<console name>.json` in `--dir`; pass `--force-pair` to pair again. Frames arrive as a CPU numpy array, the easiest one to adapt for processing with OpenCV.
+- **`2_discover_and_stream_opencv.py [--force-pair] [--headless] [--dir ./cache]`**: discover a console (you pick one if several answer), log in, pair and stream into an OpenCV window (`q` quits), all without the other scripts. Pairing is cached per console as `<console name>.json` in `--dir`; pass `--force-pair` to pair again. Frames arrive as a CPU numpy array, the easiest one to adapt for processing with OpenCV. `pip install opencv-python typer`.
+
+### Without Qt
+
+These also load `cache/host_registration.json` from step 3 and attach a DualSense if one is connected. The frame rate is drawn in the top-right corner.
+
+- **`3_stream_cpu_opencv.py`**: the minimal viewer, frames decoded to system memory into a numpy array, shown with `cv2.imshow` (`q` quits), with audio through `AudioSink`. Works everywhere, no GPU needed: `pip install opencv-python`.
+- **`4_stream_cuda_glfw.py`**: the CUDA path in a plain GLFW window (`q`/Esc quits). NVIDIA only: `pip install cupy-cuda12x glfw opencv-python typer`.
+- **`5_stream_tensor_opengl.py`**: like 4, but each frame lands in a (3, H, W) uint8 PyTorch tensor on the GPU (channels first, over interleaved memory, i.e. PyTorch's `channels_last` memory format). The tensor can feed a model such as YOLO without leaving the GPU (convert it with `.unsqueeze(0).float().div(255)`, then resize), and the window draws straight from it. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install glfw opencv-python typer`.
 
 ### Shared code
 
-`helpers.py` (attaches a DualSense), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 1.4.4/1.4.5; `GLVideoSurface.show()` takes any (3, H, W) uint8 CUDA array — torch or CuPy, planar or a view of interleaved memory), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
+`helpers.py` (attaches a DualSense), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 4 and 5; `GLVideoSurface.show()` takes any (3, H, W) uint8 CUDA array — torch or CuPy, planar or a view of interleaved memory), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
 
 ## Building from source
 
@@ -211,7 +228,7 @@ All builds put the compiled module (and, on Windows, its DLLs) in `chiaki_py/lib
 
 ## Known limitations
 
-- **Audio:** not played or exposed to Python yet; only video frames are delivered. The audio settings exist but have no effect.
+- **Audio:** `settings.set_audio_volume()` has no effect yet; set the volume on the output device instead.
 - **Rumble/haptics:** controller feedback from the console isn't forwarded to your controller yet.
 - **Microphone:** not sent to the console yet, so voice chat doesn't work.
 - Only Windows, Ubuntu and macOS (Apple Silicon) are tested; other Linux distros and Intel Macs aren't supported yet.

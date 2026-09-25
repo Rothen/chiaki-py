@@ -54,12 +54,12 @@ class StreamDisplay(QObject):
 
     How the frames are rendered follows the session's frame handler:
       - CpuFrameHandler: frames are decoded to system memory and shown by a plain QMainWindow
-        (cpu_view.py).
+        (views/cpu_view.py).
       - CudaFrameHandler: frames are converted on the GPU and drawn straight from GPU
-        memory by an OpenGL widget (gpu_view.py), never touching the CPU. This needs an
+        memory by an OpenGL widget (views/cuda_view.py), never touching the CPU. This needs an
         NVIDIA GPU, a QApplication, and pip install cupy-cuda12x cuda-python PyOpenGL.
       - VulkanFrameHandler: frames stay where the Vulkan hardware decoder put them and are drawn
-        on that same Vulkan device by libplacebo, which converts them to RGB (vulkan_view.py),
+        on that same Vulkan device by libplacebo, which converts them to RGB (views/vulkan_view.py),
         so they are not copied at all. Needs Settings.set_hardware_decoder("vulkan") and a
         QApplication; works on any GPU with Vulkan video decoding, Windows only so far.
     Other handlers cannot be shown.

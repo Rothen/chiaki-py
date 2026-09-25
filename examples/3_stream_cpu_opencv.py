@@ -3,11 +3,11 @@
 Frames are decoded to system memory into one (H, W, 3) uint8 RGB numpy array
 that every frame overwrites, and shown with cv2.imshow - the easiest starting
 point for processing frames with OpenCV or NumPy. See 1.4.1_stream_cpu_qt.py
-for the Qt viewer, and 1.4.2_stream_cuda_qt.py or 1.4.5_stream_tensor.py to
+for the Qt viewer, and 1.4.2_stream_cuda_qt.py or 5_stream_tensor_opengl.py to
 keep the frames on the GPU.
 
 Usage:
-    python examples/1.4.0_stream_cpu_opencv.py
+    python examples/3_stream_cpu_opencv.py
 
 The registration is the one written by 1.3_register_console.py. Press 'q' in
 the window, or Ctrl+C in the terminal, to quit.

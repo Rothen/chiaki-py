@@ -1,7 +1,7 @@
 """PyQt6 remote-play viewer that renders on the GPU - the pixels never touch the CPU.
 
 With the CudaFrameHandler every frame is converted to RGB on the GPU and drawn
-straight from GPU memory by an OpenGL widget (see chiaki_py/gui/stream/gpu_view.py).
+straight from GPU memory by an OpenGL widget (see chiaki_py/gui/stream/views/cuda_view.py).
 Compare 1.4.1_stream_cpu_qt.py, which decodes to system memory.
 
 Usage:

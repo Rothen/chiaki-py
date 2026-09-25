@@ -10,7 +10,7 @@ drawn from the tensor's own GPU memory through CUDA-OpenGL interop (cuda_gl.py),
 so no pixel ever reaches the CPU.
 
 Usage:
-    python examples/1.4.5_stream_tensor.py
+    python examples/5_stream_tensor_opengl.py
 
 The registration is the one written by examples/1.3_register_console.py. Press
 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.

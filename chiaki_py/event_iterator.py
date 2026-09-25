@@ -17,15 +17,14 @@ _T = TypeVar("_T")
 
 
 class _EventIterator(Generic[_T]):
-    def __init__(self, event_source: BoolEventSource, pull_fn: Callable[[], _T | None]):
+    def __init__(self, event_source: BoolEventSource, pull_fn: Callable[[], _T | None], is_active: Callable[[], bool]):
         """`is_active` is polled at least every 0.5s; iteration ends once it returns False (e.g. the session
         quit or failed to connect), instead of waiting forever for an event that will never come."""
         self.__event_source = event_source
         self.__pull_fn = pull_fn
-        self.__active = False
+        self.__is_active = is_active
 
     def __call__(self, max_fps: float = 0.0) -> Iterator[_T]:
-        self.__active = True
         return self._iter(self.__pull_fn, max_fps)
 
     def _iter(self, pull: Callable[[], _T | None], max_fps: float) -> Iterator[_T]:
@@ -34,7 +33,7 @@ class _EventIterator(Generic[_T]):
         subscription = self.__event_source.subscribe(lambda _: ready.set())
         try:
             next_yield = 0.0
-            while self.__active:
+            while self.__is_active():
                 if not ready.wait(timeout=0.5):
                     continue
                 ready.clear()

@@ -1,6 +1,7 @@
 #ifndef CHIAKI_PY_PYLOG_H
 #define CHIAKI_PY_PYLOG_H
 
+#include <cstdarg>
 #include <optional>
 
 #include <pybind11/pybind11.h>
@@ -17,6 +18,10 @@ void chiaki_log_cb_python(ChiakiLogLevel level, const char *msg, void *user);
 
 // The same for libplacebo's messages (pl_log_level passed as int), to `chiaki_py.lib.placebo`.
 void placebo_log_python(int pl_level, const char *msg);
+
+// An av_log callback (see av_log_set_callback, which init_pylog() installs) that hands FFmpeg's messages to
+// `chiaki_py.lib.ffmpeg`. Messages above av_log_get_level() (AV_LOG_INFO by default) are dropped first.
+void ffmpeg_log_python(void *avcl, int av_level, const char *fmt, va_list vl);
 
 // Releases the GIL for its lifetime if the calling thread holds it, and does nothing otherwise.
 // For code that waits for chiaki's threads (joins them) and may be reached with or without the GIL,

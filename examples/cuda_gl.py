@@ -1,5 +1,5 @@
-"""CUDA -> OpenGL interop used by glfw_video.py (and so by 1.4.4_stream_cuda_glfw.py and
-1.4.5_stream_tensor.py): shows (3, H, W) uint8 RGB frames that live in CUDA device memory
+"""CUDA -> OpenGL interop used by glfw_video.py (and so by 4_stream_cuda_glfw.py and
+5_stream_tensor_opengl.py): shows (3, H, W) uint8 RGB frames that live in CUDA device memory
 (a torch tensor, a CuPy array, anything with __cuda_array_interface__) as an OpenGL
 texture, without them ever touching the CPU, with an optional text overlay (used for the
 frame rate) in the top-right corner.
