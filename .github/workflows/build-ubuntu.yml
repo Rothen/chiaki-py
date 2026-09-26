@@ -81,7 +81,7 @@ jobs:
               run: |
                   python -m venv smoke-venv
                   smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
-                  smoke-venv/bin/python -m pip install numpy pydantic
+                  smoke-venv/bin/python -m pip install numpy pydantic sounddevice
                   smoke-venv/bin/python -c "import chiaki_py.lib as lib; print(lib.__file__); assert 'site-packages' in lib.__file__"
                   ldd smoke-venv/lib/python3.11/site-packages/chiaki_py/lib/chiaki_py.*.so
 
