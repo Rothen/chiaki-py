@@ -32,7 +32,7 @@ dependencies = [
     "pycryptodomex>=3.19",
     "PyQt6>=6.6",
     "PyQt6-WebEngine>=6.6",
-    "dualsense-py>=0.3.4",
+    "dualsense-py>=0.4.0",
     "cuda-python==13.4.1; sys_platform != 'darwin'",
     "PyOpenGL==3.1.10",
     "miniaudio==1.71",
