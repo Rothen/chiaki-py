@@ -12,6 +12,7 @@ from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
 from .threads.frame_thread import FrameThread
 from ...audio_sink import AudioSink
+from ..._qt import check_qt_platform_libs
 from .views.cpu_view import CpuVideoWidget
 from .views.vulkan_view import VulkanVideoWidget
 from .threads.fps_thread import FpsThread
@@ -130,6 +131,9 @@ class StreamDisplay(QObject):
         """Open a StreamDisplay for `session` and run the Qt event loop until its window is closed.
         Reuses an existing QApplication if one is already running, otherwise creates one from `argv`.
         Returns the process exit code from `QApplication.exec()`."""
-        app = QCoreApplication.instance() or QApplication(argv)
+        app = QCoreApplication.instance()
+        if app is None:
+            check_qt_platform_libs()
+            app = QApplication(argv)
         _ = StreamDisplay(session, show_stats, keep_aspect_ratio)
         return app.exec()

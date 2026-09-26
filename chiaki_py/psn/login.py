@@ -14,6 +14,7 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWebEngineQuick import QtWebEngineQuick
 
+from .._qt import check_qt_platform_libs
 from .account import PSNAccount
 
 CLIENT_ID = "ba495a24-818c-472b-b12d-ff231c1b5745"
@@ -160,6 +161,7 @@ class PSNLoginQt(PSNLogin):
     @classmethod
     def login(cls) -> PSNAccount:
         if QGuiApplication.instance() is None:
+            check_qt_platform_libs()
             QtWebEngineQuick.initialize()  # pyright: ignore[reportCallIssue]
 
         app = QGuiApplication.instance() or QGuiApplication(sys.argv)
