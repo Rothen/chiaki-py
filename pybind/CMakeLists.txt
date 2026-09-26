@@ -2,7 +2,7 @@ if(NOT DEPS_FOLDER)
     set(DEPS_FOLDER ${CMAKE_SOURCE_DIR}/deps)
 endif(NOT DEPS_FOLDER)
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(fmt REQUIRED)
 find_package(OpenSSL REQUIRED)
 
@@ -24,13 +24,12 @@ else()
 endif(MSVC)
 
 
-set(PYBIND11_PYTHON_VERSION 3.11)
 include(FetchContent)
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
     SOURCE_DIR "${DEPS_FOLDER}/pybind11"
-    GIT_TAG v2.13.6
+    GIT_TAG v3.0.1
 )
 FetchContent_MakeAvailable(pybind11)
 include_directories(${DEPS_FOLDER}/pybind11)

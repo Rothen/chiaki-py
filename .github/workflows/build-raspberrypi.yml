@@ -14,14 +14,19 @@ on:
 
 jobs:
     build:
-        name: Build wheel (linux_aarch64 for Raspberry Pi OS, cp311)
+        name: Build wheel (linux_aarch64 for Raspberry Pi OS, Python ${{ matrix.python-version }})
         # A native arm64 runner, but the build itself runs in Debian 12 (Bookworm), which is what 64-bit
         # Raspberry Pi OS is based on: its glibc (2.36) decides the manylinux tag auditwheel can give the
         # wheel, and one built on the runner's own Ubuntu 24.04 (glibc 2.39) would not install on a Pi.
-        # Bookworm's Python is 3.11, the one version pyproject.toml allows.
+        # Bookworm only ships Python 3.11, so each version is a portable python-build-standalone build
+        # installed with uv; those need glibc 2.17 and run fine in the container.
         # Raspberry Pi 3/4/5 (and Zero 2 W) running a 64-bit OS only; 32-bit (armhf) Pi OS is not covered.
         runs-on: ubuntu-24.04-arm
         container: debian:bookworm
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ["3.11", "3.12", "3.13", "3.14"]
         env:
             # Bookworm's FFmpeg (5.1, also what Raspberry Pi OS ships) is too old for chiaki-ng, which needs
             # AVFrame.duration (FFmpeg 6.0+), so a newer one is built here and auditwheel bundles it into the
@@ -90,10 +95,14 @@ jobs:
                   echo "LD_LIBRARY_PATH=$FFMPEG_PREFIX/lib" >> "$GITHUB_ENV"
                   PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig" pkg-config --modversion libavcodec libavformat libavutil libswscale
 
-            - name: Set up Python build/CI tooling
-              # Bookworm's Python is externally managed (PEP 668), so the tooling goes into a venv.
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v6
+
+            - name: Set up Python ${{ matrix.python-version }} and build/CI tooling
               run: |
-                  python3 -m venv "$RUNNER_TEMP/venv"
+                  uv python install ${{ matrix.python-version }}
+                  echo "BUILD_PYTHON=$(uv python find ${{ matrix.python-version }})" >> "$GITHUB_ENV"
+                  uv venv --seed --python ${{ matrix.python-version }} "$RUNNER_TEMP/venv"
                   echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
                   "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade pip
                   "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade protobuf build twine pybind11_stubgen auditwheel patchelf
@@ -126,13 +135,14 @@ jobs:
               run: |
                   # Only what the wheel bundles may be used here, not the FFmpeg build it was made from.
                   unset LD_LIBRARY_PATH
-                  python3 -m venv smoke-venv
+                  "$BUILD_PYTHON" -m venv smoke-venv
                   smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
                   smoke-venv/bin/python -m pip install numpy pydantic
                   smoke-venv/bin/python -c "import chiaki_py.lib as lib; print(lib.__file__); assert 'site-packages' in lib.__file__"
                   # SDL's audio subsystem has to start from the bundled library; runners have no sound card, hence the dummy driver.
                   SDL_AUDIODRIVER=dummy smoke-venv/bin/python -c "from chiaki_py.lib import AudioOutput; print('audio devices:', AudioOutput.get_devices())"
-                  so=$(echo smoke-venv/lib/python3.11/site-packages/chiaki_py/lib/chiaki_py.*.so)
+                  site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+                  so=$(echo "$site"/chiaki_py/lib/chiaki_py.*.so)
                   file "$so"
                   if ldd "$so" | grep "not found"; then
                       echo "::error::$so has unresolved shared libraries"
@@ -141,6 +151,6 @@ jobs:
 
             - uses: actions/upload-artifact@v4
               with:
-                  name: dist-raspberrypi
+                  name: dist-raspberrypi-${{ matrix.python-version }}
                   path: dist/
                   if-no-files-found: error

@@ -1,12 +1,12 @@
-pybind11_stubgen==2.5.5
-numpy==2.4.6
+pybind11_stubgen==3.0.0
+numpy==2.5.3
 pydantic==2
 requests==2.34.2
 pycryptodomex==3.23.0
 PyQt6==6.11.0
 PyQt6-WebEngine==6.11.0
 opencv-python==5.0.0.93
-dualsense-py==0.3.3
+dualsense-py==0.3.4
 cuda-python==13.4.1
 PyOpenGL==3.1.10
 miniaudio==1.71

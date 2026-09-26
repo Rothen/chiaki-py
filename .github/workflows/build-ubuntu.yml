@@ -14,14 +14,18 @@ on:
 
 jobs:
     build:
-        name: Build wheel (linux_x86_64, cp311)
+        name: Build wheel (linux_x86_64, Python ${{ matrix.python-version }})
         # Pinned rather than ubuntu-latest: auditwheel can only repair a wheel into a manylinux tag it
         # recognizes, and a too-new glibc (e.g. from ubuntu-latest tracking a very recent Ubuntu release)
         # fails with "too-recent versioned symbols". ubuntu-24.04 (glibc 2.39) is within auditwheel's
         # known manylinux policies.
         runs-on: ubuntu-24.04
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ["3.11", "3.12", "3.13", "3.14"]
         env:
-            PYTHON_VERSION: "3.11"
+            PYTHON_VERSION: ${{ matrix.python-version }}
 
         defaults:
             run:
@@ -59,7 +63,7 @@ jobs:
                   cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
                     -DCMAKE_BUILD_TYPE=Release \
                     -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
-                    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+                    -DCMAKE_POSITION_INDEPENDENT_CODE=ON                     -DPython3_EXECUTABLE="$(which python)" -DPython_EXECUTABLE="$(which python)" -DPYTHON_EXECUTABLE="$(which python)"
 
             - name: Build chiaki-py
               run: cmake --build build-release --config Release --target chiaki-py -- -j"$(nproc)"
@@ -85,10 +89,11 @@ jobs:
                   smoke-venv/bin/python -c "import chiaki_py.lib as lib; print(lib.__file__); assert 'site-packages' in lib.__file__"
                   # SDL's audio subsystem has to start from the bundled library; runners have no sound card, hence the dummy driver.
                   SDL_AUDIODRIVER=dummy smoke-venv/bin/python -c "from chiaki_py.lib import AudioOutput; print('audio devices:', AudioOutput.get_devices())"
-                  ldd smoke-venv/lib/python3.11/site-packages/chiaki_py/lib/chiaki_py.*.so
+                  site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+                  ldd "$site"/chiaki_py/lib/chiaki_py.*.so
 
             - uses: actions/upload-artifact@v4
               with:
-                  name: dist-ubuntu
+                  name: dist-ubuntu-${{ matrix.python-version }}
                   path: dist/
                   if-no-files-found: error

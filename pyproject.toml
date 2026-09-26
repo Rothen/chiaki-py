@@ -18,6 +18,9 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Video",
     "Topic :: Software Development :: Libraries",
 ]
@@ -30,9 +33,10 @@ dependencies = [
     "PyQt6>=6.6",
     "PyQt6-WebEngine>=6.6",
     "dualsense-py>=0.3.4",
-    "cuda-python==13.4.1",
+    "cuda-python==13.4.1; sys_platform != 'darwin'",
     "PyOpenGL==3.1.10",
-    "miniaudio==1.71"
+    "miniaudio==1.71",
+    "cupy-cuda12x[ctk]==14.2.0; sys_platform != 'darwin'"
 ]
 
 [project.urls]

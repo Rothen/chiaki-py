@@ -14,10 +14,14 @@ on:
 
 jobs:
     build:
-        name: Build wheel (win_amd64, cp311)
+        name: Build wheel (win_amd64, Python ${{ matrix.python-version }})
         runs-on: windows-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ["3.11", "3.12", "3.13", "3.14"]
         env:
-            PYTHON_VERSION: "3.11"
+            PYTHON_VERSION: ${{ matrix.python-version }}
             VCPKG_ROOT: ${{ github.workspace }}\vcpkg
             VCPKG_TAG: "2026.07.29"
 
@@ -75,22 +79,29 @@ jobs:
 
             - name: Configure
               run: |
+                  $py = (Get-Command python).Source
                   cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM="3.5" `
                     -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
                     -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
-                    -DCMAKE_BUILD_TYPE=Release
+                    -DCMAKE_BUILD_TYPE=Release `
+                    -DPython3_EXECUTABLE="$py" -DPython_EXECUTABLE="$py" -DPYTHON_EXECUTABLE="$py"
 
             - name: Build chiaki-py
               run: cmake --build build-release --config Release --target chiaki-py -- -j4
 
-            - name: Build wheel + sdist
-              run: python -m build
+            - name: Build wheel
+              run: python -m build --wheel
+
+            # One sdist is enough; the other matrix entries would upload identical copies.
+            - name: Build sdist
+              if: matrix.python-version == '3.11'
+              run: python -m build --sdist
 
             - name: Check distributions
               run: python -m twine check dist/*
 
             - uses: actions/upload-artifact@v4
               with:
-                  name: dist-windows
+                  name: dist-windows-${{ matrix.python-version }}
                   path: dist/
                   if-no-files-found: error

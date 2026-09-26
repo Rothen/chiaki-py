@@ -8,7 +8,7 @@ PS4/PS5 Remote Play from Python, built on [chiaki-ng](https://github.com/streetp
 pip install chiaki-py
 ```
 
-Python 3.11 only. Wheels are built for Windows, Ubuntu and macOS (Apple Silicon); anywhere else, see [Building from source](#building-from-source).
+Python 3.11 to 3.14. Wheels are built for Windows, Ubuntu, macOS (Apple Silicon) and 64-bit Raspberry Pi OS; anywhere else, see [Building from source](#building-from-source).
 
 ## Quickstart
 

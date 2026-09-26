@@ -13,11 +13,7 @@ from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
 from .threads.frame_thread import FrameThread
 from ...audio_sink import AudioSink
 from .views.cpu_view import CpuVideoWidget
-from .views.cuda_view import CudaVideoWidget
 from .views.vulkan_view import VulkanVideoWidget
-from chiaki_py.gui.stream.views.cpu_view import CpuVideoWidget
-from chiaki_py.gui.stream.views.cuda_view import CudaVideoWidget
-from chiaki_py.gui.stream.views.vulkan_view import VulkanVideoWidget
 from .threads.fps_thread import FpsThread
 
 _logger = logging.getLogger(__name__)
@@ -108,6 +104,7 @@ class StreamDisplay(QObject):
         if isinstance(self.session.frame_handler, CpuFrameHandler):
             return CpuVideoWidget(self.frame_thread, self.fps_thread)
         elif isinstance(self.session.frame_handler, CudaFrameHandler):
+            from .views.cuda_view import CudaVideoWidget
             return CudaVideoWidget(self.frame_thread, self.fps_thread)
         elif isinstance(self.session.frame_handler, VulkanFrameHandler):
             return VulkanVideoWidget(self.session, self.frame_thread, self.fps_thread)
