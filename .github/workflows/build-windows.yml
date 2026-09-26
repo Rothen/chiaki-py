@@ -30,12 +30,12 @@ jobs:
                 shell: powershell
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
               with:
                   fetch-depth: 0
 
             - name: Set up Python ${{ env.PYTHON_VERSION }}
-              uses: actions/setup-python@v5
+              uses: actions/setup-python@v7
               with:
                   python-version: ${{ env.PYTHON_VERSION }}
                   architecture: "x64"
@@ -65,7 +65,7 @@ jobs:
               run: echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
 
             - name: Cache vcpkg binary cache
-              uses: actions/cache@v4
+              uses: actions/cache@v6
               with:
                   path: ~\AppData\Local\vcpkg\archives
                   key: vcpkg-${{ runner.os }}-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg.json') }}
@@ -100,7 +100,7 @@ jobs:
             - name: Check distributions
               run: python -m twine check dist/*
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                   name: dist-windows-${{ matrix.python-version }}
                   path: dist/

@@ -54,7 +54,7 @@ jobs:
                       libfmt-dev \
                       libsdl2-dev libhidapi-dev libssl-dev libfftw3-dev liblcms2-dev libvulkan-dev zlib1g-dev
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
               with:
                   fetch-depth: 0
 
@@ -65,7 +65,7 @@ jobs:
 
             - name: Cache FFmpeg
               id: ffmpeg-cache
-              uses: actions/cache@v4
+              uses: actions/cache@v6
               with:
                   path: ${{ env.FFMPEG_PREFIX }}
                   # Bump the trailing revision when the configure flags below change.
@@ -96,7 +96,7 @@ jobs:
                   PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig" pkg-config --modversion libavcodec libavformat libavutil libswscale
 
             - name: Set up uv
-              uses: astral-sh/setup-uv@v6
+              uses: astral-sh/setup-uv@v10.2.0
 
             - name: Set up Python ${{ matrix.python-version }} and build/CI tooling
               run: |
@@ -149,7 +149,7 @@ jobs:
                       exit 1
                   fi
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                   name: dist-raspberrypi-${{ matrix.python-version }}
                   path: dist/
