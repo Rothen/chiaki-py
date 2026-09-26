@@ -130,7 +130,7 @@ Then, from a Visual Studio dev shell (*Developer PowerShell for VS*, or this rep
 ```powershell
 git clone https://github.com/Rothen/chiaki-py; cd chiaki-py
 
-pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
+pip install "protobuf==7.36.2" "grpcio-tools==1.84.0" pybind11_stubgen
 
 cmake --fresh -S . -B build-debug -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM="3.5" `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_TOOLCHAIN" `
@@ -158,7 +158,7 @@ sudo apt-get install -y \
 
 git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
 
-pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
+pip install "protobuf==7.36.2" "grpcio-tools==1.84.0" pybind11_stubgen
 
 cmake --fresh -S . -B build-release -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DCMAKE_BUILD_TYPE=Release \
@@ -197,7 +197,7 @@ Then build the extension:
 ```bash
 git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
 
-pip install "protobuf==5.29.3" "grpcio-tools==1.71.0" pybind11_stubgen
+pip install "protobuf==7.36.2" "grpcio-tools==1.84.0" pybind11_stubgen
 
 # /opt/homebrew isn't on clang's default search path, and protobuf@29 is keg-only
 export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib"
