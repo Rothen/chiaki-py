@@ -122,18 +122,7 @@ class CudaGLTexture:
         GL.glDeleteProgram(self.program)
 
 
-_ScalarT = TypeVar("_ScalarT", bound=np.generic)
-
-
-class _DataWithPointer(Any):
-    ptr: int
-
-class _CupyArray(npt.NDArray[_ScalarT]):
-    @property
-    def data(self) -> _DataWithPointer: ...
-
-
-class CudaVideoWidget(VideoMixin[_CupyArray], QOpenGLWidget): # pyright: ignore[reportIncompatibleMethodOverride]
+class CudaVideoWidget(VideoMixin[Any], QOpenGLWidget): # pyright: ignore[reportIncompatibleMethodOverride]
     """Shows a stream session's frames, decoded, converted and drawn without leaving the GPU.
 
     Frames are pulled by a FrameProducer on its own thread, which converts each one into a fresh CUDA
