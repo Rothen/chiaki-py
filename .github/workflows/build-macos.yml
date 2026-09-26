@@ -14,15 +14,15 @@ on:
 
 jobs:
     build:
-        name: Build wheel (macosx_14_0_arm64, Python ${{ matrix.python-version }})
-        runs-on: macos-14
+        name: Build wheel (macosx_15_0_arm64, Python ${{ matrix.python-version }})
+        runs-on: macos-15
         strategy:
             fail-fast: false
             matrix:
                 python-version: ["3.11", "3.12", "3.13", "3.14"]
         env:
             PYTHON_VERSION: ${{ matrix.python-version }}
-            MACOSX_DEPLOYMENT_TARGET: "14.0"
+            MACOSX_DEPLOYMENT_TARGET: "15.0"
 
         defaults:
             run:
@@ -104,7 +104,7 @@ jobs:
 
             - name: Build wheel
               env:
-                  _PYTHON_HOST_PLATFORM: macosx-14.0-arm64
+                  _PYTHON_HOST_PLATFORM: macosx-15.0-arm64
                   ARCHFLAGS: "-arch arm64"
               run: python -m build --wheel --outdir wheelhouse-raw
 
