@@ -21,6 +21,7 @@ public:
 
     void QueueFrame(int16_t *buf, size_t samples_count);
     py::array_t<int16_t> GetFrame(size_t max_frames = 0);
+    size_t ReadFrames(int16_t *out, size_t max_frames);
     size_t GetAudioQueuedFrames();
     void ClearAudioQueue();
     size_t GetAudioQueueMaxFrames();
@@ -34,11 +35,11 @@ public:
     unsigned int audio_rate = 0;
 private:
 
-    std::vector<int16_t> audio_buf;    // latest decoded frame, interleaved PCM
-    std::deque<int16_t> audio_queue;   // every decoded sample not yet read, interleaved PCM
-    size_t audio_queue_max_frames = 0; // 0 = derive from audio_buffer_size
+    std::vector<int16_t> audio_buf;
+    std::deque<int16_t> audio_queue;
+    size_t audio_queue_max_frames = 0;
     bool audio_queue_overflow_logged = false;
-    std::mutex audio_buf_mutex; // guards audio_buf and audio_queue: written by the decoder thread, read from Python
+    std::mutex audio_buf_mutex;
 };
 
 #endif // CHIAKI_PY_AUDIO_HANDLER_H

@@ -17,6 +17,7 @@
 #include "cuda_driver.h"
 #include "frame_handler.h"
 #include "audio_handler.h"
+#include "audio_output.h"
 #include "vulkan_renderer.h"
 #include "pylog.h"
 // #include "core/session.h"
@@ -226,6 +227,23 @@ PYBIND11_MODULE(chiaki_py, m)
              "Set the queue capacity in frames (0 = 3x the audio buffer size from Settings).")
         .def("get_audio_channels", &AudioHandler::GetAudioChannels, "Get the number of audio channels.")
         .def("get_audio_rate", &AudioHandler::GetAudioRate, "Get the audio sample rate in Hz.");
+
+    py::class_<AudioOutput>(m, "AudioOutput",
+                            "Plays a session's audio on an SDL output device. SDL's audio thread takes the frames "
+                            "straight off the session's AudioHandler queue, without the GIL, so don't read that "
+                            "queue anywhere else while it is open. chiaki_py.AudioSink wraps it.")
+        .def(py::init([](ChiakiPySession &session)
+                      { return new AudioOutput(session.GetAudioHandler()); }),
+             py::arg("session"), py::keep_alive<1, 2>())
+        .def("open", &AudioOutput::Open, py::arg("device_name") = "",
+             py::call_guard<py::gil_scoped_release>(),
+             "Open the output device (a name from get_devices(), '' = the system default) at the session's audio "
+             "rate and channel count and start playing. Raises RuntimeError before the first audio frame arrived, "
+             "or if the device can't be opened.")
+        .def("close", &AudioOutput::Close, py::call_guard<py::gil_scoped_release>(),
+             "Stop playing and close the device. Does nothing if it isn't open.")
+        .def("is_open", &AudioOutput::IsOpen, "Whether the device is open.")
+        .def_static("get_devices", &AudioOutput::GetDevices, "Names of the available audio output devices.");
 
     py::class_<CpuFrameHandler, FrameHandler>(m, "CpuFrameHandler",
         "Decodes and converts frames to RGB entirely on the CPU. Works with any decoder, needs no "

@@ -34,7 +34,7 @@ with Session(registration) as session:
 
 `Serializer.save(registration, path)` / `Serializer.load(HostRegistration, path)` persist a `registration` to JSON so you don't have to pair every run.
 
-To hear the stream, create an `AudioSink(session)` before connecting: it plays the audio on the default output device (through [sounddevice](https://python-sounddevice.readthedocs.io)) on its own thread and stops by itself when the session ends. The Qt `StreamDisplay` does this for you.
+To hear the stream, create an `AudioSink(session)` before connecting: it plays the audio on the default output device (or `AudioSink(session, device=...)`, one of `AudioSink.devices()`) through SDL, which is bundled with the wheel, on its own thread and stops by itself when the session ends. The Qt `StreamDisplay` does this for you.
 
 What `session.frames()` yields depends on the frame handler class passed as the third argument to `Session`:
 
@@ -100,15 +100,15 @@ Run these from the root of a clone of the repo, e.g. `python examples/1.2_discov
 
 ### Without Qt
 
-These also load `cache/host_registration.json` from step 3 and attach a DualSense if one is connected. The frame rate is drawn in the top-right corner.
+These also load `cache/host_registration.json` from step 3 and attach a DualSense if one is connected.
 
-- **`3_stream_cpu_opencv.py`**: the minimal viewer, frames decoded to system memory into a numpy array, shown with `cv2.imshow` (`q` quits), with audio through `AudioSink`. Works everywhere, no GPU needed: `pip install opencv-python`.
-- **`4_stream_cuda_glfw.py`**: the CUDA path in a plain GLFW window (`q`/Esc quits). NVIDIA only: `pip install cupy-cuda12x glfw opencv-python typer`.
+- **`3_simple_stream.py`**: the smallest viewer, a good starting point for your own code. Frames are decoded to system memory into one (H, W, 3) uint8 RGB numpy array that every frame overwrites, and shown with `cv2.imshow` (`q` in the window or Ctrl+C in the terminal quits). Audio goes through [miniaudio](https://github.com/irmen/pyminiaudio) instead of `AudioSink`, to show how to feed the session's audio queue to an audio library of your own (see `start_audio()` in `helpers.py`). Works everywhere, no GPU needed: `pip install opencv-python miniaudio`.
+- **`4_stream_cuda_glfw.py`**: the CUDA path in a plain GLFW window (`q`/Esc quits), with the frame rate drawn in the top-right corner. NVIDIA only: `pip install cupy-cuda12x glfw opencv-python typer`.
 - **`5_stream_tensor_opengl.py`**: like 4, but each frame lands in a (3, H, W) uint8 PyTorch tensor on the GPU (channels first, over interleaved memory, i.e. PyTorch's `channels_last` memory format). The tensor can feed a model such as YOLO without leaving the GPU (convert it with `.unsqueeze(0).float().div(255)`, then resize), and the window draws straight from it. NVIDIA plus a CUDA build of [PyTorch](https://pytorch.org): `pip install glfw opencv-python typer`.
 
 ### Shared code
 
-`helpers.py` (attaches a DualSense), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 4 and 5; `GLVideoSurface.show()` takes any (3, H, W) uint8 CUDA array — torch or CuPy, planar or a view of interleaved memory), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
+`helpers.py` (attaches a DualSense with `setup_controller()`, and plays a session's audio through miniaudio with `start_audio()`; every example imports it, so they all need `pip install miniaudio`), `glfw_video.py` + `cuda_gl.py` (the GLFW window and CUDA-OpenGL interop used by 4 and 5; `GLVideoSurface.show()` takes any (3, H, W) uint8 CUDA array — torch or CuPy, planar or a view of interleaved memory), `fps_overlay.py` (the frame-rate overlay used by the GLFW and OpenCV examples).
 
 ## Building from source
 

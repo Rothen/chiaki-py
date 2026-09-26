@@ -118,7 +118,7 @@ jobs:
               run: |
                   python -m venv smoke-venv
                   smoke-venv/bin/python -m pip install --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
-                  smoke-venv/bin/python -m pip install numpy pydantic sounddevice
+                  smoke-venv/bin/python -m pip install numpy pydantic
 
                   site="$(smoke-venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
                   status=0

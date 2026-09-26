@@ -60,6 +60,21 @@ py::array_t<int16_t> AudioHandler::GetFrame(size_t max_frames)
     return std::move(arr);
 }
 
+size_t AudioHandler::ReadFrames(int16_t *out, size_t max_frames)
+{
+    std::lock_guard<std::mutex> lock(audio_buf_mutex);
+    if (audio_channels == 0)
+    {
+        return 0;
+    }
+    size_t count = (std::min)(audio_queue.size(), max_frames * audio_channels);
+    count -= count % audio_channels;
+    std::copy_n(audio_queue.begin(), count, out);
+    audio_queue.erase(audio_queue.begin(), audio_queue.begin() + count);
+    audio_queue_overflow_logged = false;
+    return count / audio_channels;
+}
+
 size_t AudioHandler::GetAudioQueuedFrames()
 {
     std::lock_guard<std::mutex> lock(audio_buf_mutex);

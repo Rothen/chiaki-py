@@ -59,6 +59,7 @@ set(SOURCES
     include/discovery_manager.h
     include/frame_handler.h
     include/audio_handler.h
+    include/audio_output.h
     include/placebo_vulkan.h
     include/vulkan_renderer.h
     include/timer.h
@@ -83,6 +84,7 @@ set(SOURCES
     src/discovery_manager.cpp
     src/frame_handler.cpp
     src/audio_handler.cpp
+    src/audio_output.cpp
     src/placebo_vulkan.cpp
     src/vulkan_renderer.cpp
     src/utils.cpp
