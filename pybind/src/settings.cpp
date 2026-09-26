@@ -38,7 +38,11 @@ Settings::Settings() : audioVideoDisabled(CHIAKI_NONE_DISABLED),
                        displayTargetTrc(0),
                        displayTargetPrim(0),
                        decoder(Decoder::Ffmpeg),
+#ifdef __APPLE__
+                       hardwareDecoder("videotoolbox"),
+#else
                        hardwareDecoder("vulkan"),
+#endif
                        packetLossMax(0.05),
                        audioVolume(100),   // SDL_MIX_MAXVOLUME,
                        audioBufferSize(0), // 0 = GetAudioBufferSizeDefault()

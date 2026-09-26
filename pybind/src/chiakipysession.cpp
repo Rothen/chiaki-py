@@ -230,6 +230,16 @@ ChiakiPySession::ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info)
                                         connect_info.video_profile.max_fps,
                                         connect_info.hw_decoder.empty() ? NULL : connect_info.hw_decoder.c_str(),
                                         device_ctx, FfmpegFrameCb, this);
+    if (err != CHIAKI_ERR_SUCCESS && !connect_info.hw_decoder.empty())
+    {
+        CHIAKI_LOGW(GetChiakiLog(), "Hardware decoder \"%s\" unavailable, falling back to software decoding",
+                    connect_info.hw_decoder.c_str());
+        err = chiaki_ffmpeg_decoder_init(ffmpeg_decoder,
+                                            chiaki_log_sniffer_get_log(&sniffer),
+                                            chiaki_target_is_ps5(connect_info.target) ? connect_info.video_profile.codec : CHIAKI_CODEC_H264,
+                                            connect_info.video_profile.max_fps,
+                                            NULL, NULL, FfmpegFrameCb, this);
+    }
     av_buffer_unref(&owned_device_ctx); // the decoder holds its own reference
     if (err != CHIAKI_ERR_SUCCESS)
     {

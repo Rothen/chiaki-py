@@ -12,6 +12,8 @@ Python 3.11–3.14. Wheels for Windows, Ubuntu, macOS 15+ (Apple Silicon) and 64
 
 On Linux, the Qt windows (`StreamDisplay`, `PSNLoginQt`) also need `sudo apt install libxcb-cursor0`.
 
+On macOS, PySDL3's prebuilt SDL3_ttf links against Homebrew's libraries, so run `brew install harfbuzz freetype`. Without them, chiaki-py falls back to loading only the core SDL3 library, which is all controller input needs.
+
 ## Quickstart
 
 ```python
