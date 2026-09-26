@@ -54,6 +54,16 @@ function(chiaki_py_build_libplacebo deps_dir)
         endif()
     endif()
 
+    # Python 3.13+ only takes an Element, not a whole ElementTree, to make an ElementTree from, which utils_gen.py (run to
+    # generate code during the build) still does before v7.360.0. Fixed upstream in 12509c0f; the same fix is applied here.
+    set(_utils_gen "${_src}/src/vulkan/utils_gen.py")
+    file(READ "${_utils_gen}" _utils_gen_code)
+    string(REPLACE "registry = VkXML(ET.parse(xmlfile))" "registry = VkXML(ET.parse(xmlfile).getroot())"
+           _utils_gen_patched "${_utils_gen_code}")
+    if(NOT _utils_gen_patched STREQUAL _utils_gen_code)
+        file(WRITE "${_utils_gen}" "${_utils_gen_patched}")
+    endif()
+
     # meson is told what to build with, and where pkg-config finds shaderc and the Vulkan loader, through the environment
     # (which is put back afterwards; not a `cmake -E env` command, since a PATH with its semicolons would be split into arguments)
     get_filename_component(_compiler_dir "${CMAKE_C_COMPILER}" DIRECTORY)
