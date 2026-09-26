@@ -117,8 +117,8 @@ PYBIND11_MODULE(chiaki_py, m)
         .export_values();
 
     py::enum_<Decoder>(m, "Decoder",
-        "Which decoder implementation Settings.get/set_decoder() selects: Ffmpeg (the normal path, used "
-        "by all of FrameHandler's subclasses) or Pi (the Raspberry Pi hardware decoder).")
+        "The decoder implementation stored by Settings.get/set_decoder(). Only Ffmpeg is implemented and "
+        "it is always used, whatever is set; Pi (chiaki-ng's Raspberry Pi decoder) is accepted but ignored.")
         .value("Ffmpeg", Decoder::Ffmpeg)
         .value("Pi", Decoder::Pi)
         .export_values();
@@ -178,7 +178,8 @@ PYBIND11_MODULE(chiaki_py, m)
         "ChiakiPySession.has_hardware_decoder() and .hardware_decoder_type() are how to inspect it.");
 
     py::class_<ChiakiConnectVideoProfile>(m, "ChiakiConnectVideoProfile",
-        "The stream's negotiated video settings, as returned by ChiakiPySession.get_video_profile().")
+        "The stream's video settings, as returned by ChiakiPySession.get_video_profile(): the requested "
+        "ones until the console answers, then the negotiated ones.")
         .def_readwrite("width", &ChiakiConnectVideoProfile::width)
         .def_readwrite("height", &ChiakiConnectVideoProfile::height)
         .def_readwrite("max_fps", &ChiakiConnectVideoProfile::max_fps)
@@ -194,8 +195,10 @@ PYBIND11_MODULE(chiaki_py, m)
         .def_property_readonly("hw_type", &VulkanFrame::hw_type, "Hardware decoder type, e.g. 'vulkan', 'cuda', 'd3d11va'.")
         .def_property_readonly("format", &VulkanFrame::format, "Pixel format of the frame itself, e.g. 'vulkan', 'cuda', 'd3d11'.")
         .def_property_readonly("sw_format", &VulkanFrame::sw_format, "Underlying pixel layout on the GPU, e.g. 'nv12' or 'p010le'.")
-        .def_property_readonly("width", [](const VulkanFrame &f) { f.require_frame(); return f.frame->width; })
-        .def_property_readonly("height", [](const VulkanFrame &f) { f.require_frame(); return f.frame->height; })
+        .def_property_readonly("width", [](const VulkanFrame &f) { f.require_frame(); return f.frame->width; },
+                               "Width in pixels. Raises RuntimeError while the frame holds no decoded frame yet.")
+        .def_property_readonly("height", [](const VulkanFrame &f) { f.require_frame(); return f.frame->height; },
+                               "Height in pixels. Raises RuntimeError while the frame holds no decoded frame yet.")
         .def_property_readonly("pts", [](const VulkanFrame &f) { return f.pts; }, "Presentation time in seconds.")
         .def_property_readonly("duration", [](const VulkanFrame &f) { return f.duration; }, "Frame duration in seconds.")
         .def_property_readonly("data", &VulkanFrame::data, "Raw per-plane pointers / handles (integers).")
@@ -216,17 +219,21 @@ PYBIND11_MODULE(chiaki_py, m)
                     py::arg("width") = 0, py::arg("height") = 0,
                     "Not implemented on the base class; call empty_frame() on a concrete subclass instead.");
 
-    py::class_<AudioHandler>(m, "AudioHandler")
+    py::class_<AudioHandler>(m, "AudioHandler",
+                             "The queue of a ChiakiPySession's decoded audio (interleaved int16 PCM), as returned by "
+                             "ChiakiPySession.get_audio_handler(). Every read removes the frames it returns, so use one "
+                             "consumer only: get_frame(), an AudioOutput or chiaki_py.AudioSink.")
         .def("get_frame", &AudioHandler::GetFrame, py::arg("max_frames") = 0,
-             "Remove and return up to max_frames queued audio frames (0 = all) as an int16 array of shape (frames, channels).")
+             "Remove and return up to max_frames queued audio frames (0 = all) as an int16 array of shape (frames, channels), "
+             "or of shape (0, 0) if none are queued.")
         .def("get_audio_queued_frames", &AudioHandler::GetAudioQueuedFrames, "Get the number of audio frames waiting in the queue.")
         .def("clear_audio_queue", &AudioHandler::ClearAudioQueue, "Drop every queued audio frame.")
         .def("get_audio_queue_max_frames", &AudioHandler::GetAudioQueueMaxFrames,
              "Get the queue capacity in frames; the oldest frames are dropped beyond it.")
         .def("set_audio_queue_max_frames", &AudioHandler::SetAudioQueueMaxFrames, py::arg("max_frames"),
              "Set the queue capacity in frames (0 = 3x the audio buffer size from Settings).")
-        .def("get_audio_channels", &AudioHandler::GetAudioChannels, "Get the number of audio channels.")
-        .def("get_audio_rate", &AudioHandler::GetAudioRate, "Get the audio sample rate in Hz.");
+        .def("get_audio_channels", &AudioHandler::GetAudioChannels, "Get the number of audio channels; 0 until the first audio frame arrived.")
+        .def("get_audio_rate", &AudioHandler::GetAudioRate, "Get the audio sample rate in Hz; 0 until the first audio frame arrived.");
 
     py::class_<AudioOutput>(m, "AudioOutput",
                             "Plays a session's audio on an SDL output device. SDL's audio thread takes the frames "
@@ -263,7 +270,8 @@ PYBIND11_MODULE(chiaki_py, m)
     py::class_<CudaFrameHandler, FrameHandler>(m, "CudaFrameHandler",
         "Converts decoded frames to RGB on the GPU with CUDA and returns them as a CuPy (or PyTorch) "
         "array, without a round trip through system memory. Requires an NVIDIA GPU and "
-        "Settings.set_hardware_decoder('cuda') before connecting.")
+        "Settings.set_hardware_decoder('cuda') before connecting, which chiaki_py.Session does itself "
+        "for frame_handler_cls=CudaFrameHandler.")
         .def(py::init<ChiakiPySession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &CudaFrameHandler::get_frame,
              py::arg("out") = py::none(),
@@ -286,16 +294,18 @@ PYBIND11_MODULE(chiaki_py, m)
              "with no extra copy.");
 
     py::class_<VulkanFrameHandler, FrameHandler>(m, "VulkanFrameHandler",
-        "Hands out frames as VulkanFrame objects that stay resident on the Vulkan device the decoder "
-        "decoded them on - no conversion, no copy. Requires Settings.set_hardware_decoder('vulkan') "
-        "before connecting; pair with VulkanRenderer to draw them, e.g. via chiaki_py.gui.VulkanVideoWidget.")
+        "Hands out frames as VulkanFrame objects that stay resident on the GPU device the decoder "
+        "decoded them on - no conversion, no copy. Normally used with Settings.set_hardware_decoder('vulkan') "
+        "(chiaki_py.Session sets it for frame_handler_cls=VulkanFrameHandler), which VulkanRenderer needs to "
+        "draw them, e.g. via chiaki_py.gui.VulkanVideoWidget; with another hardware decoder the frames are "
+        "that decoder's (see VulkanFrame.hw_type).")
         .def(py::init<ChiakiPySession *>(), py::arg("stream_session"), py::keep_alive<1, 2>())
         .def("get_frame", &VulkanFrameHandler::get_frame,
              py::arg("out") = py::none(),
-             "Pull the next decoded video frame without leaving GPU memory. Returns a VulcanFrame, or None "
-             "if none was available yet. If `out` is a VulcanFrame it takes over the new frame (releasing "
-             "the one it held) and is returned instead of a new VulcanFrame being created. Raises "
-             "RuntimeError if the session doesn't use a hardware decoder and TypeError if `out` isn't a VulcanFrame.")
+             "Pull the next decoded video frame without leaving GPU memory. Returns a VulkanFrame, or None "
+             "if none was available yet. If `out` is a VulkanFrame it takes over the new frame (releasing "
+             "the one it held) and is returned instead of a new VulkanFrame being created. Raises "
+             "RuntimeError if the session doesn't use a hardware decoder and TypeError if `out` isn't a VulkanFrame.")
         .def_static("empty_frame", &VulkanFrameHandler::empty_frame,
              py::arg("width") = 0, py::arg("height") = 0,
              "An empty VulkanFrame holding no decoded frame yet, ready to be reused as `out` for get_frame(). "
@@ -306,19 +316,18 @@ PYBIND11_MODULE(chiaki_py, m)
 
     py::class_<Settings>(m, "Settings",
         "In-memory connection/decoding/UI settings, passed to ChiakiPySessionConnectInfo. "
-        "A fresh instance starts at chiaki-ng's defaults; there is no persistence "
-        "here (use chiaki_py.Serializer to save/load whichever of these settings an application cares "
-        "about). Most get_/set_ pairs are self-explanatory config knobs; set_hardware_decoder() and "
-        "set_log_level()/set_log_verbose() are the ones most callers need to touch directly.")
+        "A fresh instance starts at chiaki-ng's defaults; nothing is persisted. Most get_/set_ pairs "
+        "are self-explanatory config knobs; set_log_level()/set_log_verbose() are the ones most callers "
+        "need to touch directly (chiaki_py.Session sets the hardware decoder from its frame_handler_cls).")
         .def(py::init<>())
         .def("get_audio_video_disabled", &Settings::GetAudioVideoDisabled, "Get the audio/video disabled.")
         .def("get_log_verbose", &Settings::GetLogVerbose, "Get the log verbose.")
         .def("set_log_verbose", &Settings::SetLogVerbose, py::arg("log_verbose") , "Set the log verbose.")
         .def("get_log_level", &Settings::GetLogLevel, "Get the least severe log level that is still logged.")
         .def("set_log_level", &Settings::SetLogLevel, py::arg("log_level"),
-             "Set the least severe log level that is still logged, e.g. LogLevel.WARNING to hide the "
-             "INFO chatter (the default, LogLevel.DEBUG, logs everything). VERBOSE is additionally "
-             "controlled by set_log_verbose.")
+             "Set the least severe log level that is still logged, e.g. LogLevel.DEBUG to see "
+             "everything. Defaults to LogLevel.WARNING (LogLevel.DEBUG in a debug build of the module). "
+             "VERBOSE is additionally controlled by set_log_verbose.")
         .def("get_log_level_mask", &Settings::GetLogLevelMask, "Get the log level mask.")
         .def("get_rumble_haptics_intensity", &Settings::GetRumbleHapticsIntensity, "Get the rumble haptics intensity.")
         .def("set_rumble_haptics_intensity", &Settings::SetRumbleHapticsIntensity, py::arg("rumble_haptics_intensity"), "Set the rumble haptics intensity.")
@@ -367,21 +376,22 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("get_display_target_prim", &Settings::GetDisplayTargetPrim, "Get the display target PRIM.")
         .def("set_display_target_prim", &Settings::SetDisplayTargetPrim, py::arg("display_target_prim"), "Set the display target PRIM.")
         .def("get_decoder", &Settings::GetDecoder, "Get the decoder.")
-        .def("set_decoder", &Settings::SetDecoder, py::arg("decoder"), "Set the decoder.")
+        .def("set_decoder", &Settings::SetDecoder, py::arg("decoder"), "Set the decoder. Currently ignored, see Decoder.")
         .def("get_hardware_decoder", &Settings::GetHardwareDecoder, "Get the hardware decoder.")
         .def("set_hardware_decoder", &Settings::SetHardwareDecoder, py::arg("hardware_decoder"), "Set the hardware decoder.")
         .def("get_packet_loss_max", &Settings::GetPacketLossMax, "Get the packet loss max.")
         .def("set_packet_loss_max", &Settings::SetPacketLossMax, py::arg("packet_loss_max"), "Set the packet loss max.")
         .def("get_audio_volume", &Settings::GetAudioVolume, "Get the audio volume.")
-        .def("set_audio_volume", &Settings::SetAudioVolume, py::arg("audio_volume"), "Set the audio volume.")
+        .def("set_audio_volume", &Settings::SetAudioVolume, py::arg("audio_volume"), "Set the audio volume. Stored only: playback does not apply it yet.")
         .def("get_audio_buffer_size_default", &Settings::GetAudioBufferSizeDefault, "Get the audio buffer size default.")
         .def("get_audio_buffer_size_raw", &Settings::GetAudioBufferSizeRaw, "Get the audio buffer size raw.")
         .def("get_audio_buffer_size", &Settings::GetAudioBufferSize, "Get the audio buffer size.")
         .def("set_audio_buffer_size", &Settings::SetAudioBufferSize, py::arg("audio_buffer_size"), "Set the audio buffer size.")
         .def("get_audio_out_device", &Settings::GetAudioOutDevice, "Get the audio out device.")
-        .def("set_audio_out_device", &Settings::SetAudioOutDevice, py::arg("audio_out_device"), "Set the audio out device.")
+        .def("set_audio_out_device", &Settings::SetAudioOutDevice, py::arg("audio_out_device"),
+             "Set the audio out device. Stored only: pass the device to chiaki_py.AudioSink or AudioOutput.open() instead.")
         .def("get_audio_in_device", &Settings::GetAudioInDevice, "Get the audio in device.")
-        .def("set_audio_in_device", &Settings::SetAudioInDevice, py::arg("audio_in_device"), "Set the audio in device.")
+        .def("set_audio_in_device", &Settings::SetAudioInDevice, py::arg("audio_in_device"), "Set the audio in device. Stored only: there is no microphone input yet.")
         .def("get_psn_auth_token", &Settings::GetPsnAuthToken, "Get the PSN auth token.")
         .def("set_psn_auth_token", &Settings::SetPsnAuthToken, py::arg("psn_auth_token"), "Set the PSN auth token.")
         .def("get_dpad_touch_enabled", &Settings::GetDpadTouchEnabled, "Get the D-pad touch enabled.")
@@ -438,7 +448,7 @@ PYBIND11_MODULE(chiaki_py, m)
                                            "Everything ChiakiPySession needs to open a connection to an already-registered console. "
                                            "Built from the registration a prior Backend.register_host() produced (`host`, `nickname`, "
                                            "`regist_key`, `morning` i.e. the RP key, `target`) plus `settings`; the pythonic "
-                                           "`chiaki_py.Session.connect()` builds one of these from a `HostRegistration` for you.")
+                                           "`chiaki_py.Session` builds one of these from a `HostRegistration` when it is created.")
         .def(py::init<>())
         .def(py::init<Settings *,
                       ChiakiTarget,
@@ -476,16 +486,17 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("get_measured_bitrate", &ChiakiPySession::GetMeasuredBitrate, "Get the measured bitrate.")
         .def("get_average_packet_loss", &ChiakiPySession::GetAveragePacketLoss, "Get the average packet loss.")
         .def("get_muted", &ChiakiPySession::GetMuted, "Get the muted status.")
-        .def("set_audio_volume", &ChiakiPySession::SetAudioVolume, py::arg("volume"), "Set the audio volume.")
+        .def("set_audio_volume", &ChiakiPySession::SetAudioVolume, py::arg("volume"), "Set the audio volume. Stored only: playback does not apply it yet.")
         .def("get_cant_display", &ChiakiPySession::GetCantDisplay, "Get the cant display status.")
         .def("get_ffmpeg_decoder", &ChiakiPySession::GetFfmpegDecoder, "Get the FFmpeg decoder.", py::return_value_policy::reference)
         .def("has_hardware_decoder", [](ChiakiPySession &s)
              {
             ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
-            return decoder && decoder->hw_device_ctx; }, "Whether the video decoder is hardware-accelerated (i.e. get_frame_gpu() can return frames).")
+            return decoder && decoder->hw_device_ctx; }, "Whether the video decoder is hardware-accelerated, i.e. CudaFrameHandler/VulkanFrameHandler can return frames.")
         .def("get_video_profile", &ChiakiPySession::GetVideoProfile, "The stream's video profile (width, height, max_fps, bitrate, codec): the requested one until the "
                                                                      "console answers, then the negotiated one. Known before the first frame arrives.")
-        .def("get_audio_handler", &ChiakiPySession::GetAudioHandler, py::return_value_policy::reference)
+        .def("get_audio_handler", &ChiakiPySession::GetAudioHandler, "The AudioHandler queueing the session's decoded audio.",
+             py::return_value_policy::reference)
         .def("hardware_decoder_type", [](ChiakiPySession &s) -> std::string
              {
             ChiakiFfmpegDecoder *decoder = s.GetFfmpegDecoder();
@@ -537,28 +548,28 @@ PYBIND11_MODULE(chiaki_py, m)
         .def("release_ps", &ChiakiPySession::releasePS, "Release the PS button.")
         .def("set_l2", &ChiakiPySession::setL2, py::arg("state"), "Set the L2 trigger state [0, 255].")
         .def("set_r2", &ChiakiPySession::setR2, py::arg("state"), "Set the R2 trigger state [0, 255].")
-        .def("set_left_x", &ChiakiPySession::setLeftX, py::arg("x"), "Set the left analog's stick x value [0, 1023].")
-        .def("set_left_y", &ChiakiPySession::setLeftY, py::arg("y"), "Set the left analog's stick y value [0, 1023].")
-        .def("set_left", &ChiakiPySession::setLeft, py::arg("x"), py::arg("y"), "Set the left analog's stick x and y value [0, 1023].")
-        .def("set_right_x", &ChiakiPySession::setRightX, py::arg("x"), "Set the right analog's stick x value [0, 1023].")
-        .def("set_right_y", &ChiakiPySession::setRightY, py::arg("y"), "Set the right analog's stick y value [0, 1023].")
-        .def("set_right", &ChiakiPySession::setRight, py::arg("x"), py::arg("y"), "Set the right analog's stick x and y value [0, 1023].")
+        .def("set_left_x", &ChiakiPySession::setLeftX, py::arg("x"), "Set the left stick's x value [-32768, 32767], 0 is centered.")
+        .def("set_left_y", &ChiakiPySession::setLeftY, py::arg("y"), "Set the left stick's y value [-32768, 32767], 0 is centered.")
+        .def("set_left", &ChiakiPySession::setLeft, py::arg("x"), py::arg("y"), "Set the left stick's x and y values [-32768, 32767], 0 is centered.")
+        .def("set_right_x", &ChiakiPySession::setRightX, py::arg("x"), "Set the right stick's x value [-32768, 32767], 0 is centered.")
+        .def("set_right_y", &ChiakiPySession::setRightY, py::arg("y"), "Set the right stick's y value [-32768, 32767], 0 is centered.")
+        .def("set_right", &ChiakiPySession::setRight, py::arg("x"), py::arg("y"), "Set the right stick's x and y values [-32768, 32767], 0 is centered.")
 
-        .def("set_accelerometer_x", &ChiakiPySession::setAccelerometerX, py::arg("x"), "Set the accelerometer x value [0, 1023].")
-        .def("set_accelerometer_y", &ChiakiPySession::setAccelerometerY, py::arg("y"), "Set the accelerometer y value [0, 1023].")
-        .def("set_accelerometer_z", &ChiakiPySession::setAccelerometerZ, py::arg("z"), "Set the accelerometer z value [0, 1023].")
-        .def("set_accelerometer", &ChiakiPySession::setAccelerometer, py::arg("x"), py::arg("y"), py::arg("z"), "Set the accelerometer x, y and z value [0, 1023].")
+        .def("set_accelerometer_x", &ChiakiPySession::setAccelerometerX, py::arg("x"), "Set the accelerometer x value in g [-5, 5] (at rest: x=0, y=1, z=0).")
+        .def("set_accelerometer_y", &ChiakiPySession::setAccelerometerY, py::arg("y"), "Set the accelerometer y value in g [-5, 5] (at rest: x=0, y=1, z=0).")
+        .def("set_accelerometer_z", &ChiakiPySession::setAccelerometerZ, py::arg("z"), "Set the accelerometer z value in g [-5, 5] (at rest: x=0, y=1, z=0).")
+        .def("set_accelerometer", &ChiakiPySession::setAccelerometer, py::arg("x"), py::arg("y"), py::arg("z"), "Set the accelerometer x, y and z values in g [-5, 5] (at rest: 0, 1, 0).")
 
-        .def("set_gyroscope_x", &ChiakiPySession::setGyroscopeX, py::arg("x"), "Set the gyroscope x value [0, 1023].")
-        .def("set_gyroscope_y", &ChiakiPySession::setGyroscopeY, py::arg("y"), "Set the gyroscope y value [0, 1023].")
-        .def("set_gyroscope_z", &ChiakiPySession::setGyroscopeZ, py::arg("z"), "Set the gyroscope z value [0, 1023].")
-        .def("set_gyroscope", &ChiakiPySession::setGyroscope, py::arg("x"), py::arg("y"), py::arg("z"), "Set the gyroscope x, y and z value [0, 1023].")
+        .def("set_gyroscope_x", &ChiakiPySession::setGyroscopeX, py::arg("x"), "Set the gyroscope x value in rad/s [-30, 30] (at rest: 0).")
+        .def("set_gyroscope_y", &ChiakiPySession::setGyroscopeY, py::arg("y"), "Set the gyroscope y value in rad/s [-30, 30] (at rest: 0).")
+        .def("set_gyroscope_z", &ChiakiPySession::setGyroscopeZ, py::arg("z"), "Set the gyroscope z value in rad/s [-30, 30] (at rest: 0).")
+        .def("set_gyroscope", &ChiakiPySession::setGyroscope, py::arg("x"), py::arg("y"), py::arg("z"), "Set the gyroscope x, y and z values in rad/s [-30, 30] (at rest: 0).")
 
-        .def("set_orientation_x", &ChiakiPySession::setOrientationX, py::arg("x"), "Set the orientation x value [0, 1023].")
-        .def("set_orientation_y", &ChiakiPySession::setOrientationY, py::arg("y"), "Set the orientation y value [0, 1023].")
-        .def("set_orientation_z", &ChiakiPySession::setOrientationZ, py::arg("z"), "Set the orientation z value [0, 1023].")
-        .def("set_orientation_w", &ChiakiPySession::setOrientationW, py::arg("w"), "Set the orientation w value [0, 1023].")
-        .def("set_orientation", &ChiakiPySession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation x, y, z and w value [0, 1023].")
+        .def("set_orientation_x", &ChiakiPySession::setOrientationX, py::arg("x"), "Set the orientation quaternion's x component [-1, 1] (at rest: x=y=z=0, w=1).")
+        .def("set_orientation_y", &ChiakiPySession::setOrientationY, py::arg("y"), "Set the orientation quaternion's y component [-1, 1] (at rest: x=y=z=0, w=1).")
+        .def("set_orientation_z", &ChiakiPySession::setOrientationZ, py::arg("z"), "Set the orientation quaternion's z component [-1, 1] (at rest: x=y=z=0, w=1).")
+        .def("set_orientation_w", &ChiakiPySession::setOrientationW, py::arg("w"), "Set the orientation quaternion's w component [-1, 1] (at rest: x=y=z=0, w=1).")
+        .def("set_orientation", &ChiakiPySession::setOrientation, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"), "Set the orientation as a unit quaternion (x, y, z, w) (at rest: 0, 0, 0, 1).")
 
         .def("send_feedback_state", &ChiakiPySession::SendFeedbackState, "Send the feedback state.");
 
@@ -574,7 +585,8 @@ PYBIND11_MODULE(chiaki_py, m)
                     "VulkanRenderer, without a console.")
         .def_static("black", &VulkanFrame::black, py::arg("stream_session"), py::arg("width"), py::arg("height"),
                     "A new all-black width x height VulkanFrame on the session's Vulkan hardware device "
-                    "(RuntimeError if it does not use one). What VulkanFrameHandler.empty_frame() returns.");
+                    "(RuntimeError if it does not use one), e.g. as a placeholder picture. Unlike "
+                    "VulkanFrameHandler.empty_frame(), which holds no frame and does no GPU work.");
 
     py::class_<VulkanRenderer>(m, "VulkanRenderer",
                                "Draws VulkanFrames of the Vulkan hardware decoder into a native window without them "
@@ -646,7 +658,8 @@ PYBIND11_MODULE(chiaki_py, m)
              "already active; stopping tears them down and clears the discovered host list.")
         .def("send_wakeup", &DiscoveryManager::SendWakeup, py::arg("host"), py::arg("regist_key"), py::arg("ps5"),
              "Send a wakeup packet to `host` (a registration's `regist_key`, hex-encoded) so a console "
-             "in standby powers on. Raises RuntimeError if `regist_key` is malformed or sending fails.")
+             "in standby powers on. Raises ValueError if `regist_key` isn't hex, and RuntimeError if it is "
+             "too long or sending fails.")
         .def("get_active", &DiscoveryManager::GetActive, "Whether broadcast discovery is currently running.")
         .def("get_hosts", &DiscoveryManager::GetHosts,
              "The hosts the last broadcast round found. Empty until set_active(True) has had time to hear back.")
