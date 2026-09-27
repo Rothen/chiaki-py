@@ -38,13 +38,6 @@ include_directories(${CMAKE_SOURCE_DIR}/pybind/include)
 # Source files
 set(SOURCES
     include/core/common.h
-    include/core/audio.h
-    include/core/base64.h
-    include/core/bitstream.h
-    include/core/controller.h
-    include/core/ecdh.h
-    include/core/fec.h
-    include/core/feedback.h
     include/core/log.h
     include/backend.h
     include/chiaki_py_controller.h
@@ -63,14 +56,7 @@ set(SOURCES
     include/vulkan_renderer.h
     include/timer.h
     include/utils.h
-    src/core/audio.cpp
-    src/core/base64.cpp
-    src/core/bitstream.cpp
     src/core/common.cpp
-    src/core/controller.cpp
-    src/core/ecdh.cpp
-    src/core/fec.cpp
-    src/core/feedback.cpp
     src/core/log.cpp
     src/backend.cpp
     src/host.cpp

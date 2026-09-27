@@ -1,6 +1,7 @@
 #include "frame_handler.h"
 
 #include <cstring>
+#include <stdexcept>
 
 namespace py = pybind11;
 

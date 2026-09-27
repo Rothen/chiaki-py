@@ -1,13 +1,5 @@
 #include <time.h>
 #include "core/common.h"
-#include "core/audio.h"
-#include "core/base64.h"
-#include "core/bitstream.h"
-#include "core/controller.h"
-// #include "core/discovery_service.h"
-#include "core/ecdh.h"
-#include "core/fec.h"
-#include "core/feedback.h"
 #include "core/log.h"
 #include "event_source.h"
 #include "settings.h"
@@ -20,9 +12,6 @@
 #include "audio_output.h"
 #include "vulkan_renderer.h"
 #include "pylog.h"
-// #include "core/session.h"
-// #include "core/takion.h"
-// #include "core/remote/holepunch.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -75,36 +64,13 @@ PYBIND11_MODULE(chiaki_py, m)
     init_pylog();
 
     auto m_core = m.def_submodule("core", "The core submodule.");
-    // auto m_core_takion = m_core.def_submodule("takion", "The takion submodule.");
     auto m_core_common = m_core.def_submodule("common", "The common submodule.");
-    auto m_core_audio = m_core.def_submodule("audio", "The audio submodule.");
-    auto m_core_base64 = m_core.def_submodule("base64", "The base64 submodule.");
-    auto m_core_bitstream = m_core.def_submodule("bitstream", "The bitstream submodule.");
-    auto m_core_controller = m_core.def_submodule("controller", "The controller submodule.");
-    auto m_core_discovery_service = m_core.def_submodule("discovery_service", "The discovery service submodule.");
-    auto m_core_ecdh = m_core.def_submodule("ecdh", "The ecdh submodule.");
-    auto m_core_fec = m_core.def_submodule("fec", "The fec submodule.");
-    auto m_core_feedback = m_core.def_submodule("feedback", "The feedback submodule.");
     auto m_core_log = m_core.def_submodule("log", "The log submodule.");
-    // auto m_core_session = m_core.def_submodule("session", "The session submodule.");
-
-    // auto m_remote = m.def_submodule("remote", "The remote submodule.");
-    // auto m_remote_holepunch = m.def_submodule("holepunch", "The holepunch submodule.");
 
     init_event_source(m);
     init_core_common(m_core_common);
-    init_core_audio(m_core_audio);
-    init_core_base64(m_core_base64);
     init_core_log(m_core_log);
-    init_core_bitstream(m_core_bitstream);
-    init_core_controller(m_core_controller);
-    // init_core_discovery_service(m_core_discovery_service);
-    init_core_ecdh(m_core_ecdh);
-    init_core_fec(m_core_fec);
-    init_core_feedback(m_core_feedback);
     init_backend(m);
-    // init_core_session(m_core_session);
-    // init_core_remote_holepunch(m_remote_holepunch);
 
     py::enum_<RumbleHapticsIntensity>(m, "RumbleHapticsIntensity",
         "How strongly the controller rumbles for haptic feedback, from Settings.get/set_rumble_haptics_intensity().")

@@ -1,28 +1,11 @@
 #ifndef CHIAKI_PY_FRAME_HANDLER_H
 #define CHIAKI_PY_FRAME_HANDLER_H
 
-#include <time.h>
-#include "core/common.h"
-#include "core/audio.h"
-#include "core/base64.h"
-#include "core/bitstream.h"
-#include "core/controller.h"
-#include "core/ecdh.h"
-#include "core/fec.h"
-#include "core/feedback.h"
-#include "core/log.h"
-#include "event_source.h"
-#include "settings.h"
 #include "chiakipysession.h"
-#include "discovery_manager.h"
-#include "backend.h"
 #include "cuda_driver.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <optional>
-#include <stdexcept>
 #include <string>
+#include <vector>
 
 #define PYBIND11_DETAILED_ERROR_MESSAGES
 #include <pybind11/pybind11.h>
