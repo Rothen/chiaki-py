@@ -7,9 +7,12 @@
 
 #include "audio_handler.h"
 
-// Plays an AudioHandler's queue on an SDL audio device. SDL's audio thread calls back into C++ for
-// exactly as many frames as the device needs and takes them straight off the queue, so playback never
-// waits for the GIL. SDL loads the platform's audio backend (WASAPI, CoreAudio, PulseAudio/PipeWire,
+// Plays a session's audio on an SDL output device. SDL's audio thread takes the frames straight
+// off the session's AudioHandler queue, without the GIL, so don't read that queue anywhere else
+// while it is open. chiaki_py.AudioSink wraps it.
+//
+// SDL calls back into C++ for exactly as many frames as the device needs, so playback never waits
+// for the GIL. SDL loads the platform's audio backend (WASAPI, CoreAudio, PulseAudio/PipeWire,
 // ALSA) at runtime, so nothing beyond the SDL library bundled with the module is needed.
 class AudioOutput
 {
@@ -19,15 +22,18 @@ public:
     AudioOutput(const AudioOutput &) = delete;
     AudioOutput &operator=(const AudioOutput &) = delete;
 
-    // Opens the device (`device_name` as listed by GetDevices(), empty = the system default) at the
-    // handler's current rate and channel count, and starts playing. Throws if audio has not started
-    // yet (the rate is only known once the first frame arrived), or if SDL can't open the device.
+    // Open the output device (a name from get_devices(), '' = the system default) at the session's audio
+    // rate and channel count and start playing. Raises RuntimeError before the first audio frame arrived,
+    // or if the device can't be opened.
     void Open(const std::string &device_name = "");
-    // Stops playback and closes the device. Does nothing if it isn't open.
+
+    // Stop playing and close the device. Does nothing if it isn't open.
     void Close();
+
+    // Whether the device is open.
     bool IsOpen() const { return device != 0; }
 
-    // Names of the available output devices.
+    // Names of the available audio output devices.
     static std::vector<std::string> GetDevices();
 
 private:

@@ -35,6 +35,7 @@ enum class ControllerButtonExt
     MISC1 = (1 << 30),
 };
 
+// How strongly the controller rumbles for haptic feedback, from Settings.get/set_rumble_haptics_intensity().
 enum class RumbleHapticsIntensity
 {
 	Off,
@@ -45,6 +46,8 @@ enum class RumbleHapticsIntensity
 	VeryStrong
 };
 
+// The decoder implementation stored by Settings.get/set_decoder(). Only Ffmpeg is implemented and
+// it is always used, whatever is set; Pi (chiaki-ng's Raspberry Pi decoder) is accepted but ignored.
 enum class Decoder
 {
 	Ffmpeg,
@@ -63,6 +66,10 @@ std::vector<V> get_values(const std::map<K, V> &m)
     return values;
 }
 
+// In-memory connection/decoding/UI settings, passed to ChiakiPySessionConnectInfo.
+// A fresh instance starts at chiaki-ng's defaults; nothing is persisted. Most get_/set_ pairs
+// are self-explanatory config knobs; set_log_level()/set_log_verbose() are the ones most callers
+// need to touch directly (chiaki_py.Session sets the hardware decoder from its frame_handler_cls).
 class Settings
 {
 	private:
@@ -138,9 +145,16 @@ class Settings
 
         bool GetLogVerbose() const { return logVerbose; }
         void SetLogVerbose(bool logVerbose) { this->logVerbose = logVerbose; }
-        // Least severe level still logged; the levels are single bits ordered ERROR < WARNING < INFO < VERBOSE < DEBUG.
+
+        // The least severe log level that is still logged; the levels are single bits ordered
+        // ERROR < WARNING < INFO < VERBOSE < DEBUG.
         ChiakiLogLevel GetLogLevel() const { return logLevel; }
+
+        // Set the least severe log level that is still logged, e.g. LogLevel.DEBUG to see
+        // everything. Defaults to LogLevel.WARNING (LogLevel.DEBUG in a debug build of the module).
+        // VERBOSE is additionally controlled by set_log_verbose.
         void SetLogLevel(ChiakiLogLevel logLevel) { this->logLevel = logLevel; }
+
         uint32_t GetLogLevelMask() const { uint32_t mask = ((uint32_t)logLevel << 1) - 1; mask &= CHIAKI_LOG_ALL; if (!GetLogVerbose()) { mask &= ~CHIAKI_LOG_VERBOSE; } return mask; };
 
         RumbleHapticsIntensity GetRumbleHapticsIntensity() const { return rumbleHapticsIntensity; };
@@ -164,9 +178,6 @@ class Settings
 		void SetResolutionLocalPS5(ChiakiVideoResolutionPreset resolutionLocalPS5) { this->resolutionLocalPS5 = resolutionLocalPS5; }
 		void SetResolutionRemotePS5(ChiakiVideoResolutionPreset resolutionRemotePS5) { this->resolutionRemotePS5 = resolutionRemotePS5; }
 
-		/**
-		 * @return 0 if set to "automatic"
-		 */
 		ChiakiVideoFPSPreset GetFPSLocalPS4() const { return fpsLocalPS4; }
 		ChiakiVideoFPSPreset GetFPSRemotePS4() const { return fpsRemotePS4; }
 		ChiakiVideoFPSPreset GetFPSLocalPS5() const { return fpsLocalPS5; }
@@ -205,6 +216,8 @@ class Settings
 		void SetDisplayTargetPrim(int displayTargetPrim) { this->displayTargetPrim = displayTargetPrim; }
 
         Decoder GetDecoder() const { return decoder; }
+
+        // Currently ignored, see Decoder.
         void SetDecoder(Decoder decoder) { this->decoder = decoder; }
 
         std::string GetHardwareDecoder() const { return hardwareDecoder; };
@@ -214,25 +227,28 @@ class Settings
         void SetPacketLossMax(float packetLossMax) { this->packetLossMax = packetLossMax; }
 
         int GetAudioVolume() const { return audioVolume; }
+
+        // Stored only: playback does not apply it yet.
         void SetAudioVolume(int audioVolume) { this->audioVolume = audioVolume; }
 
         unsigned int GetAudioBufferSizeDefault() const { return 9600; }
 
-        /**
-         * @return 0 if set to "automatic"
-         */
+        // The audio buffer size as set, 0 if set to "automatic".
         unsigned int GetAudioBufferSizeRaw() const { return audioBufferSize; }
 
-        /**
-         * @return actual audioBufferSize to be used, default value if GetAudioBufferSizeRaw() would return 0
-         */
+        // The audio buffer size to use: the default one if get_audio_buffer_size_raw() is 0.
         unsigned int GetAudioBufferSize() const;
+
         void SetAudioBufferSize(unsigned int audioBufferSize) { this->audioBufferSize = audioBufferSize; }
 
         std::string GetAudioOutDevice() const { return audioOutDevice; }
+
+		// Stored only: pass the device to chiaki_py.AudioSink or AudioOutput.open() instead.
 		void SetAudioOutDevice(std::string audioOutDevice) { this->audioOutDevice = audioOutDevice; }
 
 		std::string GetAudioInDevice() const { return audioInDevice; }
+
+        // Stored only: there is no microphone input yet.
         void SetAudioInDevice(std::string audioInDevice) { this->audioInDevice = audioInDevice; }
 
         std::string GetPsnAuthToken() const { return psnAuthToken; }
@@ -264,7 +280,7 @@ class Settings
 		ChiakiConnectVideoProfile GetVideoProfileLocalPS5();
 		ChiakiConnectVideoProfile GetVideoProfileRemotePS5();
 
-        static std::string GetChiakiControllerButtonName(int button);
+        static std::string GetChiakiControllerButtonName(int chiaki_button);
         void SetControllerButtonMapping(int chiaki_button, int key);
         std::map<int, int> GetControllerMapping();
 		std::map<int, int> GetControllerMappingForDecoding();

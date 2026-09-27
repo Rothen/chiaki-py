@@ -105,7 +105,7 @@ jobs:
                   uv venv --seed --python ${{ matrix.python-version }} "$RUNNER_TEMP/venv"
                   echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
                   "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade pip
-                  "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade protobuf build twine pybind11_stubgen auditwheel patchelf
+                  "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade protobuf build twine auditwheel patchelf
 
             - name: Configure
               run: |

@@ -18,8 +18,6 @@
 
 namespace py = pybind11;
 
-void init_event_source(py::module &m);
-
 template <typename T>
 class EventSource
 {

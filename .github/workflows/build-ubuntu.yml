@@ -40,7 +40,7 @@ jobs:
             - name: Install Python build/CI tooling
               run: |
                   python -m pip install --upgrade pip
-                  python -m pip install --upgrade protobuf build twine pybind11_stubgen
+                  python -m pip install --upgrade protobuf build twine
 
             - name: Install native dependencies
               run: |

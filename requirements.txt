@@ -1,4 +1,4 @@
-pybind11_stubgen==3.0.0
+litgen==0.22.0
 numpy==2.5.3
 pydantic==2
 requests==2.34.2

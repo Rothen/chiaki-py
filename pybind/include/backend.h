@@ -6,7 +6,6 @@
 #include "host.h"
 #include "discovery_manager.h"
 #include "utils.h"
-#include "core/common.h"
 #include "event_source.h"
 #include "pylog.h"
 
@@ -21,8 +20,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <future>
-
-void init_backend(py::module &m);
 
 #define PSN_DEVICES_TRIES 2
 #define MAX_PSN_RECONNECT_TRIES 6
@@ -86,22 +83,31 @@ private:
     ChiakiRegist chiaki_regist;
 };
 
+// What Backend.register_host() (the blocking variant) returns on success: the same fields as
+// RegisteredHost, copied out of the underlying RegistEvent once registration completes.
 struct RegistResult
 {
     ChiakiRegistEventType type;
     ChiakiTarget target;
-    char ap_ssid[0x30];
-    char ap_bssid[0x20];
-    char ap_key[0x50];
-    char ap_name[0x20];
-    uint8_t server_mac[6];
-    char server_nickname[0x20];
-    char rp_regist_key[CHIAKI_SESSION_AUTH_SIZE]; // must be completely filled (pad with \0)
+    std::string ap_ssid;
+    std::string ap_bssid;
+    std::string ap_key;
+    std::string ap_name;
+    // The console's MAC address, as 'aa:bb:cc:dd:ee:ff'.
+    std::string server_mac;
+    std::string server_nickname;
+    std::string rp_regist_key;
     uint32_t rp_key_type;
-    uint8_t rp_key[0x10];
+    uint8_t rp_key[0x10]; // Bound as bytes by generate_bindings.py.
     uint32_t console_pin;
+
+    RegistResult() = default;
+    explicit RegistResult(const ChiakiRegistEvent &event);
 };
 
+// Stages of connecting to a console over PSN (remote play over the internet, via holepunching)
+// rather than the local network. Exported for forward compatibility; no bound method currently
+// returns one, since the PSN remote-connect path isn't wired up yet.
 enum class PsnConnectState
 {
     NotStarted,
@@ -117,6 +123,9 @@ enum class PsnConnectState
     ConnectFailedConsoleUnreachable,
 };
 
+// Registers with a console: the one-time PIN pairing that gets back the registration key
+// ChiakiPySession later needs to connect. `chiaki_py.register_host()` wraps register_host() with
+// a pythonic result type (HostRegistration) and is the easier way to call this from Python.
 class Backend
 {
 public:
@@ -136,6 +145,12 @@ public:
         }
     }
 
+    // Start registering with `host` and return a RegistEventSource that reports the outcome
+    // once subscribed to, instead of blocking. `psn_id` is the PSN account-ID (base64) for a
+    // PS5 or a PS4 in 'PS4 8.0' mode, or the online ID for an older PS4; `pin` is the one-time
+    // PIN shown on the console's registration screen, `cpin` its login PIN if it has one
+    // (otherwise empty). Raises RuntimeError immediately if `psn_id` is not valid base64 of the
+    // expected length for a PS5/PS4-8.0 `target`.
     EventSource<ChiakiRegistEvent *> &registerHostAsync(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
     {
         ChiakiRegistInfo info = {};
@@ -183,7 +198,9 @@ public:
         return event_source;
     }
 
-    RegistResult &registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
+    // Like register_host_async(), but blocks until registration finishes and returns the
+    // RegistResult directly, or raises RuntimeError on failure.
+    RegistResult registerHost(const std::string &host, const std::string &psn_id, const std::string &pin, const std::string &cpin, bool broadcast, ChiakiTarget target)
     {
         ChiakiRegistInfo info = {};
 
@@ -215,18 +232,7 @@ public:
         std::future<RegistResult> future = promise.get_future();
 
         regist.setSuccessCallback([this, &promise](ChiakiRegistEvent *event) {
-            result.type = event->type;
-            result.target = event->registered_host->target;
-            std::memcpy(result.ap_ssid, event->registered_host->ap_ssid, sizeof(event->registered_host->ap_ssid));
-            std::memcpy(result.ap_bssid, event->registered_host->ap_bssid, sizeof(event->registered_host->ap_bssid));
-            std::memcpy(result.ap_key, event->registered_host->ap_key, sizeof(event->registered_host->ap_key));
-            std::memcpy(result.ap_name, event->registered_host->ap_name, sizeof(event->registered_host->ap_name));
-            std::memcpy(result.server_mac, event->registered_host->server_mac, sizeof(event->registered_host->server_mac));
-            std::memcpy(result.server_nickname, event->registered_host->server_nickname, sizeof(event->registered_host->server_nickname));
-            std::memcpy(result.rp_regist_key, event->registered_host->rp_regist_key, CHIAKI_SESSION_AUTH_SIZE);
-            result.rp_key_type = event->registered_host->rp_key_type;
-            std::memcpy(result.rp_key, event->registered_host->rp_key, sizeof(event->registered_host->rp_key));
-            result.console_pin = event->registered_host->console_pin;
+            result = RegistResult(*event);
             promise.set_value(result);
         });
 

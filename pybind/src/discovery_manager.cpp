@@ -307,13 +307,13 @@ void DiscoveryManager::SendWakeup(const std::string &host, const std::string &re
         throw Exception(std::string("Failed to send Packet: " + std::string(chiaki_error_string(err))));
 }
 
-const std::vector<DiscoveryHostWrapper> DiscoveryManager::GetHosts() const
+const std::vector<DiscoveryHost> DiscoveryManager::GetHosts() const
 {
     std::lock_guard<std::mutex> lock(hosts_mutex);
     return hosts;
 }
 
-void DiscoveryManager::DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> hosts)
+void DiscoveryManager::DiscoveryServiceHosts(std::vector<DiscoveryHost> hosts)
 {
     {
         std::lock_guard<std::mutex> lock(hosts_mutex);
@@ -336,7 +336,7 @@ public:
         eventQueue.process();
     }
 
-    void postDiscoveryServiceHosts(const std::vector<DiscoveryHostWrapper> &hosts)
+    void postDiscoveryServiceHosts(const std::vector<DiscoveryHost> &hosts)
     {
         eventQueue.post([this, hosts]()
         {
@@ -351,21 +351,21 @@ public:
     EventQueue eventQueue;
 };
 
-static std::vector<DiscoveryHostWrapper> CreateHostsList(ChiakiDiscoveryHost *hosts, size_t hosts_count)
+static std::vector<DiscoveryHost> CreateHostsList(ChiakiDiscoveryHost *hosts, size_t hosts_count)
 {
-    std::vector<DiscoveryHostWrapper> hosts_list;
+    std::vector<DiscoveryHost> hosts_list;
     hosts_list.reserve(hosts_count);
 
     for (size_t i = 0; i < hosts_count; i++)
     {
         ChiakiDiscoveryHost *h = hosts + i;
-        DiscoveryHostWrapper o{};
-        o.setPs5(chiaki_discovery_host_is_ps5(h));
-        o.setTarget(chiaki_discovery_host_system_version_target(h));
-        o.setState(h->state);
-        o.setHostRequestPort(h->host_request_port);
-        o.setHostName(std::string(h->host_name));
-        o.setHostAddr(std::string(h->host_addr));
+        DiscoveryHost o{};
+        o.ps5 = chiaki_discovery_host_is_ps5(h);
+        o.target = chiaki_discovery_host_system_version_target(h);
+        o.state = h->state;
+        o.host_request_port = h->host_request_port;
+        o.host_name = std::string(h->host_name);
+        o.host_addr = std::string(h->host_addr);
         hosts_list.push_back(o);
     }
 

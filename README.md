@@ -92,7 +92,7 @@ CMake fetches chiaki-ng automatically (and on Windows, FFmpeg and libplacebo —
 
 ```bash
 git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
-pip install "protobuf==7.36.2" "grpcio-tools==1.84.0" pybind11_stubgen
+pip install "protobuf==7.36.2" "grpcio-tools==1.84.0"
 cmake --fresh -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 <platform flags>
 cmake --build build --target chiaki-py
 pip install -e .
@@ -103,6 +103,17 @@ pip install -e .
 - **macOS:** deps from Homebrew, plus SDL2 built from source (Homebrew's `sdl2` is an SDL3 shim that can't be bundled); see [build-macos.yml](.github/workflows/build-macos.yml).
 
 After C++ changes, re-run only the `cmake --build` step.
+
+### Python bindings
+
+The pybind11 bindings in [pybind/bindings/](pybind/bindings/) and the type stubs in `chiaki_py/lib/chiaki_py/` are generated from the C++ headers with [litgen](https://pthom.github.io/litgen): a function is exposed to Python, and the comment above it (or at the end of its line) becomes its docstring. After changing a bound header, regenerate them and commit the result:
+
+```bash
+pip install litgen==0.22.0
+python pybind/bindings/generate_bindings.py   # or: cmake --build build --target chiaki-py-generate-bindings
+```
+
+[generate_bindings.py](pybind/bindings/generate_bindings.py) lists which headers go into which `pydef_*.cpp` file and what each one excludes or adds by hand; `pydef_chiaki.cpp` and `pydef_event_source.cpp` (chiaki's C types and the event sources) are written by hand.
 
 ## Known limitations
 

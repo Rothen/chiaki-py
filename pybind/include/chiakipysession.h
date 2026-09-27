@@ -47,6 +47,10 @@ class ChiakiException: public Exception
 		explicit ChiakiException(const std::string &msg) : Exception(msg) {};
 };
 
+// Everything ChiakiPySession needs to open a connection to an already-registered console.
+// Built from the registration a prior Backend.register_host() produced (`host`, `nickname`,
+// `regist_key`, `morning` i.e. the RP key, `target`) plus `settings`; the pythonic
+// `chiaki_py.Session` builds one of these from a `HostRegistration` when it is created.
 struct ChiakiPySessionConnectInfo
 {
 	Settings *settings;
@@ -104,6 +108,12 @@ struct ChiakiPySessionConnectInfo
         bool stretch);
 };
 
+// A live or about-to-be-started connection to a console: start()/stop() it, feed it
+// controller/motion input with the press_*/release_*/set_* methods, and pull decoded video
+// through a FrameHandler built around it (see FrameHandler.get_frame() and the CpuFrameHandler/
+// CudaFrameHandler/VulkanFrameHandler subclasses). The on_*() methods each return an event
+// source frames/state changes can be subscribed to. Usually built and driven indirectly, via
+// chiaki_py.Session, rather than used directly.
 class ChiakiPySession
 {
 	friend class ChiakiPySessionPrivate;
@@ -206,25 +216,29 @@ class ChiakiPySession
 		explicit ChiakiPySession(const ChiakiPySessionConnectInfo &connect_info);
 		~ChiakiPySession();
 
-		bool IsConnected()	{ return connected; }
-		bool IsConnecting()	{ return connect_timer.isValid(); }
+		bool IsConnected()	{ return connected; } // Whether the session is connected.
+		bool IsConnecting()	{ return connect_timer.isValid(); } // Whether the session is connecting.
 
+        // The stream's video profile (width, height, max_fps, bitrate, codec): the requested one until the
+        // console answers, then the negotiated one. Known before the first frame arrives.
         ChiakiConnectVideoProfile GetVideoProfile() const { return session.connect_info.video_profile; }
+
+        // The AudioHandler queueing the session's decoded audio.
         AudioHandler &GetAudioHandler() { return audio_handler; }
 
-        void Start();
-		void Stop();
-		void GoToBed();
-		void SetLoginPIN(const std::string &pin);
-		void GoHome();
+        void Start(); // Start the stream session.
+		void Stop(); // Stop the stream session.
+		void GoToBed(); // Put the console into rest mode.
+		void SetLoginPIN(const std::string &pin); // Answer the console's login PIN request.
+		void GoHome(); // Go to the console's home screen.
 
-		std::string GetHost() { return host; }
+		std::string GetHost() { return host; } // The console's address.
 		bool GetConnected() { return connected; }
-		double GetMeasuredBitrate()	{ return measured_bitrate; }
-		double GetAveragePacketLoss()	{ return average_packet_loss; }
-		bool GetMuted()	{ return muted; }
-		void SetAudioVolume(int volume) { audio_volume = volume; }
-		bool GetCantDisplay()	{ return cant_display; }
+		double GetMeasuredBitrate()	{ return measured_bitrate; } // The measured bitrate in Mbit/s.
+		double GetAveragePacketLoss()	{ return average_packet_loss; } // The average packet loss, 0 to 1.
+		bool GetMuted()	{ return muted; } // Whether the microphone is muted.
+		void SetAudioVolume(int volume) { audio_volume = volume; } // Stored only: playback does not apply it yet.
+		bool GetCantDisplay()	{ return cant_display; } // Whether the console refused to stream what is on screen (e.g. HDCP-protected video).
 		ChiakiErrorCode ConnectPsnConnection(std::string duid, bool ps5);
 		void CancelPsnConnection(bool stop_thread);
 
@@ -238,98 +252,105 @@ class ChiakiPySession
             }
             return controller_list;
         }
-        ChiakiFfmpegDecoder *GetFfmpegDecoder()	{ return ffmpeg_decoder; }
+        ChiakiFfmpegDecoder *GetFfmpegDecoder()	{ return ffmpeg_decoder; } // The FFmpeg decoder.
 
-        const EventSource<bool> &OnAudioFrameAvailable() { return AudioFrameAvailable; }
-        const EventSource<bool> &OnFfmpegFrameAvailable() { return FfmpegFrameAvailable; }
-        const EventSource<ChiakiQuitReason> &OnSessionQuit() { return SessionQuit; }
-        const EventSource<bool> &OnLoginPINRequested() { return LoginPINRequested; }
-        const EventSource<bool> &OnDataHolepunchProgress() { return DataHolepunchProgress; }
-        const EventSource<const ChiakiRegisteredHost &> &OnAutoRegistSucceeded() { return AutoRegistSucceeded; }
-        const EventSource<std::string> &OnNicknameReceived() { return NicknameReceived; }
-        const EventSource<bool> &OnConnectedChanged() { return ConnectedChanged; }
-        const EventSource<double> &OnMeasuredBitrateChanged() { return MeasuredBitrateChanged; }
-        const EventSource<double> &OnAveragePacketLossChanged() { return AveragePacketLossChanged; }
-        const EventSource<bool> &OnCantDisplayChanged() { return CantDisplayChanged; }
+        // Whether the video decoder is hardware-accelerated, i.e. CudaFrameHandler/VulkanFrameHandler can return frames.
+        bool HasHardwareDecoder();
 
-        void pressCross() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS; SendFeedbackState(); }
-        void releaseCross() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_CROSS; SendFeedbackState(); }
+        // Type of hardware decoder in use ('vulkan', 'cuda', 'd3d11va', ...), or '' if decoding on the CPU.
+        std::string HardwareDecoderType();
 
-        void pressCircle() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_MOON; SendFeedbackState(); }
-        void releaseCircle() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_MOON; SendFeedbackState(); }
+        const EventSource<bool> &OnAudioFrameAvailable() { return AudioFrameAvailable; } // Fires whenever decoded audio was queued.
+        const EventSource<bool> &OnFrameAvailable() { return FfmpegFrameAvailable; } // Fires whenever a decoded video frame is ready.
+        const EventSource<ChiakiQuitReason> &OnSessionQuit() { return SessionQuit; } // Fires with the QuitReason when the session ended.
+        const EventSource<bool> &OnLoginPINRequested() { return LoginPINRequested; } // Fires when the console asks for its login PIN, see set_login_pin().
+        const EventSource<bool> &OnDataHolepunchProgress() { return DataHolepunchProgress; } // Fires as a PSN (holepunch) connection progresses.
+        const EventSource<const ChiakiRegisteredHost &> &OnAutoRegistSucceeded() { return AutoRegistSucceeded; } // Fires with the RegisteredHost once auto-registration succeeded.
+        const EventSource<std::string> &OnNicknameReceived() { return NicknameReceived; } // Fires with the console's nickname once it is known.
+        const EventSource<bool> &OnConnectedChanged() { return ConnectedChanged; } // Fires when is_connected() changes.
+        const EventSource<double> &OnMeasuredBitrateChanged() { return MeasuredBitrateChanged; } // Fires when get_measured_bitrate() changes.
+        const EventSource<double> &OnAveragePacketLossChanged() { return AveragePacketLossChanged; } // Fires when get_average_packet_loss() changes.
+        const EventSource<bool> &OnCantDisplayChanged() { return CantDisplayChanged; } // Fires when get_cant_display() changes.
 
-        void pressSquare() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_BOX; SendFeedbackState(); }
-        void releaseSquare() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_BOX; SendFeedbackState(); }
+        void pressCross() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS; SendFeedbackState(); } // Press the cross button.
+        void releaseCross() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_CROSS; SendFeedbackState(); } // Release the cross button.
 
-        void pressTriangle() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PYRAMID; SendFeedbackState(); }
-        void releaseTriangle() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PYRAMID; SendFeedbackState(); }
+        void pressCircle() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_MOON; SendFeedbackState(); } // Press the circle button.
+        void releaseCircle() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_MOON; SendFeedbackState(); } // Release the circle button.
 
-        void pressLeft() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
-        void releaseLeft() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); }
+        void pressSquare() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_BOX; SendFeedbackState(); } // Press the square button.
+        void releaseSquare() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_BOX; SendFeedbackState(); } // Release the square button.
 
-        void pressRight() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); }
-        void releaseRight() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); }
+        void pressTriangle() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PYRAMID; SendFeedbackState(); } // Press the triangle button.
+        void releaseTriangle() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PYRAMID; SendFeedbackState(); } // Release the triangle button.
 
-        void pressUp() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
-        void releaseUp() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); }
+        void pressLeft() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); } // Press the left button.
+        void releaseLeft() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT; SendFeedbackState(); } // Release the left button.
+
+        void pressRight() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); } // Press the right button.
+        void releaseRight() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT; SendFeedbackState(); } // Release the right button.
+
+        void pressUp() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); } // Press the up button.
+        void releaseUp() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_UP; SendFeedbackState(); } // Release the up button.
  
-        void pressDown() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); }
-        void releaseDown() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); }
+        void pressDown() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); } // Press the down button.
+        void releaseDown() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN; SendFeedbackState(); } // Release the down button.
  
-        void pressL1() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_L1; SendFeedbackState(); }
-        void releaseL1() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_L1; SendFeedbackState(); }
+        void pressL1() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_L1; SendFeedbackState(); } // Press the L1 button.
+        void releaseL1() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_L1; SendFeedbackState(); } // Release the L1 button.
  
-        void pressR1() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_R1; SendFeedbackState(); }
-        void releaseR1() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_R1; SendFeedbackState(); }
+        void pressR1() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_R1; SendFeedbackState(); } // Press the R1 button.
+        void releaseR1() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_R1; SendFeedbackState(); } // Release the R1 button.
  
-        void pressL3() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_L3; SendFeedbackState(); }
-        void releaseL3() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_L3; SendFeedbackState(); }
+        void pressL3() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_L3; SendFeedbackState(); } // Press the L3 button.
+        void releaseL3() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_L3; SendFeedbackState(); } // Release the L3 button.
  
-        void pressR3() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_R3; SendFeedbackState(); }
-        void releaseR3() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_R3; SendFeedbackState(); }
+        void pressR3() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_R3; SendFeedbackState(); } // Press the R3 button.
+        void releaseR3() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_R3; SendFeedbackState(); } // Release the R3 button.
  
-        void pressOptions() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_OPTIONS; SendFeedbackState(); }
-        void releaseOptions() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_OPTIONS; SendFeedbackState(); }
+        void pressOptions() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_OPTIONS; SendFeedbackState(); } // Press the options button.
+        void releaseOptions() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_OPTIONS; SendFeedbackState(); } // Release the options button.
  
-        void pressCreate() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_SHARE; SendFeedbackState(); }
-        void releaseCreate() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_SHARE; SendFeedbackState(); }
+        void pressCreate() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_SHARE; SendFeedbackState(); } // Press the create button.
+        void releaseCreate() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_SHARE; SendFeedbackState(); } // Release the create button.
  
-        void pressTouchpad() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD; SendFeedbackState(); }
-        void releaseTouchpad() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_TOUCHPAD; SendFeedbackState(); }
+        void pressTouchpad() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD; SendFeedbackState(); } // Press the touchpad button.
+        void releaseTouchpad() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_TOUCHPAD; SendFeedbackState(); } // Release the touchpad button.
  
-        void pressPS() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); }
-        void releasePS() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); }
+        void pressPS() { controller_state.buttons |= CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); } // Press the PS button.
+        void releasePS() { controller_state.buttons &= ~CHIAKI_CONTROLLER_BUTTON_PS; SendFeedbackState(); } // Release the PS button.
 
-        void setL2(uint8_t state) { controller_state.l2_state = state; SendFeedbackState(); }
+        void setL2(uint8_t state) { controller_state.l2_state = state; SendFeedbackState(); } // Set the L2 trigger state [0, 255].
 
-        void setR2(uint8_t state) { controller_state.r2_state = state; SendFeedbackState(); }
+        void setR2(uint8_t state) { controller_state.r2_state = state; SendFeedbackState(); } // Set the R2 trigger state [0, 255].
 
-        void setLeftX(int16_t x) { controller_state.left_x = x; SendFeedbackState(); }
-        void setLeftY(int16_t y) { controller_state.left_y = y; SendFeedbackState(); }
-        void setLeft(int16_t x, int16_t y) { controller_state.left_x = x; controller_state.left_y = y; SendFeedbackState(); }
+        void setLeftX(int16_t x) { controller_state.left_x = x; SendFeedbackState(); } // Set the left stick's x value [-32768, 32767], 0 is centered.
+        void setLeftY(int16_t y) { controller_state.left_y = y; SendFeedbackState(); } // Set the left stick's y value [-32768, 32767], 0 is centered.
+        void setLeft(int16_t x, int16_t y) { controller_state.left_x = x; controller_state.left_y = y; SendFeedbackState(); } // Set the left stick's x and y values [-32768, 32767], 0 is centered.
 
-        void setRightX(int16_t x) { controller_state.right_x = x; SendFeedbackState(); }
-        void setRightY(int16_t y) { controller_state.right_y = y; SendFeedbackState(); }
-        void setRight(int16_t x, int16_t y) { controller_state.right_x = x; controller_state.right_y = y; SendFeedbackState(); }
+        void setRightX(int16_t x) { controller_state.right_x = x; SendFeedbackState(); } // Set the right stick's x value [-32768, 32767], 0 is centered.
+        void setRightY(int16_t y) { controller_state.right_y = y; SendFeedbackState(); } // Set the right stick's y value [-32768, 32767], 0 is centered.
+        void setRight(int16_t x, int16_t y) { controller_state.right_x = x; controller_state.right_y = y; SendFeedbackState(); } // Set the right stick's x and y values [-32768, 32767], 0 is centered.
 
-        void setAccelerometerX(float x) { controller_state.accel_x = x; SendFeedbackState(); }
-        void setAccelerometerY(float y) { controller_state.accel_y = y; SendFeedbackState(); }
-        void setAccelerometerZ(float z) { controller_state.accel_z = z; SendFeedbackState(); }
-        void setAccelerometer(float x, float y, float z) { controller_state.accel_x = x; controller_state.accel_y = y; controller_state.accel_z = z; SendFeedbackState(); }
+        void setAccelerometerX(float x) { controller_state.accel_x = x; SendFeedbackState(); } // Set the accelerometer x value in g [-5, 5] (at rest: x=0, y=1, z=0).
+        void setAccelerometerY(float y) { controller_state.accel_y = y; SendFeedbackState(); } // Set the accelerometer y value in g [-5, 5] (at rest: x=0, y=1, z=0).
+        void setAccelerometerZ(float z) { controller_state.accel_z = z; SendFeedbackState(); } // Set the accelerometer z value in g [-5, 5] (at rest: x=0, y=1, z=0).
+        void setAccelerometer(float x, float y, float z) { controller_state.accel_x = x; controller_state.accel_y = y; controller_state.accel_z = z; SendFeedbackState(); } // Set the accelerometer x, y and z values in g [-5, 5] (at rest: 0, 1, 0).
 
-        void setGyroscopeX(float x) { controller_state.gyro_x = x; SendFeedbackState(); }
-        void setGyroscopeY(float y) { controller_state.gyro_y = y; SendFeedbackState(); }
-        void setGyroscopeZ(float z) { controller_state.gyro_z = z; SendFeedbackState(); }
-        void setGyroscope(float x, float y, float z) { controller_state.gyro_x = x; controller_state.gyro_y = y; controller_state.gyro_z = z; SendFeedbackState(); }
+        void setGyroscopeX(float x) { controller_state.gyro_x = x; SendFeedbackState(); } // Set the gyroscope x value in rad/s [-30, 30] (at rest: 0).
+        void setGyroscopeY(float y) { controller_state.gyro_y = y; SendFeedbackState(); } // Set the gyroscope y value in rad/s [-30, 30] (at rest: 0).
+        void setGyroscopeZ(float z) { controller_state.gyro_z = z; SendFeedbackState(); } // Set the gyroscope z value in rad/s [-30, 30] (at rest: 0).
+        void setGyroscope(float x, float y, float z) { controller_state.gyro_x = x; controller_state.gyro_y = y; controller_state.gyro_z = z; SendFeedbackState(); } // Set the gyroscope x, y and z values in rad/s [-30, 30] (at rest: 0).
 
-        void setOrientationX(float x) { controller_state.orient_x = x; SendFeedbackState(); }
-        void setOrientationY(float y) { controller_state.orient_y = y; SendFeedbackState(); }
-        void setOrientationZ(float z) { controller_state.orient_z = z; SendFeedbackState(); }
-        void setOrientationW(float w) { controller_state.orient_w = w; SendFeedbackState(); }
-        void setOrientation(float x, float y, float z, float w) { controller_state.orient_x = x; controller_state.orient_y = y; controller_state.orient_z = z; controller_state.orient_w = w; SendFeedbackState(); }
+        void setOrientationX(float x) { controller_state.orient_x = x; SendFeedbackState(); } // Set the orientation quaternion's x component [-1, 1] (at rest: x=y=z=0, w=1).
+        void setOrientationY(float y) { controller_state.orient_y = y; SendFeedbackState(); } // Set the orientation quaternion's y component [-1, 1] (at rest: x=y=z=0, w=1).
+        void setOrientationZ(float z) { controller_state.orient_z = z; SendFeedbackState(); } // Set the orientation quaternion's z component [-1, 1] (at rest: x=y=z=0, w=1).
+        void setOrientationW(float w) { controller_state.orient_w = w; SendFeedbackState(); } // Set the orientation quaternion's w component [-1, 1] (at rest: x=y=z=0, w=1).
+        void setOrientation(float x, float y, float z, float w) { controller_state.orient_x = x; controller_state.orient_y = y; controller_state.orient_z = z; controller_state.orient_w = w; SendFeedbackState(); } // Set the orientation as a unit quaternion (x, y, z, w) (at rest: 0, 0, 0, 1).
 
         ChiakiControllerState controller_state;
 
+        // Send the current controller state to the console. The press_*/release_*/set_* methods do this themselves.
         void SendFeedbackState()
         {
             GilReleaseIfHeld release; // chiaki takes locks its threads may hold while waiting for the GIL to log

@@ -428,6 +428,18 @@ ChiakiPySession::~ChiakiPySession()
     }
 }
 
+bool ChiakiPySession::HasHardwareDecoder()
+{
+    return ffmpeg_decoder && ffmpeg_decoder->hw_device_ctx;
+}
+
+std::string ChiakiPySession::HardwareDecoderType()
+{
+    if (!HasHardwareDecoder())
+        return "";
+    return av_hwdevice_get_type_name(reinterpret_cast<AVHWDeviceContext *>(ffmpeg_decoder->hw_device_ctx->data)->type);
+}
+
 void ChiakiPySession::Start()
 {
     GilReleaseIfHeld release;

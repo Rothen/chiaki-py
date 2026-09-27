@@ -34,11 +34,10 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(pybind11)
 include_directories(${DEPS_FOLDER}/pybind11)
 include_directories(${CMAKE_SOURCE_DIR}/pybind/include)
+include_directories(${CMAKE_SOURCE_DIR}/pybind/bindings)
 
 # Source files
 set(SOURCES
-    include/core/common.h
-    include/core/log.h
     include/backend.h
     include/chiaki_py_controller.h
     include/elapsed_timer.h
@@ -56,11 +55,8 @@ set(SOURCES
     include/vulkan_renderer.h
     include/timer.h
     include/utils.h
-    src/core/common.cpp
-    src/core/log.cpp
     src/backend.cpp
     src/host.cpp
-    src/event_source.cpp
     src/pylog.cpp
     src/sessionlog.cpp
     src/settings.cpp
@@ -73,10 +69,36 @@ set(SOURCES
     src/placebo_vulkan.cpp
     src/vulkan_renderer.cpp
     src/utils.cpp
-    src/bindings.cpp
 )
 
-pybind11_add_module(chiaki-py ${SOURCES})
+# The Python bindings: module.cpp defines the module, pydef_chiaki.cpp and pydef_event_source.cpp are written
+# by hand, the other pydef_*.cpp files are generated from the headers by bindings/generate_bindings.py.
+set(BINDING_SOURCES
+    bindings/pydef.h
+    bindings/module.cpp
+    bindings/pydef_chiaki.cpp
+    bindings/pydef_event_source.cpp
+    bindings/pydef_settings.cpp
+    bindings/pydef_discovery.cpp
+    bindings/pydef_audio.cpp
+    bindings/pydef_session.cpp
+    bindings/pydef_frame_handler.cpp
+    bindings/pydef_vulkan_renderer.cpp
+    bindings/pydef_backend.cpp
+)
+
+pybind11_add_module(chiaki-py ${SOURCES} ${BINDING_SOURCES})
+target_compile_definitions(chiaki-py PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)
+
+# Regenerates the generated pydef_*.cpp files and the chiaki_py/lib/chiaki_py/__init__.pyi stubs after a bound
+# header changed (needs litgen, see requirements.txt). Not part of the build: the generated files
+# are committed.
+add_custom_target(chiaki-py-generate-bindings
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/bindings/generate_bindings.py"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT " Generating the chiaki_py bindings and stubs with litgen "
+    VERBATIM
+)
 
 if(WIN32)
     # libplacebo's helper for its libav frames has to be compiled as C, see the file.
@@ -221,10 +243,4 @@ if(WIN32)
         )
     endif()
 endif()
-
-add_custom_command(TARGET chiaki-py POST_BUILD
-    VERBATIM COMMAND "${PYTHON_EXECUTABLE}" -c "with __import__('contextlib').suppress(BaseException): import sys, os; sys.path.insert(1, os.getcwd()); from pybind11_stubgen import main; import chiaki_py; sys.argv = ['pybind11-stubgen', '--ignore-all-errors', '-o', '${CMAKE_SOURCE_DIR}/chiaki_py/lib', 'chiaki_py']; main()"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/chiaki_py/lib
-    COMMENT " Generating chiaki_py .pyi stubs into chiaki_py/lib/ "
-)
 

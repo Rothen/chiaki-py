@@ -334,7 +334,7 @@ ChiakiFfmpegFrame FrameHandler::pull_decoded_frame()
     return chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
 }
 
-py::object CpuFrameHandler::get_frame(const py::object &out = py::none())
+py::object CpuFrameHandler::get_frame(const py::object &out)
 {
     frame = pull_decoded_frame().frame;
     if (!frame)
@@ -388,7 +388,7 @@ py::object CpuFrameHandler::get_frame(const py::object &out = py::none())
     return std::move(result);
 }
 
-py::object CudaFrameHandler::get_frame(const py::object &out = py::none())
+py::object CudaFrameHandler::get_frame(const py::object &out)
 {
     ChiakiFfmpegDecoder *decoder = streamSession->GetFfmpegDecoder();
     if (!decoder)
@@ -460,7 +460,7 @@ py::object CudaFrameHandler::empty_frame(int width, int height, const std::strin
     return array;
 }
 
-py::object VulkanFrameHandler::get_frame(const py::object &out = py::none())
+py::object VulkanFrameHandler::get_frame(const py::object &out)
 {
     ChiakiFfmpegDecoder *decoder = streamSession->GetFfmpegDecoder();
     if (!decoder)
@@ -496,6 +496,11 @@ py::object VulkanFrameHandler::get_frame(const py::object &out = py::none())
 
 std::unique_ptr<VulkanFrame> VulkanFrameHandler::empty_frame(int width, int height)
 {
+    // Deliberately does no GPU work (unlike VulkanFrame::black()): this is called synchronously from the
+    // GUI thread while the hardware decoder may already be submitting its own Vulkan commands on its own
+    // thread, and nothing in this codebase synchronizes access to the Vulkan queue between them - a
+    // black() upload here raced with the decoder's startup and brought down the whole device
+    // (VK_ERROR_DEVICE_LOST).
     return std::make_unique<VulkanFrame>();
 }
 

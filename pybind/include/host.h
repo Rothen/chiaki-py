@@ -11,6 +11,7 @@
 #include <fstream>
 #include <chiaki/regist.h>
 
+// A console's 6-byte Ethernet MAC address, as used to identify a registered/discovered host.
 class HostMAC
 {
 private:
@@ -21,6 +22,8 @@ public:
     HostMAC(const HostMAC &o) { memcpy(mac, o.GetMAC(), sizeof(mac)); }
     explicit HostMAC(const uint8_t mac[6]) { memcpy(this->mac, mac, sizeof(this->mac)); }
     const uint8_t *GetMAC() const { return mac; }
+
+    // The MAC address as a hex string.
     std::string ToString() const
     {
         std::stringstream ss;

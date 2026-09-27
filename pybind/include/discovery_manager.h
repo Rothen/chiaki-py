@@ -2,7 +2,6 @@
 #define CHIAKI_PY_DISCOVERYMANAGER_H
 
 #include "host.h"
-#include "core/struct_wrapper.h"
 
 #include <chiaki/discoveryservice.h>
 
@@ -10,6 +9,9 @@
 #include <unordered_map>
 #include <mutex>
 
+// One console found by DiscoveryManager's broadcast discovery, or filled in by hand to
+// register a manual one. `ps5`, `host_addr` and `state` (whether it's awake or in standby)
+// are the fields most callers need; the rest mirrors what the console's discovery reply reports.
 struct DiscoveryHost
 {
     bool ps5;
@@ -26,53 +28,13 @@ struct DiscoveryHost
     std::string running_app_titleid;
     std::string running_app_name;
 
+    // The host's MAC address, parsed from host_id.
     HostMAC GetHostMAC() const;
 };
 
-class DiscoveryHostWrapper : public StructWrapper<DiscoveryHost>
-{
-public:
-    using StructWrapper::StructWrapper;
-
-    bool getPs5() { return raw().ps5; }
-    void setPs5(bool ps5) { raw().ps5 = ps5; }
-
-    ChiakiDiscoveryHostState getState() { return raw().state; }
-    void setState(ChiakiDiscoveryHostState state) { raw().state = state; }
-
-    ChiakiTarget getTarget() { return raw().target; }
-    void setTarget(ChiakiTarget target) { raw().target = target; }
-
-    uint16_t getHostRequestPort() { return raw().host_request_port; }
-    void setHostRequestPort(uint16_t host_request_port) { raw().host_request_port = host_request_port; }
-
-    std::string getHostAddr() { return raw().host_addr; }
-    void setHostAddr(std::string host_addr) { raw().host_addr = host_addr; }
-
-    std::string getSystemVersion() { return raw().system_version; }
-    void setSystemVersion(std::string system_version) { raw().system_version = system_version; }
-
-    std::string getDeviceDiscoveryProtocolVersion() { return raw().device_discovery_protocol_version; }
-    void setDeviceDiscoveryProtocolVersion(std::string device_discovery_protocol_version) { raw().device_discovery_protocol_version = device_discovery_protocol_version; }
-
-    std::string getHostName() { return raw().host_name; }
-    void setHostName(std::string host_name) { raw().host_name = host_name; }
-
-    std::string getHostType() { return raw().host_type; }
-    void setHostType(std::string host_type) { raw().host_type = host_type; }
-
-    std::string getHostId() { return raw().host_id; }
-    void setHostId(std::string host_id) { raw().host_id = host_id; }
-
-    std::string getRunningAppTitleId() { return raw().running_app_titleid; }
-    void setRunningAppTitleId(std::string running_app_titleid) { raw().running_app_titleid = running_app_titleid; }
-
-    std::string getRunningAppName() { return raw().running_app_name; }
-    void setRunningAppName(std::string running_app_name) { raw().running_app_name = running_app_name; }
-
-    HostMAC GetHostMAC() const { return raw().GetHostMAC(); };
-};
-
+// Broadcasts for PS4/PS5 hosts on the local network (IPv4 and IPv6) in the background and keeps
+// track of what answered. `chiaki_py.discover_hosts()` wraps the start/wait/collect/stop sequence
+// this class otherwise requires driving by hand.
 class DiscoveryManager
 {
 	friend class DiscoveryManagerPrivate;
@@ -85,7 +47,7 @@ class DiscoveryManager
 		bool service_active;
 		bool service_active_ipv6;
 		mutable std::mutex hosts_mutex;
-		std::vector<DiscoveryHostWrapper> hosts;
+		std::vector<DiscoveryHost> hosts;
 
     // slots
 
@@ -93,14 +55,24 @@ class DiscoveryManager
 		explicit DiscoveryManager();
 		~DiscoveryManager();
 
+		// Start or stop broadcasting. Starting re-inits the discovery sockets if they were not
+		// already active; stopping tears them down and clears the discovered host list.
 		void SetActive(bool active);
 
-        void SendWakeup(const std::string &host, const std::string &regist_key, bool ps5);
+		// Send a wakeup packet to `host` (a registration's `regist_key`, hex-encoded) so a console
+		// in standby powers on. Raises ValueError if `regist_key` isn't hex, and RuntimeError if it is
+		// too long or sending fails.
+		void SendWakeup(const std::string &host, const std::string &regist_key, bool ps5);
 
-        bool GetActive() const { return service_active; }
-		const std::vector<DiscoveryHostWrapper> GetHosts() const;
+		// Whether broadcast discovery is currently running.
+		bool GetActive() const { return service_active; }
 
-		void DiscoveryServiceHosts(std::vector<DiscoveryHostWrapper> hosts);
+		// The hosts the last broadcast round found. Empty until set_active(True) has had time to hear back.
+		const std::vector<DiscoveryHost> GetHosts() const;
+
+		// Replace the broadcast-discovered host list wholesale. Called internally as broadcast replies
+		// come in; not normally needed from Python.
+		void DiscoveryServiceHosts(std::vector<DiscoveryHost> hosts);
 
 		void HostsUpdated();
 };
