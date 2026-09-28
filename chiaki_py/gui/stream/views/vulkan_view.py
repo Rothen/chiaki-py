@@ -4,12 +4,15 @@ The decoder decodes on a Vulkan device (Settings.set_hardware_decoder("vulkan"))
 window is drawn on that same device by VulkanRenderer, which uses libplacebo: it converts
 the decoded NV12/P010 frames to RGB (SDR or HDR), scales them and presents them from where
 they are, so the pixels never touch the CPU and are not even copied within the GPU. Works
-with any GPU that has Vulkan video decoding, Windows only so far. No optional dependencies.
+with any GPU that has Vulkan video decoding, on Windows and on Linux with X11. On a Wayland
+session Qt has to run through XWayland (QT_QPA_PLATFORM=xcb, which StreamDisplay.start sets):
+PyQt6 gives no access to the wl_surface of a Qt window. No optional dependencies.
 """
 
 import logging
 
 from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QWidget
 
 from chiaki_py import Session
@@ -97,6 +100,10 @@ class VulkanVideoWidget(VideoMixin[VulkanFrame], QWidget):
         raises RuntimeError if the session can't be drawn (it does not use the Vulkan decoder, ...)."""
         if self._renderer is not None:
             return
+        if QGuiApplication.platformName() == "wayland":
+            raise RuntimeError("VulkanVideoWidget can't draw into Qt's Wayland windows: set QT_QPA_PLATFORM=xcb "
+                               "before the QApplication is made, for Qt to use XWayland (see chiaki_py._qt.use_xwayland)")
+        # On X11 winId() is the X Window id, which VulkanRenderer opens an X connection of its own for.
         self._renderer = VulkanRenderer(self.session.cp_session, int(self.winId()))
         self._render_thread = VulkanRenderThread(self._frame_thread, self._renderer, self._fps_thread)
         self._render_thread.start()

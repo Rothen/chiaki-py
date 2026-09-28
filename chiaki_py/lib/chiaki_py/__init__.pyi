@@ -1305,11 +1305,17 @@ class VulkanFrameHandler(FrameHandler):
 
 
 
+class VulkanWindowSystem(enum.IntEnum):
+    """ The kind of native window a VulkanRenderer draws into, which decides what its `window` and `display` are."""
+    Default = enum.auto() # (= 0)  # Win32 on Windows, X11 elsewhere
+    Win32 = enum.auto()   # (= 1)  # window: an HWND; display: unused
+    X11 = enum.auto()     # (= 2)  # window: an X11 Window id (what Qt's winId() is on X11); display: an Xlib Display*, or 0 to open a connection of its own
+    Wayland = enum.auto() # (= 3)  # window: a wl_surface*; display: the wl_display* it belongs to (both from the toolkit, e.g. GLFW's or SDL's)
+
 class VulkanRenderer:
     """ Draws VulkanFrames of the Vulkan hardware decoder into a native window without them leaving the
      GPU: libplacebo converts the frames' NV12/P010 planes to RGB (SDR or HDR), scales them and presents
-     them on the same Vulkan device the decoder decodes on. Windows only so far. Call from one thread
-     (the GUI thread), and close() before the window is destroyed.
+     them on the same Vulkan device the decoder decodes on. Windows (Win32) and Linux (X11 and Wayland).
 
      The Vulkan device the decoder decodes on (see the ChiakiPySession constructor, which has libplacebo create
      it) is also the one drawn on, so a decoded frame is used where it is: libplacebo samples its NV12/P010
@@ -1318,13 +1324,21 @@ class VulkanRenderer:
 
      All calls must come from one thread (not necessarily the GUI thread - the Python binding uses a
      dedicated thread of its own, since a call here can block for a while - see VulkanRenderThread),
-     and close() before the window is destroyed.
+     except set_size(), and close() before the window is destroyed.
     """
 
     def render(self, frame: VulkanFrame) -> None:
         """ Draw `frame`, a VulkanFrame from the Vulkan decoder, scaled to fit the window with its aspect
-         ratio kept, and present it. Does nothing while the window has no area (is minimised). Returns
-         once the drawing is submitted, not finished; the GPU is waited for when the next frame needs it.
+         ratio kept, and present it. Does nothing while the window has no area (is minimised), or on Wayland
+         before set_size() was called. Returns once the drawing is submitted, not finished; the GPU is waited
+         for when the next frame needs it.
+        """
+        pass
+
+    def set_size(self, width: int, height: int) -> None:
+        """ The size in pixels to draw at, for window systems that leave it to the renderer: Wayland, where a surface is
+         as big as what is drawn into it. Call it whenever the window's size changes, from any thread. Elsewhere the
+         window's own size is used and this is ignored.
         """
         pass
 
@@ -1347,12 +1361,12 @@ class VulkanRenderer:
 
     @staticmethod
     def is_supported() -> bool:
-        """ Whether windows of this platform can be drawn into (only Windows so far)."""
+        """ Whether this build can draw into windows of this platform (Windows, and Linux if it was built with libplacebo)."""
         pass
 
 
-    def __init__(self, stream_session: ChiakiPySession, window: int) -> None:
-        """Draw into the native window `window` (an HWND). The session must use the Vulkan hardware decoder (Settings.set_hardware_decoder('vulkan')); raises RuntimeError otherwise, or if the window can't be drawn into."""
+    def __init__(self, stream_session: ChiakiPySession, window: int, display: int = 0, window_system: VulkanWindowSystem = VulkanWindowSystem.Default) -> None:
+        """Draw into the native window `window`, of the connection `display`, as `window_system` says: an HWND on Windows; an X11 Window id (e.g. Qt's winId()) and an Xlib Display* or 0 on X11; a wl_surface* and its wl_display* on Wayland. The session must use the Vulkan hardware decoder (Settings.set_hardware_decoder('vulkan')); raises RuntimeError otherwise, or if the window can't be drawn into."""
         pass
     def set_overlay(self, rgba: np.ndarray, margin: int = 12) -> None:
         """Show `rgba`, a uint8 array of shape (height, width, 4) with premultiplied alpha, on top of the video

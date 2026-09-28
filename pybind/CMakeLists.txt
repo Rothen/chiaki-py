@@ -100,10 +100,6 @@ add_custom_target(chiaki-py-generate-bindings
     VERBATIM
 )
 
-if(WIN32)
-    # libplacebo's helper for its libav frames has to be compiled as C, see the file.
-    target_sources(chiaki-py PRIVATE src/libav_impl.c)
-endif()
 set_target_properties(chiaki-py PROPERTIES OUTPUT_NAME "chiaki_py")
 
 set_target_properties(chiaki-py PROPERTIES
@@ -172,6 +168,26 @@ if(WIN32)
     get_filename_component(PLACEBO_BIN_DIR "${PLACEBO_LIB_DIR}/../bin" ABSOLUTE)
     target_include_directories(chiaki-py PRIVATE ${PLACEBO_INCLUDE_DIR})
     target_link_libraries(chiaki-py PRIVATE ${PLACEBO_LIB})
+    set(CHIAKI_PY_HAS_PLACEBO ON)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # On Linux libplacebo is optional, from the system (libplacebo-dev): without it, or without an FFmpeg that decodes
+    # with Vulkan (6.1, libavutil 58.29), VulkanRenderer is left out and says so when used. It draws into X11 windows
+    # (Xlib, libx11-dev) and Wayland ones (which need no library of their own).
+    pkg_check_modules(PLACEBO IMPORTED_TARGET libplacebo>=6.338)
+    find_package(X11)
+    if(NOT PLACEBO_FOUND OR NOT X11_FOUND)
+        message(STATUS "chiaki-py: no libplacebo >= 6.338 or no Xlib, building without VulkanRenderer")
+    elseif(FFMPEG_libavutil_VERSION VERSION_LESS "58.29")
+        message(STATUS "chiaki-py: FFmpeg's libavutil ${FFMPEG_libavutil_VERSION} can't decode with Vulkan (needs FFmpeg 6.1), building without VulkanRenderer")
+    else()
+        target_link_libraries(chiaki-py PRIVATE PkgConfig::PLACEBO X11::X11)
+        set(CHIAKI_PY_HAS_PLACEBO ON)
+    endif()
+endif()
+if(CHIAKI_PY_HAS_PLACEBO)
+    target_compile_definitions(chiaki-py PRIVATE CHIAKI_PY_HAS_PLACEBO)
+    # libplacebo's helper for its libav frames has to be compiled as C, see the file.
+    target_sources(chiaki-py PRIVATE src/libav_impl.c)
 endif()
 find_library(ZLIB_LIB NAMES z zlib REQUIRED)
 find_library(HIDAPI_LIB NAMES hidapi hidapi-hidraw hidapi-libusb REQUIRED)

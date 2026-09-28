@@ -10,27 +10,29 @@
 #include <stdexcept>
 #include <string>
 
-#ifndef _WIN32
+#ifndef CHIAKI_PY_HAS_PLACEBO
 
-// Only Windows so far: drawing into a window needs a surface extension per window system. Elsewhere the
-// class exists, so that the module has the same API, but says so when used.
+// Built without libplacebo (see placebo_vulkan.cpp): the class exists, so that the module has the same API, but
+// says so when used.
+static constexpr const char *kUnsupported = "This build of chiaki_py can't draw with Vulkan: it was built without libplacebo";
+
 struct VulkanRenderer::Impl
 {
 };
 
-VulkanRenderer::VulkanRenderer(ChiakiPySession &, uintptr_t)
-{
-    throw std::runtime_error("Rendering with Vulkan is only supported on Windows so far");
-}
+VulkanRenderer::VulkanRenderer(ChiakiPySession &, uintptr_t, uintptr_t, VulkanWindowSystem) { throw std::runtime_error(kUnsupported); }
 VulkanRenderer::~VulkanRenderer() {}
-void VulkanRenderer::render(const VulkanFrame &) { throw std::runtime_error("Rendering with Vulkan is only supported on Windows so far"); }
-void VulkanRenderer::set_overlay(const uint8_t *, int, int, int) { throw std::runtime_error("Rendering with Vulkan is only supported on Windows so far"); }
+void VulkanRenderer::render(const VulkanFrame &) { throw std::runtime_error(kUnsupported); }
+void VulkanRenderer::set_size(int, int) {}
+void VulkanRenderer::set_overlay(const uint8_t *, int, int, int) { throw std::runtime_error(kUnsupported); }
 void VulkanRenderer::clear_overlay() {}
 void VulkanRenderer::close() {}
 bool VulkanRenderer::is_supported() { return false; }
 
 #else
 
+#include <atomic>
+#include <cstdint>
 #include <deque>
 
 #include "placebo_vulkan.h"
@@ -47,6 +49,14 @@ extern "C"
 #define PL_LIBAV_IMPLEMENTATION 0
 #include <libplacebo/utils/libav.h>
 
+#ifndef _WIN32
+// Last, as Xlib defines macros (None, Bool, Status, ...) that would break the headers above. vulkan_wayland.h needs no
+// Wayland header: it only names wl_display and wl_surface as incomplete structs.
+#include <X11/Xlib.h>
+#include <vulkan/vulkan_xlib.h>
+#include <vulkan/vulkan_wayland.h>
+#endif
+
 struct VulkanRenderer::Impl
 {
     // Frames that stay referenced after they were drawn. libplacebo lets the decoder reuse a frame's image as soon as
@@ -58,7 +68,12 @@ struct VulkanRenderer::Impl
     AVBufferRef *device_ref = nullptr;
     AVHWDeviceContext *device = nullptr;
     PlaceboVulkan *placebo = nullptr;
+#ifdef _WIN32
     HWND window = nullptr;
+#else
+    Display *x11_display = nullptr; // only set if the renderer opened the connection itself, to close it again
+#endif
+    std::atomic<int> requested_width{0}, requested_height{0}; // from set_size(), for surfaces without a size of their own
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     pl_swapchain swapchain = nullptr;
     pl_renderer renderer = nullptr;
@@ -78,14 +93,16 @@ struct VulkanRenderer::Impl
         }
     }
 
-    void init(ChiakiPySession &session, uintptr_t native_window);
+    void init(ChiakiPySession &session, uintptr_t native_window, uintptr_t native_display, VulkanWindowSystem window_system);
+    void create_surface(uintptr_t native_window, uintptr_t native_display, VulkanWindowSystem window_system);
+    bool window_size(int &width, int &height);
     void render(const VulkanFrame &frame);
     void set_overlay(const uint8_t *rgba, int width, int height, int margin);
     void clear_overlay();
     void close();
 };
 
-void VulkanRenderer::Impl::init(ChiakiPySession &session, uintptr_t native_window)
+void VulkanRenderer::Impl::init(ChiakiPySession &session, uintptr_t native_window, uintptr_t native_display, VulkanWindowSystem window_system)
 {
     ChiakiFfmpegDecoder *decoder = session.GetFfmpegDecoder();
     if (!decoder || !decoder->hw_device_ctx)
@@ -101,13 +118,7 @@ void VulkanRenderer::Impl::init(ChiakiPySession &session, uintptr_t native_windo
 
     device_ref = av_buffer_ref(decoder->hw_device_ctx);
     device = device_context;
-    window = reinterpret_cast<HWND>(native_window);
-
-    VkWin32SurfaceCreateInfoKHR surface_info = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
-    surface_info.hinstance = GetModuleHandleW(nullptr);
-    surface_info.hwnd = window;
-    if (vkCreateWin32SurfaceKHR(placebo->instance->instance, &surface_info, nullptr, &surface) != VK_SUCCESS)
-        throw std::runtime_error("Failed to create a Vulkan surface for the window");
+    create_surface(native_window, native_display, window_system);
 
     pl_vulkan_swapchain_params swapchain_params = {};
     swapchain_params.surface = surface;
@@ -122,6 +133,101 @@ void VulkanRenderer::Impl::init(ChiakiPySession &session, uintptr_t native_windo
         throw std::runtime_error("libplacebo failed to create its renderer");
 }
 
+#ifdef _WIN32
+
+void VulkanRenderer::Impl::create_surface(uintptr_t native_window, uintptr_t, VulkanWindowSystem window_system)
+{
+    if (window_system != VulkanWindowSystem::Default && window_system != VulkanWindowSystem::Win32)
+        throw std::runtime_error("Only Win32 windows can be drawn into on Windows");
+    window = reinterpret_cast<HWND>(native_window);
+
+    VkWin32SurfaceCreateInfoKHR surface_info = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
+    surface_info.hinstance = GetModuleHandleW(nullptr);
+    surface_info.hwnd = window;
+    if (vkCreateWin32SurfaceKHR(placebo->instance->instance, &surface_info, nullptr, &surface) != VK_SUCCESS)
+        throw std::runtime_error("Failed to create a Vulkan surface for the window");
+}
+
+// The window's drawable size; false if the window is gone.
+bool VulkanRenderer::Impl::window_size(int &width, int &height)
+{
+    RECT area;
+    if (!GetClientRect(window, &area))
+        return false;
+    width = area.right - area.left;
+    height = area.bottom - area.top;
+    return true;
+}
+
+#else
+
+void VulkanRenderer::Impl::create_surface(uintptr_t native_window, uintptr_t native_display, VulkanWindowSystem window_system)
+{
+    const VkInstance instance = placebo->instance->instance;
+    switch (window_system)
+    {
+    case VulkanWindowSystem::Default:
+    case VulkanWindowSystem::X11:
+    {
+        if (!placebo->has_instance_extension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME))
+            throw std::runtime_error("The Vulkan driver can't draw into X11 windows (it has no " VK_KHR_XLIB_SURFACE_EXTENSION_NAME ")");
+        // A window belongs to the X server, not to a connection: one of the renderer's own draws into a window Qt made
+        // on its connection just as well, which is all that Qt's winId() leaves to go on.
+        Display *display = reinterpret_cast<Display *>(native_display);
+        if (!display)
+        {
+            x11_display = XOpenDisplay(nullptr);
+            if (!x11_display)
+                throw std::runtime_error("Failed to connect to the X server (is DISPLAY set?)");
+            display = x11_display;
+        }
+        VkXlibSurfaceCreateInfoKHR surface_info = {VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR};
+        surface_info.dpy = display;
+        surface_info.window = static_cast<Window>(native_window);
+        if (vkCreateXlibSurfaceKHR(instance, &surface_info, nullptr, &surface) != VK_SUCCESS)
+            throw std::runtime_error("Failed to create a Vulkan surface for the X11 window");
+        break;
+    }
+    case VulkanWindowSystem::Wayland:
+    {
+        if (!placebo->has_instance_extension(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
+            throw std::runtime_error("The Vulkan driver can't draw into Wayland windows (it has no " VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME ")");
+        if (!native_window || !native_display)
+            throw std::runtime_error("Drawing into a Wayland window needs its wl_surface (window) and wl_display (display)");
+        VkWaylandSurfaceCreateInfoKHR surface_info = {VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR};
+        surface_info.display = reinterpret_cast<wl_display *>(native_display);
+        surface_info.surface = reinterpret_cast<wl_surface *>(native_window);
+        if (vkCreateWaylandSurfaceKHR(instance, &surface_info, nullptr, &surface) != VK_SUCCESS)
+            throw std::runtime_error("Failed to create a Vulkan surface for the Wayland window");
+        break;
+    }
+    case VulkanWindowSystem::Win32:
+        throw std::runtime_error("Win32 windows can only be drawn into on Windows");
+    }
+}
+
+// The window's drawable size as the surface reports it (X11), or as set_size() said where the surface leaves it to the
+// swapchain (Wayland); false if the window is gone.
+bool VulkanRenderer::Impl::window_size(int &width, int &height)
+{
+    VkSurfaceCapabilitiesKHR capabilities;
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(placebo->vulkan->phys_device, surface, &capabilities) != VK_SUCCESS)
+        return false;
+    if (capabilities.currentExtent.width != UINT32_MAX)
+    {
+        width = static_cast<int>(capabilities.currentExtent.width);
+        height = static_cast<int>(capabilities.currentExtent.height);
+    }
+    else
+    {
+        width = requested_width.load();
+        height = requested_height.load();
+    }
+    return true;
+}
+
+#endif
+
 void VulkanRenderer::Impl::render(const VulkanFrame &frame)
 {
     if (closed)
@@ -135,13 +241,11 @@ void VulkanRenderer::Impl::render(const VulkanFrame &frame)
     if (frames->device_ctx != device)
         throw std::runtime_error("The frame was decoded on another Vulkan device than this renderer draws on");
 
-    RECT area;
-    if (!GetClientRect(window, &area))
+    int width = 0, height = 0;
+    if (!window_size(width, height))
         throw std::runtime_error("The window is gone");
-    int width = area.right - area.left;
-    int height = area.bottom - area.top;
     if (width <= 0 || height <= 0)
-        return; // minimised
+        return; // minimised, or on Wayland no size set yet
     if (!pl_swapchain_resize(swapchain, &width, &height))
         throw std::runtime_error("libplacebo failed to resize the swapchain");
 
@@ -281,19 +385,29 @@ void VulkanRenderer::Impl::close()
     if (surface != VK_NULL_HANDLE)
         vkDestroySurfaceKHR(placebo->instance->instance, surface, nullptr);
     surface = VK_NULL_HANDLE;
+#ifndef _WIN32
+    if (x11_display)
+        XCloseDisplay(x11_display); // after the surface, which uses the connection
+    x11_display = nullptr;
+#endif
     av_buffer_unref(&device_ref); // the device stays alive for as long as the decoder has it
 }
 
-VulkanRenderer::VulkanRenderer(ChiakiPySession &session, uintptr_t window) : impl(std::make_unique<Impl>())
+VulkanRenderer::VulkanRenderer(ChiakiPySession &session, uintptr_t window, uintptr_t display, VulkanWindowSystem window_system)
+    : impl(std::make_unique<Impl>())
 {
-    if (!is_supported())
-        throw std::runtime_error("Rendering with Vulkan is only supported on Windows so far");
-    impl->init(session, window); // if this throws, the impl frees what was made so far
+    impl->init(session, window, display, window_system); // if this throws, the impl frees what was made so far
 }
 
 VulkanRenderer::~VulkanRenderer() = default;
 
 void VulkanRenderer::render(const VulkanFrame &frame) { impl->render(frame); }
+
+void VulkanRenderer::set_size(int width, int height)
+{
+    impl->requested_width = width;
+    impl->requested_height = height;
+}
 
 void VulkanRenderer::set_overlay(const uint8_t *rgba, int width, int height, int margin) { impl->set_overlay(rgba, width, height, margin); }
 

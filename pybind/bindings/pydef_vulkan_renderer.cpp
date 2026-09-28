@@ -12,14 +12,27 @@ void py_init_vulkan_renderer(py::module_ &m)
     //
 
 
+    auto pyEnumVulkanWindowSystem =
+        py::enum_<VulkanWindowSystem>(m, "VulkanWindowSystem", py::arithmetic(), "The kind of native window a VulkanRenderer draws into, which decides what its `window` and `display` are.")
+            .value("Default", VulkanWindowSystem::Default, "Win32 on Windows, X11 elsewhere")
+            .value("Win32", VulkanWindowSystem::Win32, "window: an HWND; display: unused")
+            .value("X11", VulkanWindowSystem::X11, "window: an X11 Window id (what Qt's winId() is on X11); display: an Xlib Display*, or 0 to open a connection of its own")
+            .value("Wayland", VulkanWindowSystem::Wayland, "window: a wl_surface*; display: the wl_display* it belongs to (both from the toolkit, e.g. GLFW's or SDL's)")
+        .export_values();
+
+
     auto pyClassVulkanRenderer =
         py::class_<VulkanRenderer>
-            (m, "VulkanRenderer", " Draws VulkanFrames of the Vulkan hardware decoder into a native window without them leaving the\n GPU: libplacebo converts the frames' NV12/P010 planes to RGB (SDR or HDR), scales them and presents\n them on the same Vulkan device the decoder decodes on. Windows only so far. Call from one thread\n (the GUI thread), and close() before the window is destroyed.\n\n The Vulkan device the decoder decodes on (see the ChiakiPySession constructor, which has libplacebo create\n it) is also the one drawn on, so a decoded frame is used where it is: libplacebo samples its NV12/P010\n planes, converts them to RGB with the frame's own colour space (SDR or HDR), scales them to the window and\n presents the result on the window's swapchain. Nothing is copied.\n\n All calls must come from one thread (not necessarily the GUI thread - the Python binding uses a\n dedicated thread of its own, since a call here can block for a while - see VulkanRenderThread),\n and close() before the window is destroyed.")
+            (m, "VulkanRenderer", " Draws VulkanFrames of the Vulkan hardware decoder into a native window without them leaving the\n GPU: libplacebo converts the frames' NV12/P010 planes to RGB (SDR or HDR), scales them and presents\n them on the same Vulkan device the decoder decodes on. Windows (Win32) and Linux (X11 and Wayland).\n\n The Vulkan device the decoder decodes on (see the ChiakiPySession constructor, which has libplacebo create\n it) is also the one drawn on, so a decoded frame is used where it is: libplacebo samples its NV12/P010\n planes, converts them to RGB with the frame's own colour space (SDR or HDR), scales them to the window and\n presents the result on the window's swapchain. Nothing is copied.\n\n All calls must come from one thread (not necessarily the GUI thread - the Python binding uses a\n dedicated thread of its own, since a call here can block for a while - see VulkanRenderThread),\n except set_size(), and close() before the window is destroyed.")
         .def("render",
             &VulkanRenderer::render,
             py::arg("frame"),
-            " Draw `frame`, a VulkanFrame from the Vulkan decoder, scaled to fit the window with its aspect\n ratio kept, and present it. Does nothing while the window has no area (is minimised). Returns\n once the drawing is submitted, not finished; the GPU is waited for when the next frame needs it.",
+            " Draw `frame`, a VulkanFrame from the Vulkan decoder, scaled to fit the window with its aspect\n ratio kept, and present it. Does nothing while the window has no area (is minimised), or on Wayland\n before set_size() was called. Returns once the drawing is submitted, not finished; the GPU is waited\n for when the next frame needs it.",
             py::call_guard<py::gil_scoped_release>())
+        .def("set_size",
+            &VulkanRenderer::set_size,
+            py::arg("width"), py::arg("height"),
+            " The size in pixels to draw at, for window systems that leave it to the renderer: Wayland, where a surface is\n as big as what is drawn into it. Call it whenever the window's size changes, from any thread. Elsewhere the\n window's own size is used and this is ignored.")
         .def("set_overlay",
             &VulkanRenderer::set_overlay,
             py::arg("rgba"), py::arg("width"), py::arg("height"), py::arg("margin"),
@@ -31,10 +44,10 @@ void py_init_vulkan_renderer(py::module_ &m)
             " Wait for the GPU to be done with everything drawn so far and free everything. Call before the\n window is destroyed; safe to call twice.",
             py::call_guard<py::gil_scoped_release>())
         .def_static("is_supported",
-            &VulkanRenderer::is_supported, "Whether windows of this platform can be drawn into (only Windows so far).")
+            &VulkanRenderer::is_supported, "Whether this build can draw into windows of this platform (Windows, and Linux if it was built with libplacebo).")
         ;
 
-    pyClassVulkanRenderer.def(py::init<ChiakiPySession &, uintptr_t>(), py::arg("stream_session"), py::arg("window"), py::keep_alive<1, 2>(), "Draw into the native window `window` (an HWND). The session must use the Vulkan hardware decoder (Settings.set_hardware_decoder('vulkan')); raises RuntimeError otherwise, or if the window can't be drawn into.");
+    pyClassVulkanRenderer.def(py::init<ChiakiPySession &, uintptr_t, uintptr_t, VulkanWindowSystem>(), py::arg("stream_session"), py::arg("window"), py::arg("display") = 0, py::arg("window_system") = VulkanWindowSystem::Default, py::keep_alive<1, 2>(), "Draw into the native window `window`, of the connection `display`, as `window_system` says: an HWND on Windows; an X11 Window id (e.g. Qt's winId()) and an Xlib Display* or 0 on X11; a wl_surface* and its wl_display* on Wayland. The session must use the Vulkan hardware decoder (Settings.set_hardware_decoder('vulkan')); raises RuntimeError otherwise, or if the window can't be drawn into.");
     pyClassVulkanRenderer.def("set_overlay",
         [](VulkanRenderer &renderer, const py::array_t<uint8_t, py::array::c_style | py::array::forcecast> &rgba, int margin)
         {

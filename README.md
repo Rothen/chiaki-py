@@ -78,7 +78,7 @@ Run from the repo root; the scripts share a `./cache` directory for the PSN acco
 | `1.3_register_console.py <host> <pin> [--ps4]` | Pair with a console | |
 | `1.4.1_stream_cpu_qt.py` | Stream in a Qt window (CPU) | |
 | `1.4.2_stream_cuda_qt.py` | Same, via CUDA + OpenGL (NVIDIA) | `cupy-cuda12x cuda-python PyOpenGL` |
-| `1.4.3_stream_vulkan_qt.py` | Same, via Vulkan + libplacebo, zero-copy (Windows) | |
+| `1.4.3_stream_vulkan_qt.py` | Same, via Vulkan + libplacebo, zero-copy (Windows, Linux X11; XWayland on Wayland) | |
 | `2_discover_and_stream_opencv.py` | Discover, log in, pair and stream in one script | `opencv-python typer` |
 | `3_simple_stream.py` | Minimal OpenCV viewer; good starting point | `opencv-python` |
 | `4_stream_cuda_glfw.py` | CUDA stream in a GLFW window (NVIDIA) | `cupy-cuda12x glfw opencv-python typer` |
@@ -99,7 +99,7 @@ pip install -e .
 ```
 
 - **Windows:** Visual Studio 2022+ C++ tools, LLVM, CMake, Ninja, Meson and [vcpkg](https://github.com/microsoft/vcpkg). Run from a VS dev shell with `-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl`.
-- **Ubuntu:** native deps from apt; see [build-ubuntu.yml](.github/workflows/build-ubuntu.yml) for the package list.
+- **Ubuntu:** native deps from apt; see [build-ubuntu.yml](.github/workflows/build-ubuntu.yml) for the package list. `VulkanRenderer` needs `libplacebo-dev` (6.338+) and `libx11-dev`, plus FFmpeg 6.1+ (Ubuntu 24.04); without them it is built as a stub that raises.
 - **macOS:** deps from Homebrew, plus SDL2 built from source (Homebrew's `sdl2` is an SDL3 shim that can't be bundled); see [build-macos.yml](.github/workflows/build-macos.yml).
 
 After C++ changes, re-run only the `cmake --build` step.

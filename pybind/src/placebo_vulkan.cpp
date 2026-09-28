@@ -2,16 +2,17 @@
 #include "pylog.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <vector>
 
-#ifndef _WIN32
+#ifndef CHIAKI_PY_HAS_PLACEBO
 
-// Only Windows so far: VulkanRenderer needs a window system integration per platform.
+// Built without libplacebo (macOS, or Linux without it or without an FFmpeg that decodes with Vulkan).
 AVBufferRef *PlaceboVulkan::create_device(std::string &error)
 {
-    error = "Creating a Vulkan device with libplacebo is only supported on Windows so far";
+    error = "This build of chiaki_py has no libplacebo, so it can't create a Vulkan device to draw on";
     return nullptr;
 }
 PlaceboVulkan *PlaceboVulkan::from_device(const AVHWDeviceContext *) { return nullptr; }
@@ -31,10 +32,16 @@ namespace
     // (or info, trace) lets more through to it.
     pl_log_level log_level_from_environment()
     {
+#ifdef _WIN32
         char name[16];
         DWORD length = GetEnvironmentVariableA("CHIAKI_PY_PLACEBO_LOG", name, sizeof(name));
         if (length == 0 || length >= sizeof(name))
             return PL_LOG_WARN;
+#else
+        const char *name = std::getenv("CHIAKI_PY_PLACEBO_LOG");
+        if (!name)
+            return PL_LOG_WARN;
+#endif
         if (std::strcmp(name, "trace") == 0)
             return PL_LOG_TRACE;
         if (std::strcmp(name, "debug") == 0)
@@ -107,6 +114,14 @@ PlaceboVulkan::~PlaceboVulkan()
         pl_log_destroy(&log);
 }
 
+bool PlaceboVulkan::has_instance_extension(const char *name) const
+{
+    for (int i = 0; instance && i < instance->num_extensions; i++)
+        if (std::strcmp(instance->extensions[i], name) == 0)
+            return true;
+    return false;
+}
+
 bool PlaceboVulkan::is_supported() { return true; }
 
 PlaceboVulkan *PlaceboVulkan::from_device(const AVHWDeviceContext *device)
@@ -130,6 +145,7 @@ AVBufferRef *PlaceboVulkan::create_device(std::string &error)
         return nullptr;
     }
 
+#ifdef _WIN32
     // Twitch Studio installs a Vulkan layer into every Vulkan process, which prints its whole module list to stdout every
     // time the swapchain is recreated, and that is at every step of a drag-resize. The layer's manifest has a switch to
     // turn it off; it has to be set before the instance is made. Left alone if it is set already.
@@ -140,6 +156,18 @@ AVBufferRef *PlaceboVulkan::create_device(std::string &error)
     pl_vk_inst_params instance_params = pl_vk_inst_default_params;
     instance_params.extensions = instance_extensions;
     instance_params.num_extensions = 2;
+#else
+    // Both window systems' surface extensions, as far as the driver has them: which one a window needs is only known
+    // once a VulkanRenderer is made for it, which checks that its own is there. (Spelled out rather than taken from
+    // vulkan_xlib.h and vulkan_wayland.h, which need the window systems' headers.)
+    const char *instance_extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME};
+    const char *optional_instance_extensions[] = {"VK_KHR_xlib_surface", "VK_KHR_wayland_surface"};
+    pl_vk_inst_params instance_params = pl_vk_inst_default_params;
+    instance_params.extensions = instance_extensions;
+    instance_params.num_extensions = 1;
+    instance_params.opt_extensions = optional_instance_extensions;
+    instance_params.num_opt_extensions = 2;
+#endif
     placebo->instance = pl_vk_inst_create(placebo->log, &instance_params);
     if (!placebo->instance)
     {
@@ -200,10 +228,11 @@ AVBufferRef *PlaceboVulkan::create_device(std::string &error)
     hw->lock_queue = lock_queue;
     hw->unlock_queue = unlock_queue;
 
-#if FF_API_VULKAN_FIXED_QUEUES
+// FFmpeg before 7.1 (e.g. 6.1 on Ubuntu 24.04) only has these fields, and no FF_API_VULKAN_FIXED_QUEUES to say so.
+#if !defined(FF_API_VULKAN_FIXED_QUEUES) || FF_API_VULKAN_FIXED_QUEUES
     // FFmpeg turns these into the list of queue families it uses.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     hw->queue_family_index = vulkan->queue_graphics.index;
     hw->nb_graphics_queues = vulkan->queue_graphics.count;
     hw->queue_family_tx_index = vulkan->queue_transfer.index;
@@ -214,7 +243,7 @@ AVBufferRef *PlaceboVulkan::create_device(std::string &error)
     hw->nb_encode_queues = 0;
     hw->queue_family_decode_index = static_cast<int>(decode_family);
     hw->nb_decode_queues = 1;
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 #else
     auto add_queue_family = [hw](uint32_t index, uint32_t count, VkQueueFlagBits flags, VkVideoCodecOperationFlagsKHR codecs = 0) {
         hw->qf[hw->nb_qf++] = {static_cast<int>(index), static_cast<int>(count), flags, static_cast<VkVideoCodecOperationFlagBitsKHR>(codecs)};

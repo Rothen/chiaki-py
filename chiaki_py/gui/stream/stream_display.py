@@ -12,7 +12,7 @@ from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
 from .threads.frame_thread import FrameThread
 from ...audio_sink import AudioSink
-from ..._qt import check_qt_platform_libs
+from ..._qt import check_qt_platform_libs, use_xwayland
 from .views.cpu_view import CpuVideoWidget
 from .views.vulkan_view import VulkanVideoWidget
 from .threads.fps_thread import FpsThread
@@ -133,6 +133,8 @@ class StreamDisplay(QObject):
         Returns the process exit code from `QApplication.exec()`."""
         app = QCoreApplication.instance()
         if app is None:
+            if isinstance(session.frame_handler, VulkanFrameHandler):
+                use_xwayland()   # VulkanRenderer can't draw into Qt's Wayland windows, see there
             check_qt_platform_libs()
             app = QApplication(argv)
         _ = StreamDisplay(session, show_stats, keep_aspect_ratio)

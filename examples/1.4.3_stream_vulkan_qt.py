@@ -14,7 +14,7 @@ The registration is the one written by 1.3_register_console.py. Press F in the
 window to show the frame rate (drawn over the video by libplacebo), A to lock its aspect ratio.
 
 Needs: a GPU and driver with Vulkan video decoding (H.264 for a PS4, H.264 or HEVC
-for a PS5). Windows only so far.
+for a PS5). Windows, or Linux on X11; on a Wayland session Qt runs through XWayland.
 """
 
 import sys

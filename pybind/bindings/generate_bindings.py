@@ -95,12 +95,13 @@ def keep_enum_value_names(options: litgen.LitgenOptions, header: str) -> None:
 
 
 def add_keep_alive_constructor(
-    options: litgen.LitgenOptions, cls: str, cpp_params: str, params: list[tuple[str, str]], doc: str = ""
+    options: litgen.LitgenOptions, cls: str, cpp_params: str, params: list[tuple[str, ...]], doc: str = ""
 ) -> None:
     """Bind the constructor of `cls` taking `cpp_params`, named and typed in Python as `params`, such that
-    the first argument (the ChiakiPySession the new object works on) lives at least as long as the object."""
-    stub_params = ", ".join(f"{name}: {python_type}" for name, python_type in params)
-    py_args = ", ".join(f'py::arg("{name}")' for name, _ in params)
+    the first argument (the ChiakiPySession the new object works on) lives at least as long as the object.
+    A parameter with a default is (name, python_type, python_default, cpp_default)."""
+    stub_params = ", ".join(f"{p[0]}: {p[1]}" + (f" = {p[2]}" if len(p) > 2 else "") for p in params)
+    py_args = ", ".join(f'py::arg("{p[0]}")' + (f" = {p[3]}" if len(p) > 2 else "") for p in params)
     options.custom_bindings.add_custom_bindings_to_class(
         cls,
         stub_code=f"def __init__(self, {stub_params}) -> None:\n" + (f'    """{doc}"""\n' if doc else "") + "    pass",
@@ -241,11 +242,20 @@ def configure_frame_handler(options: litgen.LitgenOptions) -> None:
 
 def configure_vulkan_renderer(options: litgen.LitgenOptions) -> None:
     options.fn_exclude_by_name__regex = r"^VulkanRenderer$"  # its constructor, bound below
+    keep_enum_value_names(options, "vulkan_renderer.h")
     options.fn_add_gil_scoped_release_guard__regex = r"^(render|close)$"
     add_keep_alive_constructor(
-        options, "VulkanRenderer", "ChiakiPySession &, uintptr_t", [("stream_session", "ChiakiPySession"), ("window", "int")],
-        doc="Draw into the native window `window` (an HWND). The session must use the Vulkan hardware decoder "
-            "(Settings.set_hardware_decoder('vulkan')); raises RuntimeError otherwise, or if the window can't be drawn into.",
+        options, "VulkanRenderer", "ChiakiPySession &, uintptr_t, uintptr_t, VulkanWindowSystem",
+        [
+            ("stream_session", "ChiakiPySession"),
+            ("window", "int"),
+            ("display", "int", "0", "0"),
+            ("window_system", "VulkanWindowSystem", "VulkanWindowSystem.Default", "VulkanWindowSystem::Default"),
+        ],
+        doc="Draw into the native window `window`, of the connection `display`, as `window_system` says: an HWND on "
+            "Windows; an X11 Window id (e.g. Qt's winId()) and an Xlib Display* or 0 on X11; a wl_surface* and its "
+            "wl_display* on Wayland. The session must use the Vulkan hardware decoder (Settings.set_hardware_decoder('vulkan')); "
+            "raises RuntimeError otherwise, or if the window can't be drawn into.",
     )
     options.custom_bindings.add_custom_bindings_to_class(
         "VulkanRenderer",
