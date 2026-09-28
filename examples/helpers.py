@@ -13,7 +13,8 @@ def wake_up_registered_host(reg: HostRegistration, max_tries: int = 3) -> bool:
     if host is None:
         return False
 
-    reg.host = host.host_addr
+    if reg.host != host.host_addr:
+        reg.host = host.host_addr
 
     if host.state == DiscoveryHostState.Standby:
         is_awake: bool = False
