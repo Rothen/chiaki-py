@@ -12,6 +12,9 @@ def wake_up_registered_host(reg: HostRegistration, max_tries: int = 3) -> bool:
     host = find_host(host_name=reg.nickname, timeout=5.0)
     if host is None:
         return False
+
+    reg.host = host.host_addr
+
     if host.state == DiscoveryHostState.Standby:
         is_awake: bool = False
         try_number = 0
