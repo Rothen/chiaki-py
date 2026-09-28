@@ -20,7 +20,6 @@ def find_host(host_name: str, timeout: float = 2.0) -> DiscoveryHost | None:
 
         if hosts := manager.get_hosts():
             for host in hosts:
-                print(host.host_name, host_name)
                 if host.host_name == host_name:
                     found_host = host
                     break
