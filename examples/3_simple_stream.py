@@ -28,7 +28,7 @@ from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.session import CpuFrameHandler
 from chiaki_py.controller import detach_controller
 
-from helpers import setup_controller, start_audio
+from helpers import setup_controller, start_audio, wake_up_registered_host
 
 
 def main() -> None:
@@ -39,7 +39,8 @@ def main() -> None:
         print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
-    registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
+    registration = Serializer.load(HostRegistration, registration_file)
+    wake_up_registered_host(reg=registration)
 
     session = Session(registration)
     audio_device: miniaudio.PlaybackDevice | None = None

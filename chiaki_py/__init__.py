@@ -12,7 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 # A library leaves output to the application: without logging configured, nothing is printed.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-from .discovery import discover_hosts
+from .discovery import discover_hosts, find_host
 from .registration import register_host, HostRegistration
 from .session import Session, SessionConnectError
 from .serializer import Serializer
@@ -23,4 +23,4 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0"
 
-__all__ = ["Session", "SessionConnectError", "Serializer", "AudioSink", "register_host", "discover_hosts", "HostRegistration", "discover_hosts", "__version__"]
+__all__ = ["Session", "SessionConnectError", "Serializer", "AudioSink", "register_host", "discover_hosts", "find_host", "HostRegistration", "discover_hosts", "__version__"]

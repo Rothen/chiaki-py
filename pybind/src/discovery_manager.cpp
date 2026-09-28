@@ -7,6 +7,7 @@
 #include "pylog.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 
 #ifdef _WIN32
@@ -276,26 +277,26 @@ void DiscoveryManager::HostsUpdated()
     // emit HostsUpdated();
 }
 
-void DiscoveryManager::SendWakeup(const std::string &host, const std::string &regist_key, bool ps5)
+void DiscoveryManager::SendWakeup(std::string host, std::string regist_key, bool ps5)
 {
-    std::string key = regist_key;
-    for (size_t i = 0; i < key.size(); i++)
+    for (size_t i = 0; i < regist_key.size(); i++)
     {
-        if (!key.at(i))
+        if (!regist_key.at(i))
         {
-            key.resize(i);
+            regist_key.resize(i);
             break;
         }
     }
 
-    bool ok;
-    uint64_t credential = std::stoull(key, nullptr, 16);
-
-    if (key.size() > 8 || !ok)
+    // Equivalent of Qt's toULongLong(&ok, 16): the whole regist_key must be hex digits
+    bool ok = !regist_key.empty() && std::all_of(regist_key.begin(), regist_key.end(), [](unsigned char c) { return std::isxdigit(c); });
+    if (regist_key.size() > 8 || !ok)
     {
         CHIAKI_LOGE(&log, "DiscoveryManager got invalid regist key for wakeup");
         throw Exception("Invalid regist key");
     }
+    uint64_t credential = std::stoull(regist_key, nullptr, 16);
+
     const char *ipv6 = strchr(host.data(), ':');
     ChiakiErrorCode err;
     if (ipv6)

@@ -62,7 +62,7 @@ class DiscoveryManager
 		// Send a wakeup packet to `host` (a registration's `regist_key`, hex-encoded) so a console
 		// in standby powers on. Raises ValueError if `regist_key` isn't hex, and RuntimeError if it is
 		// too long or sending fails.
-		void SendWakeup(const std::string &host, const std::string &regist_key, bool ps5);
+		void SendWakeup(std::string host, std::string regist_key, bool ps5);
 
 		// Whether broadcast discovery is currently running.
 		bool GetActive() const { return service_active; }

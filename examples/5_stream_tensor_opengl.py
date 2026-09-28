@@ -31,7 +31,7 @@ from chiaki_py.lib import Settings, CudaFrameHandler
 from chiaki_py.controller import detach_controller
 
 from glfw_video import GLVideoSurface
-from helpers import setup_controller
+from helpers import setup_controller, wake_up_registered_host
 
 
 def main() -> None:
@@ -44,8 +44,8 @@ def main() -> None:
         print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
-    registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
-
+    registration = Serializer.load(HostRegistration, registration_file)
+    wake_up_registered_host(reg=registration)
 
     session = Session(registration, CudaFrameHandler)
 

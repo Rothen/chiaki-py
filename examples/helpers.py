@@ -3,9 +3,26 @@ from dualsense_py.utils import get_available_controllers
 from dualsense_py import DualSenseController
 import miniaudio
 
-from chiaki_py import Session
+from chiaki_py import Session, HostRegistration, find_host
 from chiaki_py.controller import attach_controller, ControllerSubscriptions
-from chiaki_py.lib import ChiakiPySession
+from chiaki_py.lib import ChiakiPySession, DiscoveryHostState, DiscoveryManager
+
+
+def wake_up_registered_host(reg: HostRegistration, max_tries: int = 3) -> bool:
+    host = find_host(host_name=reg.nickname, timeout=5.0)
+    if host is None:
+        return False
+    if host.state == DiscoveryHostState.Standby:
+        is_awake: bool = False
+        try_number = 0
+        while not is_awake:
+            DiscoveryManager().send_wakeup(host=reg.host, regist_key=reg.regist_key, ps5=True)
+            host = find_host(host_name=reg.nickname, timeout=5.0)
+            is_awake = host is not None and host.state == DiscoveryHostState.Ready
+            if try_number >= max_tries:
+                return False
+        return True
+    return True
 
 
 def setup_controller(stream_session: ChiakiPySession) -> tuple[DualSenseController | None, ControllerSubscriptions | None]:

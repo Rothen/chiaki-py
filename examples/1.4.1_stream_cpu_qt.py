@@ -14,14 +14,13 @@ import logging
 
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.gui import StreamDisplay
-from chiaki_py.lib import Settings, LogLevel
 from chiaki_py.controller import detach_controller
 
-from helpers import setup_controller
+from helpers import setup_controller, wake_up_registered_host
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("chiaki_py.lib").setLevel(logging.WARNING)  # or quiet one logger again
-
+        
 
 def main() -> None:
     cache_dir = Path("./cache")
@@ -31,7 +30,8 @@ def main() -> None:
         print(f"Registration not found under {registration_file}. Run examples/1.3_register_console.py first")
         sys.exit(1)
 
-    registration = Serializer.load(HostRegistration, Path("./cache", "host_registration.json"))
+    registration = Serializer.load(HostRegistration, registration_file)
+    wake_up_registered_host(reg=registration)
 
     session = Session(registration)
 
