@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
+import sys
 from typing import Any, Iterator
 from types import TracebackType
 
@@ -46,7 +46,10 @@ class Session:
         settings = settings if settings is not None else Settings()
         
         if frame_handler_cls == VulkanFrameHandler:
-            settings.set_hardware_decoder("vulkan")
+            if sys.platform == "darwin":
+                settings.set_hardware_decoder("videotoolbox")
+            else:
+                settings.set_hardware_decoder("vulkan")
         elif frame_handler_cls == CudaFrameHandler:
             settings.set_hardware_decoder("cuda")
         
