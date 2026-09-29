@@ -81,7 +81,7 @@ Run from the repo root; the scripts share a `./cache` directory for the PSN acco
 | `1.4.1_stream_cpu_qt.py` | Stream in a Qt window (CPU) | |
 | `1.4.2_stream_cuda_qt.py` | Same, via CUDA + OpenGL (NVIDIA) | `cupy-cuda12x cuda-python PyOpenGL` |
 | `1.4.3_stream_vulkan_qt.py` | Same, via Vulkan + libplacebo, zero-copy (Windows, Linux X11; XWayland on Wayland) | |
-| `2_discover_and_stream_opencv.py` | Discover, log in, pair and stream in one script | `opencv-python typer` |
+| `2_whole_process_till_stream_opencv.py` | Discover, log in, pair and stream in one script | `opencv-python typer` |
 | `3_simple_stream.py` | Minimal OpenCV viewer; good starting point | `opencv-python` |
 | `4_stream_cuda_glfw.py` | CUDA stream in a GLFW window (NVIDIA) | `cupy-cuda12x glfw opencv-python typer` |
 | `5_stream_tensor_opengl.py` | Frames as PyTorch GPU tensors, e.g. for YOLO (NVIDIA) | CUDA PyTorch, `glfw opencv-python typer` |

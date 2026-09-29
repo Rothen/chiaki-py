@@ -57,14 +57,10 @@ def main() -> None:
             try:
                 profile = session.cp_session.get_video_profile()
                 with GLVideoSurface(profile.width, profile.height, "chiaki-py") as surface:
-                    # Every frame is converted to RGB into this device buffer, which must match the
-                    # stream's size exactly (a PS5 streams what the profile says; a PS4 asked for 1080p
-                    # downgrades to 720p once connected, which would not fit).
-                    # Shaped (3, H, W) as the window wants it: a transposed view of that (H, W, 3) memory.
                     frame = cp.empty((profile.height, profile.width, 3), dtype=cp.uint8).transpose(2, 0, 1)
 
                     print("Streaming - press 'q' or Esc in the window, or Ctrl+C in the terminal, to quit.")
-                    # max_fps=0: no limit, the stream already has its own frame rate.
+                    
                     for _ in session.frames(max_fps=0, out=frame):
                         surface.show(frame)
                         if surface.should_close:

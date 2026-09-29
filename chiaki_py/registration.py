@@ -2,17 +2,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, PlainSerializer, PlainValidator
+from pydantic import BaseModel, PlainSerializer, PlainValidator
 
 from chiaki_lib import Backend
 from chiaki_lib.core.common import Target
-
-
-HexBytes = Annotated[
-    bytes,
-    BeforeValidator(lambda v: bytes.fromhex(v) if isinstance(v, str) else v),
-    PlainSerializer(lambda b: b.hex(), return_type=str),
-]
 
 
 def _parse_target(v: Target | str | int) -> Target:
@@ -37,7 +30,7 @@ class HostRegistration(BaseModel):
     target: TargetField
     regist_key: str
     nickname: str
-    morning: HexBytes
+    morning: str
     initial_login_pin: str = ""
     duid: str = ""
     auto_regist: bool = False

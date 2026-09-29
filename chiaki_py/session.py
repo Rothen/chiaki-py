@@ -164,7 +164,7 @@ class Session:
 
     def frames(
         self,
-        max_fps: float = 60.0,
+        max_fps: float = 0.0,
         out: npt.NDArray[np.uint8] | VulkanFrame | Any | None = None,
     ) -> Iterator[npt.NDArray[np.uint8] | VulkanFrame | Any]:
         """Yield decoded frames, at most `max_fps` per second (0 = every frame). Yields nothing unless

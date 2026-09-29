@@ -27,7 +27,7 @@ class _EventIterator(Generic[_T]):
     def __call__(self, max_fps: float = 0.0) -> Iterator[_T]:
         return self._iter(self.__pull_fn, max_fps)
 
-    def _iter(self, pull: Callable[[], _T | None], max_fps: float) -> Iterator[_T]:
+    def _iter(self, pull: Callable[[], _T | None], max_fps: float = 0.0) -> Iterator[_T]:
         min_interval = (1.0 / max_fps) if max_fps > 0 else 0.0
         ready = threading.Event()
         subscription = self.__event_source.subscribe(lambda _: ready.set())
