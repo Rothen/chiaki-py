@@ -2,7 +2,7 @@
 name = "chiaki-py"
 # Derived from the git tag (vX.Y.Z) by setuptools-scm - see [tool.setuptools_scm].
 dynamic = ["version"]
-description = "Python bindings and a Pythonic client library for PS4/PS5 Remote Play (chiaki-ng)"
+description = "A Pythonic client library for PS4/PS5 Remote Play, built on chiaki-lib (chiaki-ng)"
 readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
@@ -14,7 +14,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: C++",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
@@ -26,6 +25,7 @@ classifiers = [
 ]
 keywords = ["playstation", "remote-play", "chiaki", "chiaki-ng", "ps4", "ps5", "streaming"]
 dependencies = [
+    "chiaki-lib>=0.1.0",
     "numpy>=2.4",
     "pydantic>=2",
     "requests>=2.31",
@@ -53,10 +53,10 @@ local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 
 [tool.setuptools]
-packages = ["chiaki_py", "chiaki_py.lib", "chiaki_py.psn", "chiaki_py.controller", "chiaki_py.gui"]
+packages = ["chiaki_py", "chiaki_py.psn", "chiaki_py.controller", "chiaki_py.gui"]
 
 [tool.setuptools.package-data]
-"*" = ["*.pyi", "*.pyd", "*.so", "*.dll", "*.qml"]
+"*" = ["*.qml"]
 "chiaki_py.gui" = ["favicon/*.ico", "favicon/*.png", "favicon/*.svg"]
 
 [tool.pyright]

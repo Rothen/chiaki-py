@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import List
 
-from .lib import DiscoveryHost, DiscoveryManager
+from chiaki_lib import DiscoveryHost, DiscoveryManager
 
 
 def find_host(host_name: str, timeout: float = 2.0) -> DiscoveryHost | None:

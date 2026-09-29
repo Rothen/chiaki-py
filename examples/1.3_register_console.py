@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from chiaki_py import Serializer, register_host
-from chiaki_py.lib import Target
+from chiaki_lib import Target
 from chiaki_py.psn import PSNLoginQt, PSNAccount
 
 

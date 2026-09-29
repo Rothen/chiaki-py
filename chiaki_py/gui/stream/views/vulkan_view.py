@@ -16,7 +16,7 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QWidget
 
 from chiaki_py import Session
-from chiaki_py.lib import VulkanFrame, VulkanRenderer, ChiakiPySession
+from chiaki_lib import VulkanFrame, VulkanRenderer, ChiakiPySession
 from .base_view import VideoMixin
 from ..threads.frame_thread import FrameThread
 from ..threads.fps_thread import FpsThread

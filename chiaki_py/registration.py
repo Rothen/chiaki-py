@@ -4,8 +4,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, PlainSerializer, PlainValidator
 
-from .lib import Backend
-from .lib.core.common import Target
+from chiaki_lib import Backend
+from chiaki_lib.core.common import Target
 
 
 HexBytes = Annotated[

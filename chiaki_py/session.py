@@ -8,7 +8,7 @@ from types import TracebackType
 import numpy as np
 import numpy.typing as npt
 
-from .lib import VulkanFrame, Settings, ChiakiPySession, ChiakiPySessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, QuitReason, quit_reason_is_error, quit_reason_string
+from chiaki_lib import VulkanFrame, Settings, ChiakiPySession, ChiakiPySessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, QuitReason, quit_reason_is_error, quit_reason_string
 from .registration import HostRegistration
 from .event_iterator import AudioFrameEventIterator, FrameEventIterator
 

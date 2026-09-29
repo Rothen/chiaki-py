@@ -23,7 +23,7 @@ from pathlib import Path
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.controller import detach_controller
 from chiaki_py.gui import StreamDisplay
-from chiaki_py.lib import VulkanFrameHandler
+from chiaki_lib import VulkanFrameHandler
 
 from helpers import setup_controller, wake_up_registered_host
 

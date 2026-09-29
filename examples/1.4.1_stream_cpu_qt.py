@@ -19,7 +19,7 @@ from chiaki_py.controller import detach_controller
 from helpers import setup_controller, wake_up_registered_host
 
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("chiaki_py.lib").setLevel(logging.WARNING)  # or quiet one logger again
+logging.getLogger("chiaki_lib").setLevel(logging.WARNING)  # or quiet one logger again
         
 
 def main() -> None:

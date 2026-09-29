@@ -9,7 +9,7 @@ from typing_extensions import Unpack
 import numpy as np
 import numpy.typing as npt
 
-from .lib import BoolEventSource, VulkanFrame
+from chiaki_lib import BoolEventSource, VulkanFrame
 
 _logger = logging.getLogger(__name__)
 

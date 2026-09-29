@@ -6,7 +6,7 @@ from reactivex.abc import DisposableBase
 from dualsense_py.dual_sense_controller import DualSenseController
 from dualsense_py.states import Accelerometer, Gyroscope, JoyStick, Orientation
 
-from ..lib import ChiakiPySession
+from chiaki_lib import ChiakiPySession
 
 
 def _left_stick_change(joy_stick: JoyStick, stream_session: ChiakiPySession) -> None:

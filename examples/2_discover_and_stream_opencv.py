@@ -29,7 +29,7 @@ import typer
 import numpy as np
 
 from chiaki_py import Session, discover_hosts, Serializer, HostRegistration, register_host
-from chiaki_py.lib import Settings, DiscoveryHost, CpuFrameHandler
+from chiaki_lib import DiscoveryHost, CpuFrameHandler
 from chiaki_py.psn import PSNLoginQt, PSNAccount, LoginError, PSNLoginTerminal, PSNLogin
 from chiaki_py.controller import detach_controller
 from fps_overlay import FpsCounter, draw_text_top_right

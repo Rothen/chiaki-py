@@ -5,7 +5,7 @@ import miniaudio
 
 from chiaki_py import Session, HostRegistration, find_host
 from chiaki_py.controller import attach_controller, ControllerSubscriptions
-from chiaki_py.lib import ChiakiPySession, DiscoveryHostState, DiscoveryManager
+from chiaki_lib import ChiakiPySession, DiscoveryHostState, DiscoveryManager
 
 
 def wake_up_registered_host(reg: HostRegistration, max_tries: int = 3) -> bool:

@@ -1,8 +1,8 @@
-"""Python bindings and a high-level API for Chiaki's PS4/PS5 Remote Play protocol: discover
-consoles on the network, register with one, and stream its video/audio/input as a Session.
+"""A high-level API for Chiaki's PS4/PS5 Remote Play protocol: discover consoles on the network,
+register with one, and stream its video/audio/input as a Session.
 
-The low-level pybind11 bindings (ChiakiPySession, Settings, DiscoveryManager, ...) live in
-`chiaki_py.lib`; this package wraps them into the pythonic pieces re-exported below. GUI widgets
+The low-level pybind11 bindings (ChiakiPySession, Settings, DiscoveryManager, ...) live in the
+separate `chiaki_lib` package; this package wraps them into the pythonic pieces re-exported below. GUI widgets
 that can display a Session's frames are in the optional `chiaki_py.gui` subpackage (needs PyQt6).
 """
 

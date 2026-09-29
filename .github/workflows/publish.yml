@@ -6,22 +6,36 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
-    uses: ./.github/workflows/build-windows.yml
+  build:
+    # chiaki-py is pure Python since the native bindings moved to chiaki-lib: one wheel and one
+    # sdist for every platform.
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-  build-ubuntu:
-    uses: ./.github/workflows/build-ubuntu.yml
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
 
-  build-macos:
-    uses: ./.github/workflows/build-macos.yml
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
 
-  build-raspberrypi:
-    uses: ./.github/workflows/build-raspberrypi.yml
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-python
+          path: dist/
+          if-no-files-found: error
 
   publish-testpypi:
     name: Publish to TestPyPI
     if: github.event_name == 'workflow_dispatch'
-    needs: [build-windows, build-ubuntu, build-macos, build-raspberrypi]
+    needs: [build]
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -46,7 +60,7 @@ jobs:
   publish:
     name: Publish to PyPI
     if: github.event_name == 'release'
-    needs: [build-windows, build-ubuntu, build-macos, build-raspberrypi]
+    needs: [build]
     runs-on: ubuntu-latest
     environment:
       name: pypi

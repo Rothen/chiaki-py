@@ -27,7 +27,7 @@ import torch
 import typer
 
 from chiaki_py import Session, Serializer, HostRegistration
-from chiaki_py.lib import Settings, CudaFrameHandler
+from chiaki_lib import Settings, CudaFrameHandler
 from chiaki_py.controller import detach_controller
 
 from glfw_video import GLVideoSurface
