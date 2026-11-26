@@ -1,8 +1,7 @@
-litgen==0.22.0
-numpy==2.5.3
+-e ../chiaki-lib --config-settings editable_mode=compat
+numpy==2.4.6
 pydantic==2
 requests==2.34.2
-pycryptodomex==3.23.0
 PyQt6==6.11.0
 PyQt6-WebEngine==6.11.0
 opencv-python==5.0.0.93

@@ -8,7 +8,7 @@ from types import TracebackType
 import numpy as np
 import numpy.typing as npt
 
-from .lib import VulkanFrame, Settings, ChiakiPySession, ChiakiPySessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, QuitReason, quit_reason_is_error, quit_reason_string
+from chiaki_lib import VulkanFrame, Settings, ChiakiPySession, ChiakiPySessionConnectInfo, CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler, QuitReason, quit_reason_is_error, quit_reason_string
 from .registration import HostRegistration
 from .event_iterator import AudioFrameEventIterator, FrameEventIterator
 
@@ -164,7 +164,7 @@ class Session:
 
     def frames(
         self,
-        max_fps: float = 60.0,
+        max_fps: float = 0.0,
         out: npt.NDArray[np.uint8] | VulkanFrame | Any | None = None,
     ) -> Iterator[npt.NDArray[np.uint8] | VulkanFrame | Any]:
         """Yield decoded frames, at most `max_fps` per second (0 = every frame). Yields nothing unless

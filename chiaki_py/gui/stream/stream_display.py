@@ -8,7 +8,7 @@ from dualsense_py.utils import get_available_controllers
 from chiaki_py import Session
 from chiaki_py.controller import attach_controller
 from chiaki_py.gui.stream.aspect_ratio import AspectRatioLock
-from chiaki_py.lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
+from chiaki_lib import CpuFrameHandler, CudaFrameHandler, VulkanFrameHandler
 from chiaki_py.gui.stream.views.base_view import BaseView, VideoMixin
 from .threads.frame_thread import FrameThread
 from ...audio_sink import AudioSink

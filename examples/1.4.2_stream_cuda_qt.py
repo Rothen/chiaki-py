@@ -19,7 +19,7 @@ from pathlib import Path
 
 from chiaki_py import Session, Serializer, HostRegistration
 from chiaki_py.gui import StreamDisplay
-from chiaki_py.lib import CudaFrameHandler
+from chiaki_lib import CudaFrameHandler
 from chiaki_py.controller import detach_controller
 
 from helpers import setup_controller, wake_up_registered_host

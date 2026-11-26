@@ -19,9 +19,9 @@ class FrameThread(QThread, Generic[T]):
     for a VulkanFrame, which only wraps a frame the decoder already produced - and the GUI thread simply
     keeps whichever frame it is using alive by holding a reference to it for as long as it needs it.
     """
-    new_frame = pyqtSignal(object)   # the frame, and how long getting/converting it took (seconds)
+    new_frame = pyqtSignal(object)
 
-    def __init__(self, session: Session, max_fps: float = 60.0):
+    def __init__(self, session: Session, max_fps: float = 0.0):
         super().__init__()
         self.session = session
         self.max_fps = max_fps

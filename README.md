@@ -2,13 +2,15 @@
 
 PS4/PS5 Remote Play from Python, built on [chiaki-ng](https://github.com/streetpea/chiaki-ng): discover consoles, pair, stream video and audio, and send controller input.
 
+chiaki-py is pure Python. The native bindings around chiaki-ng live in [chiaki-lib](https://github.com/Rothen/chiaki-lib), which pip installs with it; the low-level classes (`ChiakiPySession`, `Settings`, the frame handlers, ...) are imported from `chiaki_lib`.
+
 ## Install
 
 ```bash
 pip install chiaki-py
 ```
 
-Python 3.11–3.14. Wheels for Windows, Ubuntu, macOS 15+ (Apple Silicon) and 64-bit Raspberry Pi OS; elsewhere, [build from source](#building-from-source).
+Python 3.11–3.14. chiaki-lib has wheels for Windows, Ubuntu, macOS 15+ (Apple Silicon) and 64-bit Raspberry Pi OS; elsewhere, build it from source as its README describes.
 
 On Linux, the Qt windows (`StreamDisplay`, `PSNLoginQt`) also need `sudo apt install libxcb-cursor0`.
 
@@ -36,6 +38,25 @@ with Session(registration) as session:
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
+### Registering without a PIN
+
+`auto_register_host()` registers through PSN instead, like chiaki-ng's automatic registration: no PIN, and the console need not be on the same network. It must be signed in to the account, have Remote Play enabled, and be on or in rest mode with "Stay connected to the internet" on. For a PS4, only the account's primary console can be registered this way.
+
+```python
+from chiaki_py import auto_register_host, find_host
+from chiaki_py.psn import PSNLoginQt, fresh_access_token
+
+psn_account = PSNLoginQt.login()
+registration = auto_register_host(
+    psn_token=fresh_access_token(psn_account),  # refreshes the token if it is about to expire
+    psn_account_id=psn_account.user_rpid,
+    console_name="PS5-123",                     # optional if the account has a single PS5; ps4=True for a PS4
+)
+registration.host = find_host(registration.nickname).host_addr  # PSN does not report the local address
+```
+
+`list_psn_devices(token)` lists the account's PS5s. PSN tokens expire after about an hour. `fresh_access_token()` refreshes them in place, so save the account again afterwards. Accounts saved before chiaki-py 0.1.1 have no tokens: log in again.
+
 ### Frame handlers
 
 The third argument to `Session` picks what `session.frames()` yields:
@@ -47,7 +68,7 @@ The third argument to `Session` picks what `session.frames()` yields:
 | `VulkanFrameHandler` | `VulkanFrame` with raw GPU handles (NV12/P010) | Any hardware decoder; release frames promptly |
 
 ```python
-from chiaki_py.lib import CudaFrameHandler
+from chiaki_lib import CudaFrameHandler
 
 settings.set_hardware_decoder("cuda")
 with Session(registration, CudaFrameHandler) as session:
@@ -57,12 +78,12 @@ with Session(registration, CudaFrameHandler) as session:
 
 ## Logging
 
-chiaki-py logs through Python's `logging` under `chiaki_py.*`, including the native libraries (`chiaki_py.lib`, `chiaki_py.lib.ffmpeg`, `chiaki_py.lib.placebo`):
+chiaki-py logs through Python's `logging` under `chiaki_py.*`, the native libraries under `chiaki_lib` (chiaki-ng), `chiaki_lib.ffmpeg` and `chiaki_lib.placebo`:
 
 ```python
 import logging
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("chiaki_py.lib.ffmpeg").setLevel(logging.CRITICAL)  # e.g. hide decoder errors
+logging.getLogger("chiaki_lib.ffmpeg").setLevel(logging.CRITICAL)  # e.g. hide decoder errors
 ```
 
 For noisy streams, filter at the source instead: `settings.set_log_level(LogLevel.WARNING)`, and `CHIAKI_PY_PLACEBO_LOG=warning` for libplacebo.
@@ -76,44 +97,27 @@ Run from the repo root; the scripts share a `./cache` directory for the PSN acco
 | `1.1_login.py` | PSN login, saved to `cache/` | |
 | `1.2_discover_hosts.py` | List consoles on the network | |
 | `1.3_register_console.py <host> <pin> [--ps4]` | Pair with a console | |
+| `1.3.2_auto_register_console.py [name] [--ps4]` | Pair through PSN, without a PIN | |
 | `1.4.1_stream_cpu_qt.py` | Stream in a Qt window (CPU) | |
 | `1.4.2_stream_cuda_qt.py` | Same, via CUDA + OpenGL (NVIDIA) | `cupy-cuda12x cuda-python PyOpenGL` |
 | `1.4.3_stream_vulkan_qt.py` | Same, via Vulkan + libplacebo, zero-copy (Windows, Linux X11; XWayland on Wayland) | |
-| `2_discover_and_stream_opencv.py` | Discover, log in, pair and stream in one script | `opencv-python typer` |
+| `2_whole_process_till_stream_opencv.py` | Discover, log in, pair and stream in one script | `opencv-python typer` |
 | `3_simple_stream.py` | Minimal OpenCV viewer; good starting point | `opencv-python` |
 | `4_stream_cuda_glfw.py` | CUDA stream in a GLFW window (NVIDIA) | `cupy-cuda12x glfw opencv-python typer` |
 | `5_stream_tensor_opengl.py` | Frames as PyTorch GPU tensors, e.g. for YOLO (NVIDIA) | CUDA PyTorch, `glfw opencv-python typer` |
 
 All examples also need `pip install miniaudio`.
 
-## Building from source
+## Development
 
-CMake fetches chiaki-ng automatically (and on Windows, FFmpeg and libplacebo — the first build is slow). The CI workflows in [.github/workflows/](.github/workflows/) are the reference recipes for each platform, including exact dependency versions.
+chiaki-py needs chiaki-lib, either from PyPI or built next to it (see chiaki-lib's README for the CMake build):
 
 ```bash
+git clone https://github.com/Rothen/chiaki-lib
 git clone https://github.com/Rothen/chiaki-py && cd chiaki-py
-pip install "protobuf==7.36.2" "grpcio-tools==1.84.0"
-cmake --fresh -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 <platform flags>
-cmake --build build --target chiaki-py
+pip install -r requirements.txt   # installs ../chiaki-lib in editable mode
 pip install -e .
 ```
-
-- **Windows:** Visual Studio 2022+ C++ tools, LLVM, CMake, Ninja, Meson and [vcpkg](https://github.com/microsoft/vcpkg). Run from a VS dev shell with `-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl`.
-- **Ubuntu:** native deps from apt; see [build-ubuntu.yml](.github/workflows/build-ubuntu.yml) for the package list. `VulkanRenderer` needs `libplacebo-dev` (6.338+) and `libx11-dev`, plus FFmpeg 6.1+ (Ubuntu 24.04); without them it is built as a stub that raises.
-- **macOS:** deps from Homebrew, plus SDL2 built from source (Homebrew's `sdl2` is an SDL3 shim that can't be bundled); see [build-macos.yml](.github/workflows/build-macos.yml).
-
-After C++ changes, re-run only the `cmake --build` step.
-
-### Python bindings
-
-The pybind11 bindings in [pybind/bindings/](pybind/bindings/) and the type stubs in `chiaki_py/lib/chiaki_py/` are generated from the C++ headers with [litgen](https://pthom.github.io/litgen): a function is exposed to Python, and the comment above it (or at the end of its line) becomes its docstring. After changing a bound header, regenerate them and commit the result:
-
-```bash
-pip install litgen==0.22.0
-python pybind/bindings/generate_bindings.py   # or: cmake --build build --target chiaki-py-generate-bindings
-```
-
-[generate_bindings.py](pybind/bindings/generate_bindings.py) lists which headers go into which `pydef_*.cpp` file and what each one excludes or adds by hand; `pydef_chiaki.cpp` and `pydef_event_source.cpp` (chiaki's C types and the event sources) are written by hand.
 
 ## Known limitations
 
@@ -123,4 +127,4 @@ python pybind/bindings/generate_bindings.py   # or: cmake --build build --target
 
 ## License
 
-AGPL-3.0-only (see `LICENSE`), since the extension statically links chiaki-ng's AGPL-3.0 `chiaki-lib`.
+AGPL-3.0-only (see `LICENSE`), like chiaki-lib, which statically links chiaki-ng's AGPL-3.0 C library.

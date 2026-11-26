@@ -1,7 +1,7 @@
 import threading
 
 from chiaki_py import Session
-from chiaki_py.lib import AudioOutput
+from chiaki_lib import AudioOutput
 
 
 class AudioSink(threading.Thread):
@@ -9,7 +9,7 @@ class AudioSink(threading.Thread):
     `AudioSink.devices()`).
 
     Waits for the first audio frame (the rate/channel count are only known once audio arrives), then
-    opens an SDL audio device (`chiaki_py.lib.AudioOutput`) whose audio thread pulls exactly as many
+    opens an SDL audio device (`chiaki_lib.AudioOutput`) whose audio thread pulls exactly as many
     frames as the device asks for straight from the AudioHandler queue, in C++ and without the GIL,
     padding with silence on underrun. It is the queue's only consumer - pulling frames anywhere else as
     well would steal audio from it.
