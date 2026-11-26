@@ -25,11 +25,10 @@ classifiers = [
 ]
 keywords = ["playstation", "remote-play", "chiaki", "chiaki-ng", "ps4", "ps5", "streaming"]
 dependencies = [
-    "chiaki-lib>=0.1.0",
+    "chiaki-lib>=0.1.2",
     "numpy>=2.4",
     "pydantic>=2",
     "requests>=2.31",
-    "pycryptodomex>=3.19",
     "PyQt6>=6.6",
     "PyQt6-WebEngine>=6.6",
     "dualsense-py>=0.4.0",

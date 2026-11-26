@@ -1,5 +1,5 @@
-"""Logs in to a PSN account and saves it to cache/psn_account.json, which
-1.3_register_console.py needs to pair with a console.
+"""Logs in to a PSN account and saves it, tokens included, to cache/psn_account.json, which
+1.3_register_console.py and 1.3.2_auto_register_console.py need to pair with a console.
 
 Usage:
     python examples/1.1_login.py [--headless]

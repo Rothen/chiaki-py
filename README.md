@@ -38,6 +38,25 @@ with Session(registration) as session:
         ...  # frame is an (H, W, 3) uint8 numpy array
 ```
 
+### Registering without a PIN
+
+`auto_register_host()` registers through PSN instead, like chiaki-ng's automatic registration: no PIN, and the console need not be on the same network. It must be signed in to the account, have Remote Play enabled, and be on or in rest mode with "Stay connected to the internet" on. For a PS4, only the account's primary console can be registered this way.
+
+```python
+from chiaki_py import auto_register_host, find_host
+from chiaki_py.psn import PSNLoginQt, fresh_access_token
+
+psn_account = PSNLoginQt.login()
+registration = auto_register_host(
+    psn_token=fresh_access_token(psn_account),  # refreshes the token if it is about to expire
+    psn_account_id=psn_account.user_rpid,
+    console_name="PS5-123",                     # optional if the account has a single PS5; ps4=True for a PS4
+)
+registration.host = find_host(registration.nickname).host_addr  # PSN does not report the local address
+```
+
+`list_psn_devices(token)` lists the account's PS5s. PSN tokens expire after about an hour. `fresh_access_token()` refreshes them in place, so save the account again afterwards. Accounts saved before chiaki-py 0.1.1 have no tokens: log in again.
+
 ### Frame handlers
 
 The third argument to `Session` picks what `session.frames()` yields:
@@ -78,6 +97,7 @@ Run from the repo root; the scripts share a `./cache` directory for the PSN acco
 | `1.1_login.py` | PSN login, saved to `cache/` | |
 | `1.2_discover_hosts.py` | List consoles on the network | |
 | `1.3_register_console.py <host> <pin> [--ps4]` | Pair with a console | |
+| `1.3.2_auto_register_console.py [name] [--ps4]` | Pair through PSN, without a PIN | |
 | `1.4.1_stream_cpu_qt.py` | Stream in a Qt window (CPU) | |
 | `1.4.2_stream_cuda_qt.py` | Same, via CUDA + OpenGL (NVIDIA) | `cupy-cuda12x cuda-python PyOpenGL` |
 | `1.4.3_stream_vulkan_qt.py` | Same, via Vulkan + libplacebo, zero-copy (Windows, Linux X11; XWayland on Wayland) | |
